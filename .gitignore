@@ -99,3 +99,6 @@ tools/postcard.sh
 /afterstep-xephyr-*.log
 /afterstep-xorg-*.log
 /afterstep-screenshots*/
+
+# Local planning notes (keep untracked)
+/plan.md
