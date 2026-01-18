@@ -416,6 +416,17 @@ AC_CHECK_LIB(Xrandr, XRRQueryExtension, [x_libs="-lXrandr $x_libs";AC_DEFINE(HAV
 dnl# Check for XRandR 1.5 monitor API (XRRGetMonitors)
 AC_CHECK_LIB(Xrandr, XRRGetMonitors, [AC_DEFINE(HAVE_XRANDR_MONITORS,1,Support for XRandR monitor API (XRRGetMonitors))],,$full_x_libs)
 
+dnl# Check for XRender extension (Render)
+have_xrender=no
+AC_CHECK_HEADER(X11/extensions/Xrender.h, have_xrender_h=yes, have_xrender_h=no)
+if test "x$have_xrender_h" = "xyes"; then
+  AC_CHECK_LIB(Xrender, XRenderQueryExtension, [have_xrender=yes], [have_xrender=no], $full_x_libs)
+  if test "x$have_xrender" = "xyes"; then
+    x_libs="-lXrender $x_libs"
+    AC_DEFINE(HAVE_XRENDER,1,Support for XRender extension)
+  fi
+fi
+
 if test "x$enable_sigsegv" = "xyes"; then
   AC_DEFINE(HAVE_SIGSEGV_HANDLING,1,self diagnostic SIGSEGV handling (as opposed to dumping core))
 fi

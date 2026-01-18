@@ -104,6 +104,9 @@
 /* Support for XRandR monitor API (XRRGetMonitors) */
 #undef HAVE_XRANDR_MONITORS
 
+/* Support for XRender extension */
+#undef HAVE_XRENDER
+
 /* Internationalized text support */
 #undef I18N
 

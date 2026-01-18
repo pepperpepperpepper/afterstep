@@ -315,6 +315,19 @@ if test "x$have_xext_lib" = "xyes"; then
     x_libs="$x_libs -lXext"
 fi
 
+dnl# Check for XRender extension (Render)
+have_xrender=no
+if test "x$have_x" = "xyes"; then
+	AC_CHECK_HEADER(X11/extensions/Xrender.h, have_xrender_h=yes, have_xrender_h=no)
+	if test "x$have_xrender_h" = "xyes"; then
+		AC_CHECK_LIB(Xrender, XRenderQueryExtension, [have_xrender=yes], [have_xrender=no], $full_x_libs)
+		if test "x$have_xrender" = "xyes"; then
+			x_libs="-lXrender $x_libs"
+			AC_DEFINE(HAVE_XRENDER,1,Support for XRender extension)
+		fi
+	fi
+fi
+
 dnl# Check for graphics libraries :
 
 image_format="xpm"

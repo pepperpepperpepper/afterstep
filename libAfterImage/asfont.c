@@ -409,6 +409,13 @@ destroy_font( ASFont *font )
 {
 	if( font )
 	{
+#if defined(HAVE_XRENDER) && !defined(X_DISPLAY_MISSING)
+		if( font->xrender_glyphset != 0 && font->fontman && font->fontman->dpy )
+		{
+			XRenderFreeGlyphSet( font->fontman->dpy, (GlyphSet)font->xrender_glyphset );
+			font->xrender_glyphset = 0;
+		}
+#endif
 #ifdef HAVE_FREETYPE
         if( font->type == ASF_Freetype && font->ft_face )
 			FT_Done_Face(font->ft_face);
@@ -2214,106 +2221,182 @@ Bool afterimage_uses_xrender(){ return True;}
 
 void
 draw_text_xrender(  ASVisual *asv, const void *text, ASFont *font, ASTextAttributes *attr, int length,
-					Picture	xrender_src, Picture xrender_dst,
+					int xrender_op, unsigned long xrender_src, unsigned long xrender_dst,
 					int	xrender_xSrc,  int xrender_ySrc, int xrender_xDst, int xrender_yDst )
 {
+	static unsigned long next_xrender_gid = 1;
+
 	ASGlyphMap map;
-	int max_gid = 0 ;
-	int i ;
-	int missing_glyphs = 0 ;
-	int glyphs_bmap_size = 0, max_height = 0 ;
+	ASGlyph **missing = NULL;
+	int missing_count = 0;
+	int missing_cap = 0;
+	size_t images_size = 0;
+	int max_height = 0;
+	int i;
+	int offset_3d_x = 0, offset_3d_y = 0;
+	int space_size = 0, line_height = 0;
+	int pen_x = 0, pen_y = 0;
+	XRenderPictFormat *mask_fmt = NULL;
+	int render_event_base = 0, render_error_base = 0;
+
+	(void)render_event_base;
+	(void)render_error_base;
+
+	if( asv == NULL || asv->dpy == NULL || text == NULL || font == NULL || attr == NULL )
+		return;
+
+	if( !XRenderQueryExtension( asv->dpy, &render_event_base, &render_error_base ) )
+		return;
+
+	mask_fmt = XRenderFindStandardFormat( asv->dpy, PictStandardA8 );
+	if( mask_fmt == NULL )
+		return;
 
 	if( !get_text_glyph_map( text, font, &map, attr, length) )
 		return;
 	
 	if( map.width == 0 ) 
+	{
+		free_glyph_map( &map, True );
 		return;
+	}
 	/* xrender code starts here : */
 	/* Step 1: we have to make sure we have a valid GlyphSet */
 	if( font->xrender_glyphset == 0 ) 
-		font->xrender_glyphset = XRenderCreateGlyphSet (asv->dpy, asv->xrender_mask_format);
+		font->xrender_glyphset = XRenderCreateGlyphSet( asv->dpy, mask_fmt );
+	if( font->xrender_glyphset == 0 )
+	{
+		free_glyph_map( &map, True );
+		return;
+	}
+
 	/* Step 2: we have to make sure all the glyphs are in GlyphSet */
-	for( i = 0 ; map.glyphs[i] != GLYPH_EOT ; ++i ) 
-		if( map.glyphs[i] > MAX_SPECIAL_GLYPH && map.glyphs[i]->xrender_gid == 0 ) 
+	for( i = 0 ; map.glyphs[i] != GLYPH_EOT ; ++i )
+		if( map.glyphs[i] > MAX_SPECIAL_GLYPH && map.glyphs[i]->xrender_gid == 0 )
 		{
-			glyphs_bmap_size += map.glyphs[i]->width * map.glyphs[i]->height ;
-			if( map.glyphs[i]->height > max_height ) 
-				max_height = map.glyphs[i]->height ;
-			++missing_glyphs;
+			ASGlyph *asg = map.glyphs[i];
+			int stride = (asg->width + 3) & ~3; /* ZPixmap alignment for depth=8 */
+
+			asg->xrender_gid = next_xrender_gid++;
+			if( next_xrender_gid == 0 )
+				next_xrender_gid = 1;
+
+			if( missing_count >= missing_cap )
+			{
+				missing_cap = (missing_cap == 0) ? 64 : (missing_cap * 2);
+				missing = saferealloc( missing, sizeof(*missing) * missing_cap );
+			}
+			missing[missing_count++] = asg;
+
+			images_size += (size_t)stride * (size_t)asg->height;
+			if( asg->height > max_height )
+				max_height = asg->height;
 		}
 	
-	if( missing_glyphs > 0 ) 
-	{
-		Glyph		*gids;
-		XGlyphInfo	*glyphs;
-		char *bitmap, *bmap_ptr ;
-		int	 nbytes_bitmap = 0;
-		CARD8 **scanlines ;
+	if( missing_count > 0 )
+		{
+			Glyph *gids = safecalloc( missing_count, sizeof(Glyph) );
+			XGlyphInfo *glyphs = safecalloc( missing_count, sizeof(XGlyphInfo) );
+			char *images = NULL;
+			char *images_ptr = NULL;
+			CARD8 **scanlines = safecalloc( MAX(max_height, 1), sizeof(CARD8*) );
+			int gi;
 
-		scanlines = safecalloc(max_height, sizeof(CARD8*));
+			images = safecalloc( 1, (images_size > 0) ? images_size : 1 );
+			images_ptr = images;
 
-		bmap_ptr = bitmap = safemalloc( glyphs_bmap_size );
-		glyphs = safecalloc( missing_glyphs, sizeof(XGlyphInfo));
-		gids = safecalloc( missing_glyphs, sizeof(Glyph));
-		for( i = 0 ; map.glyphs[i] != GLYPH_EOT ; ++i ) 
-			if( map.glyphs[i] > MAX_SPECIAL_GLYPH && map.glyphs[i]->xrender_gid == 0 ) 
-			{	
-				ASGlyph *asg = map.glyphs[i];
-				int k = asg->height ;  
-				char *ptr = bmap_ptr + asg->width*asg->height ;
-				bmap_ptr = ptr ; 				   
-				while ( --k >= 0 )
-				{
-					ptr -= asg->width ;	  
-					scanlines[k] = ptr ;
-				}		
-				render_asglyph( scanlines, asg->pixmap,	0, 0, asg->width, asg->height, 0xFF );
-				gids[i] = 
-			}
-		XRenderAddGlyphs( asv->dpy, font->xrender_glyphset, gids, glyphs, missing_glyphs, bitmap, nbytes_bitmap );
+		for( gi = 0 ; gi < missing_count ; ++gi )
+		{
+			ASGlyph *asg = missing[gi];
+			int y;
+			int stride = (asg->width + 3) & ~3; /* ZPixmap alignment for depth=8 */
+
+			gids[gi] = (Glyph)asg->xrender_gid;
+			glyphs[gi].width = asg->width;
+			glyphs[gi].height = asg->height;
+			glyphs[gi].x = asg->lead;
+			glyphs[gi].y = -asg->ascend;
+			glyphs[gi].xOff = asg->step;
+			glyphs[gi].yOff = 0;
+
+			for( y = 0 ; y < asg->height ; ++y )
+				scanlines[y] = (CARD8*)images_ptr + (size_t)y * (size_t)stride;
+
+			if( images_ptr && asg->pixmap && asg->width > 0 && asg->height > 0 )
+				render_asglyph( scanlines, asg->pixmap, 0, 0, asg->width, asg->height, 0xFF );
+
+			images_ptr += (size_t)stride * (size_t)asg->height;
+		}
+
+		XRenderAddGlyphs( asv->dpy, (GlyphSet)font->xrender_glyphset, gids, glyphs, missing_count, images, (int)images_size );
+
 		free( gids );
 		free( glyphs );
-		free( bitmap );
-		free( scanlines );
-	}
+			free( images );
+			free( scanlines );
+		}
+
 	/* Step 3: actually rendering text  : */
-	if( max_gid <= 255 ) 
+	apply_text_3D_type( attr->type, &offset_3d_x, &offset_3d_y );
+	offset_3d_x += font->spacing_x ;
+	offset_3d_y += font->spacing_y ;
+
+	line_height = font->max_height + offset_3d_y;
+
+	space_size  = font->space_size ;
+	if( !get_flags( font->flags, ASF_Monospaced) )
+		space_size  = (space_size>>1)+1 ;
+	space_size += offset_3d_x;
+
+	for( i = 0 ; map.glyphs[i] != GLYPH_EOT ; ++i )
 	{
-		char *string = safemalloc( map->glyphs_num-1 );
-		for( i = 0 ; map.glyphs[i] != GLYPH_EOT ; ++i ) 
-			string[i] = map.glyphs[i]->xrender_gid ;
-		XRenderCompositeString8 ( asv->dpy, PictOpOver, xrender_src, xrender_dst, 
-								  asv->xrender_mask_format,
-			  					  font->xrender_glyphset, 
-								  xrender_xSrc,xrender_ySrc,xrender_xDst,xrender_yDst,
-								  string, i);
-		free( string );
-	}else if( max_gid <= 65000 ) 	
-	{
-		unsigned short *string = safemalloc( sizeof(unsigned short)*(map->glyphs_num-1) );
-		for( i = 0 ; map.glyphs[i] != GLYPH_EOT ; ++i ) 
-			string[i] = map.glyphs[i]->xrender_gid ;
-		XRenderCompositeString16 (asv->dpy, PictOpOver, xrender_src, xrender_dst, 
-								  asv->xrender_mask_format,
-			  					  font->xrender_glyphset, 
-								  xrender_xSrc,xrender_ySrc,xrender_xDst,xrender_yDst,
-								  string, i);
-		free( string );
-	}else
-	{
-		unsigned int *string = safemalloc( sizeof(int)*(map->glyphs_num-1) );	
-		for( i = 0 ; map.glyphs[i] != GLYPH_EOT ; ++i ) 
-			string[i] = map.glyphs[i]->xrender_gid ;
-		XRenderCompositeString32 (asv->dpy, PictOpOver, xrender_src, xrender_dst, 
-								  asv->xrender_mask_format,
-			  					  font->xrender_glyphset, 
-								  xrender_xSrc,xrender_ySrc,xrender_xDst,xrender_yDst,
-								  string, i);
-		free( string );
-	}	 
-	
+		if( map.glyphs[i] == GLYPH_EOL )
+		{
+			pen_x = 0;
+			pen_y += line_height;
+			continue;
+		}
+
+		if( map.glyphs[i] == GLYPH_SPACE )
+		{
+			pen_x += space_size;
+			continue;
+		}
+
+		if( map.glyphs[i] == GLYPH_TAB )
+		{
+			if( !get_flags( attr->rendition_flags, ASTA_UseTabStops ) )
+				pen_x += space_size * attr->tab_size;
+			else
+				pen_x = goto_tab_stop( attr, space_size, pen_x );
+			continue;
+		}
+
+		if( map.glyphs[i] > MAX_SPECIAL_GLYPH )
+		{
+			ASGlyph *asg = map.glyphs[i];
+			unsigned int gid32;
+			Picture src_pic = (Picture)xrender_src;
+			Picture dst_pic = (Picture)xrender_dst;
+
+			pen_x += map.x_kerning[i];
+
+			gid32 = (unsigned int)asg->xrender_gid;
+			if( gid32 != 0 )
+				XRenderCompositeString32( asv->dpy, xrender_op, src_pic, dst_pic, mask_fmt,
+										  (GlyphSet)font->xrender_glyphset,
+										  xrender_xSrc, xrender_ySrc,
+										  xrender_xDst + pen_x, xrender_yDst + pen_y,
+										  &gid32, 1 );
+
+			pen_x += asg->step + offset_3d_x;
+		}
+	}
+
 	/* xrender code ends here : */
-	free_glyph_map( &map, True );	  
+	free_glyph_map( &map, True );
+	if( missing )
+		free( missing );
 }
 
 #endif
@@ -2322,4 +2405,3 @@ draw_text_xrender(  ASVisual *asv, const void *text, ASFont *font, ASTextAttribu
 /*********************************************************************************/
 /* The end !!!! 																 */
 /*********************************************************************************/
-

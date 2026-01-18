@@ -124,6 +124,9 @@
 /* Define if support for XPM images is desired */
 #undef HAVE_XPM
 
+/* Support for XRender extension */
+#undef HAVE_XRENDER
+
 /* Define to 1 if you have the <zlib.h> header file. */
 #undef HAVE_ZLIB_H
 
