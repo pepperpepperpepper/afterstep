@@ -100,5 +100,5 @@ tools/postcard.sh
 /afterstep-xorg-*.log
 /afterstep-screenshots*/
 
-# Local planning notes (keep untracked)
+# Local notes (keep untracked)
 /plan.md
