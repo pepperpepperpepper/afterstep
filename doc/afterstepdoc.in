@@ -8,21 +8,28 @@
 #
 # Try to find an appropiate browser to show afterstep documentation in
 
-for app in sensible-browser x-www-browser firefox mozilla chrome chromium opera konqueror; do 
+page="${1:-index.html}"
+doc_dir="@datarootdir@/afterstep/doc/html"
+doc_path="$doc_dir/$page"
+if [ ! -r "$doc_path" ]; then
+	doc_path="$doc_dir/index.html"
+fi
+
+for app in xdg-open sensible-browser x-www-browser firefox mozilla chrome chromium opera konqueror; do 
 	full_path=`which $app`
 	if [ "x$full_path" != "x" ] ; then
-     		$app @datarootdir@/afterstep/doc/html/index.html & exit
+     		$app "$doc_path" & exit
 	fi
 done
 
 for lynx in /usr/bin/w3m /usr/bin/links /usr/bin/lynx /bin/w3m /bin/links /bin/lynx /usr/local/bin/w3m /usr/local/bin/links /usr/local/bin/lynx; do
     if [ -x $lynx ] ; then
 	if [ -x /usr/bin/aterm ] ; then
-	    exec /usr/bin/aterm -e $lynx @datarootdir@/afterstep/doc/html/index.html &
+	    exec /usr/bin/aterm -e $lynx "$doc_path" &
 	elif [ -x /usr/local/bin/aterm ] ; then
-	    exec /usr/local/bin/aterm -e $lynx @datarootdir@/afterstep/doc/html/index.html &
+	    exec /usr/local/bin/aterm -e $lynx "$doc_path" &
 	else			       
-	    exec xterm -bg black -fg white -sl 500 -vb -e $lynx @datarootdir@/afterstep/doc/html/index.html &
+	    exec xterm -bg black -fg white -sl 500 -vb -e $lynx "$doc_path" &
 	fi
     fi
 done

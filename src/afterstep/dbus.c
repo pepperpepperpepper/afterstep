@@ -25,6 +25,8 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/time.h>
+#include <time.h>
 
 #undef HAVE_DBUS_CONTEXT
 
@@ -314,7 +316,7 @@ void asdbus_dispatch_destroy (void *data) {
     free (data);
 }
 #endif
-static _asdbus_add_match (DBusConnection *conn, const char* iface, const char* member) {
+static void _asdbus_add_match (DBusConnection *conn, const char* iface, const char* member) {
 	char match[256];
 	sprintf(match,	member?"type='signal',interface='%s',member='%s'":"type='signal',interface='%s'", iface, member);
     	DBusError error;
@@ -601,11 +603,13 @@ char *asdbus_RegisterSMClient (const char *sm_client_id)
 																										 &error);
 			dbus_message_unref (message);
 
-			if (!replay)
+			if (!replay) {
 				show_error
 						("Failed to register as a client with the Gnome Session Manager. DBus error: %s",
 						 dbus_error_is_set (&error) ? error.message : "unknown error");
-			else {										/* get the allocated session ClientID */
+				if (dbus_error_is_set (&error))
+					dbus_error_free (&error);
+			} else {									/* get the allocated session ClientID */
 				char *ret_client_path;
 				if (!dbus_message_get_args
 						(replay, &error, DBUS_TYPE_OBJECT_PATH, &ret_client_path,
@@ -744,6 +748,81 @@ Bool asdbus_SendSimpleCommandSyncNoRep (ASDBusOjectDescr *descr, const char *com
 	}
 #endif
 	return res;
+}
+
+static Bool asdbus_TryGetBoolProperty (ASDBusOjectDescr *descr, const char *property,
+																			Bool *out_value)
+{
+#ifdef HAVE_DBUS_CONTEXT
+	DBusConnection *conn;
+	DBusMessage *message;
+	DBusMessage *reply;
+	DBusError error;
+	DBusMessageIter iter;
+	DBusMessageIter variant;
+	const char *interface;
+	const char *property_name;
+
+	if (out_value)
+		*out_value = False;
+	if (descr == NULL || property == NULL || out_value == NULL)
+		return False;
+
+	conn = descr->systemBus ? ASDBus.system_conn : ASDBus.session_conn;
+	if (conn == NULL)
+		return False;
+
+	message =
+			dbus_message_new_method_call (descr->name, descr->path,
+																		DBUS_INTERFACE_PROPERTIES, "Get");
+	if (message == NULL)
+		return False;
+
+	interface = descr->interface;
+	property_name = property;
+	dbus_message_iter_init_append (message, &iter);
+	dbus_message_iter_append_basic (&iter, DBUS_TYPE_STRING, &interface);
+	dbus_message_iter_append_basic (&iter, DBUS_TYPE_STRING, &property_name);
+
+	dbus_error_init (&error);
+	reply = dbus_connection_send_with_reply_and_block (conn, message, -1, &error);
+	dbus_message_unref (message);
+
+	if (reply == NULL) {
+		if (dbus_error_is_set (&error))
+			dbus_error_free (&error);
+		return False;
+	}
+
+	if (!dbus_message_iter_init (reply, &iter)
+			|| dbus_message_iter_get_arg_type (&iter) != DBUS_TYPE_VARIANT) {
+		dbus_message_unref (reply);
+		if (dbus_error_is_set (&error))
+			dbus_error_free (&error);
+		return False;
+	}
+
+	dbus_message_iter_recurse (&iter, &variant);
+	if (dbus_message_iter_get_arg_type (&variant) == DBUS_TYPE_BOOLEAN) {
+		dbus_bool_t ok = 0;
+		dbus_message_iter_get_basic (&variant, &ok);
+		*out_value = ok ? True : False;
+		dbus_message_unref (reply);
+		if (dbus_error_is_set (&error))
+			dbus_error_free (&error);
+		return True;
+	}
+
+	dbus_message_unref (reply);
+	if (dbus_error_is_set (&error))
+		dbus_error_free (&error);
+	return False;
+#else
+	(void)descr;
+	(void)property;
+	(void)out_value;
+	return False;
+#endif
 }
 
 Bool asdbus_GetIndicator (ASDBusOjectDescr *descr, const char *command)
@@ -899,6 +978,9 @@ Bool asdbus_Suspend (int timeout)
 
 Bool asdbus_GetCanSuspend ()
 {
+	Bool res = False;
+	if (asdbus_TryGetBoolProperty (&dbusUPower, "CanSuspend", &res))
+		return res;
 	return asdbus_GetIndicator (&dbusUPower, "SuspendAllowed");
 }
 
@@ -909,6 +991,9 @@ Bool asdbus_Hibernate (int timeout)
 
 Bool asdbus_GetCanHibernate ()
 {
+	Bool res = False;
+	if (asdbus_TryGetBoolProperty (&dbusUPower, "CanHibernate", &res))
+		return res;
 	return asdbus_GetIndicator (&dbusUPower, "HibernateAllowed");
 }
 

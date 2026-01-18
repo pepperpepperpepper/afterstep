@@ -48,9 +48,8 @@ make_standard_categories:	make_standard_categories.o
 PrintDesktopEntries.o:	DesktopEntry.c
 		$(CC) $(CCFLAGS) $(EXTRA_DEFINES) -DPRINT_DESKTOP_ENTRIES $(INCLUDES) $(EXTRA_INCLUDES) -c DesktopEntry.c -o PrintDesktopEntries.o
 
-PrintDesktopEntries:	PrintDesktopEntries.o
-		$(CC) PrintDesktopEntries.o $(USER_LD_FLAGS) $(LIBS_ALL) $(LIBS_AFTERIMAGE) -o PrintDesktopEntries
+PrintDesktopEntries:	$(LIB_STATIC) PrintDesktopEntries.o
+			$(CC) PrintDesktopEntries.o $(USER_LD_FLAGS) $(LIBS_ALL) $(LIBS_AFTERIMAGE) -o PrintDesktopEntries
 
 install.inc:
-
 

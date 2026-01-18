@@ -44,6 +44,7 @@
 
 #include "../../libAfterStep/wmprops.h"
 #include "../../libAfterStep/moveresize.h"
+#include "../../libAfterStep/canvas.h"
 
 #include <X11/keysym.h>
 #ifdef XSHMIMAGE
@@ -61,6 +62,19 @@
  ************************************************************************/
 void DigestEvent (ASEvent * event);
 void afterstep_wait_pipes_input (int timeout_sec);
+
+static void refresh_root_geometry (void)
+{
+	setupScreenSize (&Scr);
+	if (Scr.RootCanvas)
+		handle_canvas_config (Scr.RootCanvas);
+	get_Xinerama_rectangles (&Scr);
+	check_screen_panframes (&Scr);
+	if (Scr.wmprops)
+		set_desktop_geometry_prop (Scr.wmprops,
+														 Scr.VxMax + Scr.MyDisplayWidth,
+														 Scr.VyMax + Scr.MyDisplayHeight);
+}
 
 static int
 _exec_while_x_pending ()
@@ -704,22 +718,21 @@ void DispatchEvent (ASEvent * event, Bool deffered)
 	case MapRequest:
 		HandleMapRequest (event);
 		break;
-	case ConfigureNotify:
-		if (event->client) {
-			LOCAL_DEBUG_CALLER_OUT
-					("ConfigureNotify:(%p,%lx,asw->w=%lx,(%dx%d%+d%+d)",
-					 event->client, event->w, event->client->w,
-					 event->x.xconfigure.width, event->x.xconfigure.height,
-					 event->x.xconfigure.x, event->x.xconfigure.y);
-			on_window_moveresize (event->client, event->w);
-		}else if (event->w == Scr.Root) {
-					("ConfigureNotify:(RootWindow,%dx%d)",
-					 event->x.xconfigure.width, event->x.xconfigure.height);
-			setupScreenSize(&Scr);
-			//Scr.MyDisplayWidth = event->x.xconfigure.width;
-			//Scr.MyDisplayHeight = event->x.xconfigure.height;
-		}
-		break;
+		case ConfigureNotify:
+			if (event->client) {
+				LOCAL_DEBUG_CALLER_OUT
+						("ConfigureNotify:(%p,%lx,asw->w=%lx,(%dx%d%+d%+d)",
+					 	 event->client, event->w, event->client->w,
+					 	 event->x.xconfigure.width, event->x.xconfigure.height,
+					 	 event->x.xconfigure.x, event->x.xconfigure.y);
+				on_window_moveresize (event->client, event->w);
+			}else if (event->w == Scr.Root) {
+				LOCAL_DEBUG_CALLER_OUT ("ConfigureNotify:(RootWindow,%dx%d)",
+																event->x.xconfigure.width,
+																event->x.xconfigure.height);
+				refresh_root_geometry ();
+			}
+			break;
 	case ConfigureRequest:
 		HandleConfigureRequest (event);
 		break;
@@ -736,6 +749,19 @@ void DispatchEvent (ASEvent * event, Bool deffered)
 		HandleSelectionClear (event);
 		break;
 	default:
+#ifdef HAVE_XRANDR
+		if (Scr.RandREventBase != 0) {
+			if (event->x.type == (Scr.RandREventBase + RRScreenChangeNotify)) {
+				XRRUpdateConfiguration (&event->x);
+				refresh_root_geometry ();
+				break;
+			}
+			if (event->x.type == (Scr.RandREventBase + RRNotify)) {
+				refresh_root_geometry ();
+				break;
+			}
+		}
+#endif
 #ifdef SHAPE
 		if (event->x.type == (Scr.ShapeEventBase + ShapeNotify))
 			HandleShapeNotify (event);

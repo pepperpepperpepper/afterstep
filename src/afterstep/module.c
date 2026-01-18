@@ -462,6 +462,9 @@ void FlushAllQueues ()
 	struct timeval tv;
 	struct timeval *t = NULL;
 
+	if (Modules == NULL)
+		return;
+
 	do {
 		int max_fd = -1;
 		register int i = MIN (MODULES_NUM, Module_npipes);

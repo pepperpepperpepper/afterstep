@@ -1,0 +1,355 @@
+afterstep : Defining var [icon.button.width] == 64.
+afterstep : Defining var [icon.button.height] == 64.
+afterstep : Defining var [icon.width] == 48.
+afterstep : Defining var [icon.height] == 48.
+afterstep : Defining var [minipixmap.width] == 24.
+afterstep : Defining var [minipixmap.height] == 24.
+afterstep : Defining var [title.font.size] == 14.
+afterstep : Defining var [menu.font.size] == 16.
+afterstep : Defining var [menu.show_minipixmaps] == 1.
+afterstep : Defining var [menu.show_unavailable] == 1.
+afterstep : Defining var [xroot.width] == 1280.
+afterstep : Defining var [xroot.height] == 800.
+afterstep : Defining var [xroot.widthmm] == 325.
+afterstep : Defining var [xroot.heightmm] == 203.
+afterstep : Defining var [icon.button.width] == 48.
+afterstep : Defining var [icon.button.height] == 48.
+afterstep : Defining var [icon.width] == 36.
+afterstep : Defining var [icon.height] == 36.
+afterstep : Defining var [minipixmap.width] == 19.
+afterstep : Defining var [minipixmap.height] == 19.
+afterstep : Defining var [title.font.size] == 11.
+afterstep : Defining var [menu.font.size] == 12.
+afterstep : Defining var [font.size] == 11.
+afterstep : Attempting to accure Window Management selection on screen 0 ...
+afterstep : Window Management selection Accured.
+afterstep : Defining var [xroot.xinerama_screens_num] == 0.
+afterstep : Defining var [xroot.xinerama_screens_num] == 1.
+afterstep : xroot.xinerama_screens[0] = {0, 0, 0, 1280, 800}
+afterstep : Defining var [xroot.xinerama_screens[0].x] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].y] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].width] == 1280.
+afterstep : Defining var [xroot.xinerama_screens[0].height] == 800.
+afterstep : Defining var [xroot.xinerama_screens_num] == 0.
+afterstep : Defining var [xroot.xinerama_screens_num] == 1.
+afterstep : xroot.randr.monitor[0] = {0, 0, 1280, 800}
+afterstep : Defining var [xroot.xinerama_screens[0].x] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].y] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].width] == 1280.
+afterstep : Defining var [xroot.xinerama_screens[0].height] == 800.
+afterstep : Connected to System DBus.
+afterstep : AfterStep v.2.2.12 is starting up ...
+afterstep : Successfuly accured Session DBus connection.
+afterstep : Using "afterstep-2072321" as the client ID for registration with the Session Manager
+afterstep ERROR: Failed to register as a client with the Gnome Session Manager. DBus error: The name is not activatable
+afterstep : Creating /tmp/tmp.KTkqa926ck/.afterstep/non-configurable/workspace_state ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.KTkqa926ck/.afterstep/desktop ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.KTkqa926ck/.afterstep/desktop/icons ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.KTkqa926ck/.afterstep/desktop/fonts ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.KTkqa926ck/.afterstep/desktop/tiles ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.KTkqa926ck/.afterstep/webcache ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.KTkqa926ck/.afterstep/thumbnails ... 
+afterstep : 	 created.
+afterstep ERROR: Request SuspendAllowed to Power Management Daemon failed: No such method “SuspendAllowed”
+afterstep ERROR: Request HibernateAllowed to Power Management Daemon failed: No such method “HibernateAllowed”
+afterstep : Initializing screen 0 ...
+afterstep : 	 screen[0].size = 1280x800
+afterstep : 	 screen[0].root = 21F
+afterstep : 	 screen[0].color_depth = 24
+afterstep : 	 screen[0].colormap    = 0x20
+afterstep : 	 screen[0].visual.id         = 21
+afterstep : 	 screen[0].visual.class      = 4
+afterstep : 	 screen[0].visual.red_mask   = 0x00FF0000
+afterstep : 	 screen[0].visual.green_mask = 0x0000FF00
+afterstep : 	 screen[0].visual.blue_mask  = 0x000000FF
+afterstep : 	 screen[0].rdisplay_string = "HOSTDISPLAY=sandbox-server::100"
+afterstep : 	 screen[0].display_string = "DISPLAY=:100"
+afterstep : Loading configuration files ...
+afterstep warning: BASE configuration file cannot be found
+afterstep : Pixmap Path changed to "$HOME/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:$HOME/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:$HOME/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:$HOME/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps:/usr/chare/icons::" ...
+afterstep : Font Path changed to "$HOME/.afterstep/desktop/fonts/:/home/arch/afterstep/_install/share/afterstep/desktop/fonts/:/usr/share/fonts/default/TrueType/:/X11/fonts/TTF" ...
+afterstep warning: COLORSCHEME is not set
+afterstep : hsv(225,11,40)->rgb16(23331,24052,26214)->crit24045
+afterstep : hsv(195,11,40)->rgb16(23331,25494,26214)->crit25064
+afterstep : hsv(30,31,40)->rgb16(26214,22151,18089)->crit22764
+afterstep : hsv(210,31,30)->rgb16(13566,16613,19660)->crit16152
+afterstep : hsv(210,31,50)->rgb16(22611,27689,32767)->crit26922
+afterstep : hsv(30,31,20)->rgb16(13107,11076,9045)->crit11382
+afterstep : Defining color [Base] == #FF34404C.
+afterstep : Defining color [Inactive1] == #FF5B5D66.
+afterstep : Defining color [Inactive2] == #FF5B6366.
+afterstep : Defining color [Active] == #FF665646.
+afterstep : Defining color [InactiveText1] == #FFE6E6E6.
+afterstep : Defining color [InactiveText2] == #FFE6E6E6.
+afterstep : Defining color [ActiveText] == #FFF5F8FA.
+afterstep : Defining color [HighInactive] == #FF888C99.
+afterstep : Defining color [HighActive] == #FF998169.
+afterstep : Defining color [HighInactiveBack] == #FF586C7F.
+afterstep : Defining color [HighActiveBack] == #FF332B23.
+afterstep : Defining color [HighInactiveText] == #FFE6E6E6.
+afterstep : Defining color [HighActiveText] == #FFF5F8FA.
+afterstep : Defining color [DisabledText] == #FF262D33.
+afterstep : Defining color [BaseDark] == #FF000000.
+afterstep : Defining color [BaseLight] == #FF7B97B3.
+afterstep : Defining color [Inactive1Dark] == #FF2D2E33.
+afterstep : Defining color [Inactive1Light] == #FF888C99.
+afterstep : Defining color [Inactive2Dark] == #FF2D3133.
+afterstep : Defining color [Inactive2Light] == #FF889599.
+afterstep : Defining color [ActiveDark] == #FF332B23.
+afterstep : Defining color [ActiveLight] == #FF998169.
+afterstep : Defining color [HighInactiveDark] == #FF5B5D66.
+afterstep : Defining color [HighInactiveLight] == #FFB6BBCC.
+afterstep : Defining color [HighActiveDark] == #FF665646.
+afterstep : Defining color [HighActiveLight] == #FFCCAD8D.
+afterstep : Defining color [HighInactiveBackDark] == #FF34404C.
+afterstep : Defining color [HighInactiveBackLight] == #FF7B97B3.
+afterstep : Defining color [HighActiveBackDark] == #FF000000.
+afterstep : Defining color [HighActiveBackLight] == #FF665646.
+afterstep : Defining color [Cursor] == #FF0C7F0C.
+afterstep : Defining var [ascs.Base.alpha] == 255.
+afterstep : Defining var [ascs.Base.red] == 52.
+afterstep : Defining var [ascs.Base.green] == 64.
+afterstep : Defining var [ascs.Base.blue] == 76.
+afterstep : Defining var [ascs.Base.hue] == 210.
+afterstep : Defining var [ascs.Base.saturation] == 31.
+afterstep : Defining var [ascs.Base.value] == 30.
+afterstep : Defining var [ascs.Inactive1.alpha] == 255.
+afterstep : Defining var [ascs.Inactive1.red] == 91.
+afterstep : Defining var [ascs.Inactive1.green] == 93.
+afterstep : Defining var [ascs.Inactive1.blue] == 102.
+afterstep : Defining var [ascs.Inactive1.hue] == 225.
+afterstep : Defining var [ascs.Inactive1.saturation] == 11.
+afterstep : Defining var [ascs.Inactive1.value] == 40.
+afterstep : Defining var [ascs.Inactive2.alpha] == 255.
+afterstep : Defining var [ascs.Inactive2.red] == 91.
+afterstep : Defining var [ascs.Inactive2.green] == 99.
+afterstep : Defining var [ascs.Inactive2.blue] == 102.
+afterstep : Defining var [ascs.Inactive2.hue] == 195.
+afterstep : Defining var [ascs.Inactive2.saturation] == 11.
+afterstep : Defining var [ascs.Inactive2.value] == 40.
+afterstep : Defining var [ascs.Active.alpha] == 255.
+afterstep : Defining var [ascs.Active.red] == 102.
+afterstep : Defining var [ascs.Active.green] == 86.
+afterstep : Defining var [ascs.Active.blue] == 70.
+afterstep : Defining var [ascs.Active.hue] == 30.
+afterstep : Defining var [ascs.Active.saturation] == 31.
+afterstep : Defining var [ascs.Active.value] == 40.
+afterstep : Defining var [ascs.InactiveText1.alpha] == 255.
+afterstep : Defining var [ascs.InactiveText1.red] == 230.
+afterstep : Defining var [ascs.InactiveText1.green] == 230.
+afterstep : Defining var [ascs.InactiveText1.blue] == 230.
+afterstep : Defining var [ascs.InactiveText1.hue] == 45.
+afterstep : Defining var [ascs.InactiveText1.saturation] == 0.
+afterstep : Defining var [ascs.InactiveText1.value] == 90.
+afterstep : Defining var [ascs.InactiveText2.alpha] == 255.
+afterstep : Defining var [ascs.InactiveText2.red] == 230.
+afterstep : Defining var [ascs.InactiveText2.green] == 230.
+afterstep : Defining var [ascs.InactiveText2.blue] == 230.
+afterstep : Defining var [ascs.InactiveText2.hue] == 15.
+afterstep : Defining var [ascs.InactiveText2.saturation] == 0.
+afterstep : Defining var [ascs.InactiveText2.value] == 90.
+afterstep : Defining var [ascs.ActiveText.alpha] == 255.
+afterstep : Defining var [ascs.ActiveText.red] == 245.
+afterstep : Defining var [ascs.ActiveText.green] == 248.
+afterstep : Defining var [ascs.ActiveText.blue] == 250.
+afterstep : Defining var [ascs.ActiveText.hue] == 210.
+afterstep : Defining var [ascs.ActiveText.saturation] == 2.
+afterstep : Defining var [ascs.ActiveText.value] == 98.
+afterstep : Defining var [ascs.HighInactive.alpha] == 255.
+afterstep : Defining var [ascs.HighInactive.red] == 136.
+afterstep : Defining var [ascs.HighInactive.green] == 140.
+afterstep : Defining var [ascs.HighInactive.blue] == 153.
+afterstep : Defining var [ascs.HighInactive.hue] == 225.
+afterstep : Defining var [ascs.HighInactive.saturation] == 11.
+afterstep : Defining var [ascs.HighInactive.value] == 60.
+afterstep : Defining var [ascs.HighActive.alpha] == 255.
+afterstep : Defining var [ascs.HighActive.red] == 153.
+afterstep : Defining var [ascs.HighActive.green] == 129.
+afterstep : Defining var [ascs.HighActive.blue] == 105.
+afterstep : Defining var [ascs.HighActive.hue] == 30.
+afterstep : Defining var [ascs.HighActive.saturation] == 31.
+afterstep : Defining var [ascs.HighActive.value] == 60.
+afterstep : Defining var [ascs.HighInactiveBack.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveBack.red] == 88.
+afterstep : Defining var [ascs.HighInactiveBack.green] == 108.
+afterstep : Defining var [ascs.HighInactiveBack.blue] == 127.
+afterstep : Defining var [ascs.HighInactiveBack.hue] == 210.
+afterstep : Defining var [ascs.HighInactiveBack.saturation] == 31.
+afterstep : Defining var [ascs.HighInactiveBack.value] == 50.
+afterstep : Defining var [ascs.HighActiveBack.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveBack.red] == 51.
+afterstep : Defining var [ascs.HighActiveBack.green] == 43.
+afterstep : Defining var [ascs.HighActiveBack.blue] == 35.
+afterstep : Defining var [ascs.HighActiveBack.hue] == 30.
+afterstep : Defining var [ascs.HighActiveBack.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveBack.value] == 20.
+afterstep : Defining var [ascs.HighInactiveText.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveText.red] == 230.
+afterstep : Defining var [ascs.HighInactiveText.green] == 230.
+afterstep : Defining var [ascs.HighInactiveText.blue] == 230.
+afterstep : Defining var [ascs.HighInactiveText.hue] == 30.
+afterstep : Defining var [ascs.HighInactiveText.saturation] == 0.
+afterstep : Defining var [ascs.HighInactiveText.value] == 90.
+afterstep : Defining var [ascs.HighActiveText.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveText.red] == 245.
+afterstep : Defining var [ascs.HighActiveText.green] == 248.
+afterstep : Defining var [ascs.HighActiveText.blue] == 250.
+afterstep : Defining var [ascs.HighActiveText.hue] == 210.
+afterstep : Defining var [ascs.HighActiveText.saturation] == 2.
+afterstep : Defining var [ascs.HighActiveText.value] == 98.
+afterstep : Defining var [ascs.DisabledText.alpha] == 255.
+afterstep : Defining var [ascs.DisabledText.red] == 38.
+afterstep : Defining var [ascs.DisabledText.green] == 45.
+afterstep : Defining var [ascs.DisabledText.blue] == 51.
+afterstep : Defining var [ascs.DisabledText.hue] == 210.
+afterstep : Defining var [ascs.DisabledText.saturation] == 24.
+afterstep : Defining var [ascs.DisabledText.value] == 20.
+afterstep : Defining var [ascs.BaseDark.alpha] == 255.
+afterstep : Defining var [ascs.BaseDark.red] == 0.
+afterstep : Defining var [ascs.BaseDark.green] == 0.
+afterstep : Defining var [ascs.BaseDark.blue] == 0.
+afterstep : Defining var [ascs.BaseDark.hue] == 210.
+afterstep : Defining var [ascs.BaseDark.saturation] == 31.
+afterstep : Defining var [ascs.BaseDark.value] == 0.
+afterstep : Defining var [ascs.BaseLight.alpha] == 255.
+afterstep : Defining var [ascs.BaseLight.red] == 123.
+afterstep : Defining var [ascs.BaseLight.green] == 151.
+afterstep : Defining var [ascs.BaseLight.blue] == 179.
+afterstep : Defining var [ascs.BaseLight.hue] == 210.
+afterstep : Defining var [ascs.BaseLight.saturation] == 31.
+afterstep : Defining var [ascs.BaseLight.value] == 70.
+afterstep : Defining var [ascs.Inactive1Dark.alpha] == 255.
+afterstep : Defining var [ascs.Inactive1Dark.red] == 45.
+afterstep : Defining var [ascs.Inactive1Dark.green] == 46.
+afterstep : Defining var [ascs.Inactive1Dark.blue] == 51.
+afterstep : Defining var [ascs.Inactive1Dark.hue] == 225.
+afterstep : Defining var [ascs.Inactive1Dark.saturation] == 11.
+afterstep : Defining var [ascs.Inactive1Dark.value] == 20.
+afterstep : Defining var [ascs.Inactive1Light.alpha] == 255.
+afterstep : Defining var [ascs.Inactive1Light.red] == 136.
+afterstep : Defining var [ascs.Inactive1Light.green] == 140.
+afterstep : Defining var [ascs.Inactive1Light.blue] == 153.
+afterstep : Defining var [ascs.Inactive1Light.hue] == 225.
+afterstep : Defining var [ascs.Inactive1Light.saturation] == 11.
+afterstep : Defining var [ascs.Inactive1Light.value] == 60.
+afterstep : Defining var [ascs.Inactive2Dark.alpha] == 255.
+afterstep : Defining var [ascs.Inactive2Dark.red] == 45.
+afterstep : Defining var [ascs.Inactive2Dark.green] == 49.
+afterstep : Defining var [ascs.Inactive2Dark.blue] == 51.
+afterstep : Defining var [ascs.Inactive2Dark.hue] == 195.
+afterstep : Defining var [ascs.Inactive2Dark.saturation] == 11.
+afterstep : Defining var [ascs.Inactive2Dark.value] == 20.
+afterstep : Defining var [ascs.Inactive2Light.alpha] == 255.
+afterstep : Defining var [ascs.Inactive2Light.red] == 136.
+afterstep : Defining var [ascs.Inactive2Light.green] == 149.
+afterstep : Defining var [ascs.Inactive2Light.blue] == 153.
+afterstep : Defining var [ascs.Inactive2Light.hue] == 195.
+afterstep : Defining var [ascs.Inactive2Light.saturation] == 11.
+afterstep : Defining var [ascs.Inactive2Light.value] == 60.
+afterstep : Defining var [ascs.ActiveDark.alpha] == 255.
+afterstep : Defining var [ascs.ActiveDark.red] == 51.
+afterstep : Defining var [ascs.ActiveDark.green] == 43.
+afterstep : Defining var [ascs.ActiveDark.blue] == 35.
+afterstep : Defining var [ascs.ActiveDark.hue] == 30.
+afterstep : Defining var [ascs.ActiveDark.saturation] == 31.
+afterstep : Defining var [ascs.ActiveDark.value] == 20.
+afterstep : Defining var [ascs.ActiveLight.alpha] == 255.
+afterstep : Defining var [ascs.ActiveLight.red] == 153.
+afterstep : Defining var [ascs.ActiveLight.green] == 129.
+afterstep : Defining var [ascs.ActiveLight.blue] == 105.
+afterstep : Defining var [ascs.ActiveLight.hue] == 30.
+afterstep : Defining var [ascs.ActiveLight.saturation] == 31.
+afterstep : Defining var [ascs.ActiveLight.value] == 60.
+afterstep : Defining var [ascs.HighInactiveDark.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveDark.red] == 91.
+afterstep : Defining var [ascs.HighInactiveDark.green] == 93.
+afterstep : Defining var [ascs.HighInactiveDark.blue] == 102.
+afterstep : Defining var [ascs.HighInactiveDark.hue] == 225.
+afterstep : Defining var [ascs.HighInactiveDark.saturation] == 11.
+afterstep : Defining var [ascs.HighInactiveDark.value] == 40.
+afterstep : Defining var [ascs.HighInactiveLight.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveLight.red] == 182.
+afterstep : Defining var [ascs.HighInactiveLight.green] == 187.
+afterstep : Defining var [ascs.HighInactiveLight.blue] == 204.
+afterstep : Defining var [ascs.HighInactiveLight.hue] == 225.
+afterstep : Defining var [ascs.HighInactiveLight.saturation] == 11.
+afterstep : Defining var [ascs.HighInactiveLight.value] == 80.
+afterstep : Defining var [ascs.HighActiveDark.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveDark.red] == 102.
+afterstep : Defining var [ascs.HighActiveDark.green] == 86.
+afterstep : Defining var [ascs.HighActiveDark.blue] == 70.
+afterstep : Defining var [ascs.HighActiveDark.hue] == 30.
+afterstep : Defining var [ascs.HighActiveDark.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveDark.value] == 40.
+afterstep : Defining var [ascs.HighActiveLight.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveLight.red] == 204.
+afterstep : Defining var [ascs.HighActiveLight.green] == 173.
+afterstep : Defining var [ascs.HighActiveLight.blue] == 141.
+afterstep : Defining var [ascs.HighActiveLight.hue] == 30.
+afterstep : Defining var [ascs.HighActiveLight.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveLight.value] == 80.
+afterstep : Defining var [ascs.HighInactiveBackDark.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveBackDark.red] == 52.
+afterstep : Defining var [ascs.HighInactiveBackDark.green] == 64.
+afterstep : Defining var [ascs.HighInactiveBackDark.blue] == 76.
+afterstep : Defining var [ascs.HighInactiveBackDark.hue] == 210.
+afterstep : Defining var [ascs.HighInactiveBackDark.saturation] == 31.
+afterstep : Defining var [ascs.HighInactiveBackDark.value] == 30.
+afterstep : Defining var [ascs.HighInactiveBackLight.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveBackLight.red] == 123.
+afterstep : Defining var [ascs.HighInactiveBackLight.green] == 151.
+afterstep : Defining var [ascs.HighInactiveBackLight.blue] == 179.
+afterstep : Defining var [ascs.HighInactiveBackLight.hue] == 210.
+afterstep : Defining var [ascs.HighInactiveBackLight.saturation] == 31.
+afterstep : Defining var [ascs.HighInactiveBackLight.value] == 70.
+afterstep : Defining var [ascs.HighActiveBackDark.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveBackDark.red] == 0.
+afterstep : Defining var [ascs.HighActiveBackDark.green] == 0.
+afterstep : Defining var [ascs.HighActiveBackDark.blue] == 0.
+afterstep : Defining var [ascs.HighActiveBackDark.hue] == 30.
+afterstep : Defining var [ascs.HighActiveBackDark.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveBackDark.value] == 0.
+afterstep : Defining var [ascs.HighActiveBackLight.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveBackLight.red] == 102.
+afterstep : Defining var [ascs.HighActiveBackLight.green] == 86.
+afterstep : Defining var [ascs.HighActiveBackLight.blue] == 70.
+afterstep : Defining var [ascs.HighActiveBackLight.hue] == 30.
+afterstep : Defining var [ascs.HighActiveBackLight.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveBackLight.value] == 40.
+afterstep : Defining var [ascs.Cursor.alpha] == 255.
+afterstep : Defining var [ascs.Cursor.red] == 12.
+afterstep : Defining var [ascs.Cursor.green] == 127.
+afterstep : Defining var [ascs.Cursor.blue] == 12.
+afterstep : Defining var [ascs.Cursor.hue] == 120.
+afterstep : Defining var [ascs.Cursor.saturation] == 90.
+afterstep : Defining var [ascs.Cursor.value] == 50.
+afterstep warning: LOOK configuration file cannot be found!
+afterstep warning: FEEL configuration file cannot be found!
+afterstep warning: DATABASE configuration file cannot be found!
+afterstep : Done loading configuration.
+Segmentation Fault trapped in afterstep.
+ Call Backtrace :
+ CALL#: ADDRESS:    FUNCTION:
+     1  0x55f46f5fd1d0  [/home/arch/afterstep/_install/bin/afterstep(+0x1161d0) [0x55f46f5fd1d0]]
+     2  0x7fa7c283e4d0  [/usr/lib/libc.so.6(+0x3e4d0) [0x7fa7c283e4d0]]
+     3  0x55f46f52bf85  [/home/arch/afterstep/_install/bin/afterstep(advertise_tbar_props+0x1e5) [0x55f46f52bf85]]
+     4  0x55f46f52cd78  [/home/arch/afterstep/_install/bin/afterstep(LoadASConfig+0x6b8) [0x55f46f52cd78]]
+     5  0x55f46f52159f  [/home/arch/afterstep/_install/bin/afterstep(main+0x60f) [0x55f46f52159f]]
+     6  0x7fa7c2827635  [/usr/lib/libc.so.6(+0x27635) [0x7fa7c2827635]]
+     7  0x7fa7c28276e9  [/usr/lib/libc.so.6(__libc_start_main+0x89) [0x7fa7c28276e9]]
+     8  0x55f46f521795  [/home/arch/afterstep/_install/bin/afterstep(_start+0x25) [0x55f46f521795]]
+Please collect all the listed information and open an issue at
+	https://github.com/afterstep/afterstep/issues.
+If a core dump was generated by this fault, please examine it with gdb and attach results to your report.
+ You can use the following sequence to do so :
+   gdb -core core /usr/bin/afterstep
+   gdb>backtrace
+   gdb>info frame
+   gdb>info all-registers
+   gdb>disassemble

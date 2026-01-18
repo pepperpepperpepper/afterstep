@@ -581,8 +581,9 @@ void asdbus_handleDispatches ();
 void asdbus_shutdown();
 void asdbus_process_messages (ASDBusFd*);
 
-char *asdbus_RegisterSMClient(const char *sm_client_id);
-void asdbus_Notify(const char *summary, const char *body, int timeout);
+	char *asdbus_RegisterSMClient(const char *sm_client_id);
+	void asdbus_UnregisterSMClient (const char *sm_client_path);
+	void asdbus_Notify(const char *summary, const char *body, int timeout);
 
 typedef enum {
 	ASDBUS_Logout_Normal = 0,
@@ -592,9 +593,13 @@ typedef enum {
 
 Bool asdbus_GetCanLogout ();
 Bool asdbus_Logout (ASDbusLogoutMode mode, int timeout);
-Bool asdbus_GetCanShutdown ();
-Bool asdbus_Shutdown (int timeout);
-Bool get_gnome_autosave ();
+	Bool asdbus_GetCanShutdown ();
+	Bool asdbus_Shutdown (int timeout);
+	Bool asdbus_GetCanSuspend ();
+	Bool asdbus_Suspend (int timeout);
+	Bool asdbus_GetCanHibernate ();
+	Bool asdbus_Hibernate (int timeout);
+	Bool get_gnome_autosave ();
 
 /*************************** decorations.c ********************************/
 ASOrientation* get_orientation_data( ASWindow *asw );

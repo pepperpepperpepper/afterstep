@@ -311,6 +311,7 @@ void DeadPipe (int nonsense)
 {
 	static int already_dead = False;
 	int i;
+	MyStyle **ms_desk_back = NULL;
 
 	if (already_dead)
 		return;
@@ -345,12 +346,15 @@ void DeadPipe (int nonsense)
 	}
 
 	if (Config)
+		ms_desk_back = Config->MSDeskBack;
+	if (Config)
 		DestroyPagerConfig (Config);
+	Config = NULL;
 	destroy_astbar_props (&(PagerState.tbar_props));
 	free_button_resources (&PagerState.shade_button);
 
-	if (Config->MSDeskBack)
-		free (Config->MSDeskBack);
+	if (ms_desk_back)
+		free (ms_desk_back);
 	free (PagerState.desks);
 
 	FreeMyAppResources ();
@@ -1953,7 +1957,7 @@ void refresh_client (INT32 old_desk, ASWindowData * wd)
 
 
 void
-change_desk_stacking (int desk, unsigned int clients_num, Window * clients)
+change_desk_stacking (int desk, unsigned int clients_num, send_data_type * clients)
 {
 	ASPagerDesk *d = get_pager_desk (desk);
 	int i, real_clients_count = 0;
@@ -1967,7 +1971,7 @@ change_desk_stacking (int desk, unsigned int clients_num, Window * clients)
 		d->clients_num = clients_num;
 	}
 	for (i = 0; i < clients_num; ++i) {
-		ASWindowData *wd = fetch_window_by_id (clients[i]);
+		ASWindowData *wd = fetch_window_by_id ((Window)clients[i]);
 		if (wd != NULL) {						/* window is in stacking order, but wew were not notifyed about it yet */
 			int k = real_clients_count;
 			while (--k >= 0)
@@ -1976,7 +1980,8 @@ change_desk_stacking (int desk, unsigned int clients_num, Window * clients)
 			if (k < 0) {
 				d->clients[i] = wd;
 				++real_clients_count;
-				LOCAL_DEBUG_OUT ("id(%lX)->wd(%p)", clients[i], d->clients[i]);
+				LOCAL_DEBUG_OUT ("id(%lX)->wd(%p)", (unsigned long)clients[i],
+												 d->clients[i]);
 			}
 		}
 	}
@@ -2505,13 +2510,13 @@ void process_message (send_data_type type, send_data_type * body)
 				update_pager_shape ();
 			}
 			break;
-		case M_STACKING_ORDER:
-			{
-				LOCAL_DEBUG_OUT ("M_STACKING_ORDER(desk=%ld, clients_num=%ld)",
-												 body[0], body[1]);
-				change_desk_stacking (body[0], body[1], (Window *) & (body[2]));
-			}
-			break;
+			case M_STACKING_ORDER:
+				{
+					LOCAL_DEBUG_OUT ("M_STACKING_ORDER(desk=%ld, clients_num=%ld)",
+													 body[0], body[1]);
+					change_desk_stacking (body[0], body[1], &body[2]);
+				}
+				break;
 		case M_END_WINDOWLIST:
 			clear_flags (PagerState.flags, ASP_ReceivingWindowList);
 			update_pager_shape ();

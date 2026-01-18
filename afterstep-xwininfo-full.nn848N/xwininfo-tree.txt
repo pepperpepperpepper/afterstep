@@ -1,0 +1,89 @@
+
+xwininfo: Window id: 0x21f (the root window) (has no name)
+
+  Root window id: 0x21f (the root window) (has no name)
+  Parent window id: 0x0 (none)
+     31 children:
+     0x200136 (has no name): ()  1x1+0+0  +0+0
+     0x200287 (has no name): ()  1280x2+0+798  +0+798
+     0x200286 (has no name): ()  2x796+1278+2  +1278+2
+     0x2002a1 (has no name): ()  64x64+1+1  +1+1
+        1 child:
+        0xa00006 (has no name): ("Wharf" "ASModule")  64x64+0+0  +1+1
+           1 child:
+           0xa00007 (has no name): ()  64x64+0+0  +1+1
+     0x200298 (has no name): ()  82x289+1197+27  +1197+27
+        1 child:
+        0xe00006 (has no name): ("Pager" "ASModule")  82x289+0+0  +1197+27
+           4 children:
+           0xe00010 (has no name): ()  80x71+0+216  +1197+243
+              2 children:
+              0xe00012 (has no name): ()  80x1+0+46  +1198+290
+              0xe00011 (has no name): ()  1x50+40+21  +1238+265
+           0xe0000d (has no name): ()  80x71+0+144  +1197+171
+              2 children:
+              0xe0000f (has no name): ()  80x1+0+46  +1198+218
+              0xe0000e (has no name): ()  1x50+40+21  +1238+193
+           0xe0000a (has no name): ()  80x71+0+72  +1197+99
+              2 children:
+              0xe0000c (has no name): ()  80x1+0+46  +1198+146
+              0xe0000b (has no name): ()  1x50+40+21  +1238+121
+           0xe00007 (has no name): ()  80x71+0+0  +1197+27
+              11 children:
+              0xe00013 (has no name): ()  42x1+-1+20  +1197+48
+              0xe00014 (has no name): ()  1x27+-1+20  +1197+48
+              0xe00015 (has no name): ()  42x1+-1+47  +1197+75
+              0xe00016 (has no name): ()  1x27+41+20  +1239+48
+              0xe00009 (has no name): ()  80x1+0+46  +1198+74
+              0xe00008 (has no name): ()  1x50+40+21  +1238+49
+              0xe00029 (has no name): ()  2x2+0+21  +1198+49
+              0xe00024 (has no name): ()  2x9+37+21  +1235+49
+              0xe00022 (has no name): ()  2x10+37+35  +1235+63
+              0xe00026 (has no name): ()  6x1+1+24  +1199+52
+              0xe00020 (has no name): ()  35x1+2+22  +1200+50
+     0x200293 (has no name): ()  64x320+1211+475  +1211+475
+        1 child:
+        0x800006 (has no name): ("Wharf" "ASModule")  64x320+0+0  +1211+475
+           5 children:
+           0x80000e (has no name): ()  64x64+0+256  +1211+731
+           0x80000a (has no name): ()  64x64+0+192  +1211+667
+           0x800009 (has no name): ()  64x64+0+128  +1211+603
+           0x800008 (has no name): ()  64x64+0+64  +1211+539
+           0x800007 (has no name): ()  64x64+0+0  +1211+475
+     0x20028e (has no name): ()  1126x1+68+36  +68+36
+        1 child:
+        0x600006 (has no name): ("WinList" "ASModule")  1126x1+0+0  +68+36
+     0x20029a (has no name): ()  196x62+38+100  +38+100
+        3 children:
+        0xc00005 (has no name): ("WinTabs" "ASModule")  196x26+0+29  +38+129
+           1 child:
+           0xc00006 (has no name): ()  196x26+0+0  +38+129
+        0x20029d (has no name): ()  196x7+0+55  +38+155
+        0x20029c (has no name): ()  196x29+0+0  +38+100
+     0x2002a2 (has no name): ()  1x1+-9000+-9000  +-9000+-9000
+     0xa00005 (has no name): ()  1x1+-10+-10  +-10+-10
+     0x20029b (has no name): ()  1x1+-9000+-9000  +-9000+-9000
+     0x200299 (has no name): ()  1x1+-9000+-9000  +-9000+-9000
+     0xe00005 (has no name): ()  1x1+-10+-10  +-10+-10
+     0xc00003 (has no name): ()  10x10+-20+-20  +-20+-20
+     0xe00003 (has no name): ()  10x10+-20+-20  +-20+-20
+     0xa00003 (has no name): ()  10x10+-20+-20  +-20+-20
+     0x200295 (has no name): ()  789x30+-144+410  +-144+410
+     0x200294 (has no name): ()  1x1+-9000+-9000  +-9000+-9000
+     0x80000b (has no name): ()  2x2+0+0  +0+0
+        2 children:
+        0x80000d (has no name): ()  1x1+-1+-1  +-1+-1
+        0x80000c (has no name): ()  1x1+-1+-1  +-1+-1
+     0x800005 (has no name): ()  1x1+-10+-10  +-10+-10
+     0x800003 (has no name): ()  10x10+-20+-20  +-20+-20
+     0x20028f (has no name): ()  1x1+-9000+-9000  +-9000+-9000
+     0x600005 (has no name): ()  1x1+-10+-10  +-10+-10
+     0x600003 (has no name): ()  10x10+-20+-20  +-20+-20
+     0x200288 (has no name): ()  2x796+0+2  +0+2
+     0x200285 (has no name): ()  1280x2+0+0  +0+0
+     0x200264 (has no name): ()  1x1+-10+-10  +-10+-10
+     0x200263 (has no name): ()  1x1+-10+-10  +-10+-10
+     0x200135 (has no name): ()  10x10+-999+-999  +-999+-999
+     0x200004 (has no name): ()  10x10+-20+-20  +-20+-20
+     0x200001 (has no name): ()  5x5+0+0  +0+0
+

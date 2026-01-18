@@ -77,14 +77,14 @@ typedef CARD32 ARGB32;
                                  ((((CARD32)g)&0x00FF)<<8 )| \
 								 (( (CARD32)b)&0x00FF))
 
-#define MAKE_ARGB32_GREY8(a,l)	(((a)<<24)|(((l)&0x00FF)<<16)| \
-                                 (((l)&0x00FF)<<8)|((l)&0x00FF))
+#define MAKE_ARGB32_GREY8(a,l)	((((CARD32)(a))<<24)|((((CARD32)(l))&0x00FF)<<16)| \
+                                 ((((CARD32)(l))&0x00FF)<<8)|(((CARD32)(l))&0x00FF))
 #define ARGB32_ALPHA8(c)		(((c)>>24)&0x00FF)
 #define ARGB32_RED8(c)			(((c)>>16)&0x00FF)
 #define ARGB32_GREEN8(c)	 	(((c)>>8 )&0x00FF)
 #define ARGB32_BLUE8(c)			( (c)     &0x00FF)
 #define ARGB32_CHAN8(c,i)		(((c)>>((i)<<3))&0x00FF)
-#define MAKE_ARGB32_CHAN8(v,i)	(((v)&0x0000FF)<<((i)<<3))
+#define MAKE_ARGB32_CHAN8(v,i)	((((CARD32)(v))&0x0000FF)<<((i)<<3))
 
 #ifdef __GNUC__
 #define ARGB32_ALPHA16(c)		({ CARD32 __c = ARGB32_ALPHA8(c); __c | (__c<<8);})

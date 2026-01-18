@@ -1,0 +1,2905 @@
+afterstep : Defining var [icon.button.width] == 64.
+afterstep : Defining var [icon.button.height] == 64.
+afterstep : Defining var [icon.width] == 48.
+afterstep : Defining var [icon.height] == 48.
+afterstep : Defining var [minipixmap.width] == 24.
+afterstep : Defining var [minipixmap.height] == 24.
+afterstep : Defining var [title.font.size] == 14.
+afterstep : Defining var [menu.font.size] == 16.
+afterstep : Defining var [menu.show_minipixmaps] == 1.
+afterstep : Defining var [menu.show_unavailable] == 1.
+afterstep : Defining var [xroot.width] == 1280.
+afterstep : Defining var [xroot.height] == 800.
+afterstep : Defining var [xroot.widthmm] == 325.
+afterstep : Defining var [xroot.heightmm] == 203.
+afterstep : Defining var [icon.button.width] == 48.
+afterstep : Defining var [icon.button.height] == 48.
+afterstep : Defining var [icon.width] == 36.
+afterstep : Defining var [icon.height] == 36.
+afterstep : Defining var [minipixmap.width] == 19.
+afterstep : Defining var [minipixmap.height] == 19.
+afterstep : Defining var [title.font.size] == 11.
+afterstep : Defining var [menu.font.size] == 12.
+afterstep : Defining var [font.size] == 11.
+afterstep : Attempting to accure Window Management selection on screen 0 ...
+afterstep : Window Management selection Accured.
+afterstep : Defining var [xroot.xinerama_screens_num] == 0.
+afterstep : Defining var [xroot.xinerama_screens_num] == 1.
+afterstep : xroot.xinerama_screens[0] = {0, 0, 0, 1280, 800}
+afterstep : Defining var [xroot.xinerama_screens[0].x] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].y] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].width] == 1280.
+afterstep : Defining var [xroot.xinerama_screens[0].height] == 800.
+afterstep : Defining var [xroot.xinerama_screens_num] == 0.
+afterstep : Defining var [xroot.xinerama_screens_num] == 1.
+afterstep : xroot.randr.monitor[0] = {0, 0, 1280, 800}
+afterstep : Defining var [xroot.xinerama_screens[0].x] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].y] == 0.
+afterstep : Defining var [xroot.xinerama_screens[0].width] == 1280.
+afterstep : Defining var [xroot.xinerama_screens[0].height] == 800.
+afterstep : Connected to System DBus.
+afterstep : AfterStep v.2.2.12 is starting up ...
+afterstep : Successfuly accured Session DBus connection.
+afterstep : Using "afterstep-2075136" as the client ID for registration with the Session Manager
+afterstep ERROR: Failed to register as a client with the Gnome Session Manager. DBus error: The name is not activatable
+afterstep : Creating /tmp/tmp.VNuhqAdoGz/.afterstep/non-configurable/workspace_state ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.VNuhqAdoGz/.afterstep/desktop ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.VNuhqAdoGz/.afterstep/desktop/fonts ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.VNuhqAdoGz/.afterstep/desktop/tiles ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.VNuhqAdoGz/.afterstep/webcache ... 
+afterstep : 	 created.
+afterstep : Creating /tmp/tmp.VNuhqAdoGz/.afterstep/thumbnails ... 
+afterstep : 	 created.
+afterstep ERROR: Request SuspendAllowed to Power Management Daemon failed: No such method “SuspendAllowed”
+afterstep ERROR: Request HibernateAllowed to Power Management Daemon failed: No such method “HibernateAllowed”
+afterstep : Initializing screen 0 ...
+afterstep : 	 screen[0].size = 1280x800
+afterstep : 	 screen[0].root = 21F
+afterstep : 	 screen[0].color_depth = 24
+afterstep : 	 screen[0].colormap    = 0x20
+afterstep : 	 screen[0].visual.id         = 21
+afterstep : 	 screen[0].visual.class      = 4
+afterstep : 	 screen[0].visual.red_mask   = 0x00FF0000
+afterstep : 	 screen[0].visual.green_mask = 0x0000FF00
+afterstep : 	 screen[0].visual.blue_mask  = 0x000000FF
+afterstep : 	 screen[0].rdisplay_string = "HOSTDISPLAY=sandbox-server::100"
+afterstep : 	 screen[0].display_string = "DISPLAY=:100"
+afterstep : Loading configuration files ...
+afterstep : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+afterstep : Terminal is set to: "/usr/bin/xterm"
+afterstep : Browser is set to: "none"
+afterstep : Editor is set to: "none"
+afterstep : Pixmap Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons:::" ...
+afterstep : Font Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/fonts/:/home/arch/afterstep/_install/share/afterstep/desktop/fonts/:/usr/share/fonts/default/TrueType/:/usr/share/fonts/truetype/freefont/:/X11/fonts/TTF" ...
+afterstep : hsv(245,11,40)->rgb16(23571,23331,26214)->crit23588
+afterstep : hsv(175,11,40)->rgb16(23331,26214,25973)->crit25556
+afterstep : hsv(30,31,40)->rgb16(26214,22151,18089)->crit22764
+afterstep : hsv(210,31,30)->rgb16(13566,16613,19660)->crit16152
+afterstep : hsv(210,31,50)->rgb16(22611,27689,32767)->crit26922
+afterstep : hsv(30,31,20)->rgb16(13107,11076,9045)->crit11382
+afterstep : COLORSCHEME loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_colorscheme" ...
+afterstep : Defining color [Base] == #FF34404C.
+afterstep : Defining color [Inactive1] == #FF5C5B66.
+afterstep : Defining color [Inactive2] == #FF5B6665.
+afterstep : Defining color [Active] == #FF665646.
+afterstep : Defining color [InactiveText1] == #FFE6E6E6.
+afterstep : Defining color [InactiveText2] == #FFE6E6E6.
+afterstep : Defining color [ActiveText] == #FFF5F8FA.
+afterstep : Defining color [HighInactive] == #FF8A8899.
+afterstep : Defining color [HighActive] == #FF998169.
+afterstep : Defining color [HighInactiveBack] == #FF586C7F.
+afterstep : Defining color [HighActiveBack] == #FF332B23.
+afterstep : Defining color [HighInactiveText] == #FFE6E6E6.
+afterstep : Defining color [HighActiveText] == #FFF5F8FA.
+afterstep : Defining color [DisabledText] == #FF262D33.
+afterstep : Defining color [BaseDark] == #FF000000.
+afterstep : Defining color [BaseLight] == #FF7B97B3.
+afterstep : Defining color [Inactive1Dark] == #FF2E2D33.
+afterstep : Defining color [Inactive1Light] == #FF8A8899.
+afterstep : Defining color [Inactive2Dark] == #FF2D3332.
+afterstep : Defining color [Inactive2Light] == #FF889998.
+afterstep : Defining color [ActiveDark] == #FF332B23.
+afterstep : Defining color [ActiveLight] == #FF998169.
+afterstep : Defining color [HighInactiveDark] == #FF5C5B66.
+afterstep : Defining color [HighInactiveLight] == #FFB8B6CC.
+afterstep : Defining color [HighActiveDark] == #FF665646.
+afterstep : Defining color [HighActiveLight] == #FFCCAD8D.
+afterstep : Defining color [HighInactiveBackDark] == #FF34404C.
+afterstep : Defining color [HighInactiveBackLight] == #FF7B97B3.
+afterstep : Defining color [HighActiveBackDark] == #FF000000.
+afterstep : Defining color [HighActiveBackLight] == #FF665646.
+afterstep : Defining color [Cursor] == #FF0C7F0C.
+afterstep : Defining var [ascs.Base.alpha] == 255.
+afterstep : Defining var [ascs.Base.red] == 52.
+afterstep : Defining var [ascs.Base.green] == 64.
+afterstep : Defining var [ascs.Base.blue] == 76.
+afterstep : Defining var [ascs.Base.hue] == 210.
+afterstep : Defining var [ascs.Base.saturation] == 31.
+afterstep : Defining var [ascs.Base.value] == 29.
+afterstep : Defining var [ascs.Inactive1.alpha] == 255.
+afterstep : Defining var [ascs.Inactive1.red] == 92.
+afterstep : Defining var [ascs.Inactive1.green] == 91.
+afterstep : Defining var [ascs.Inactive1.blue] == 102.
+afterstep : Defining var [ascs.Inactive1.hue] == 245.
+afterstep : Defining var [ascs.Inactive1.saturation] == 10.
+afterstep : Defining var [ascs.Inactive1.value] == 40.
+afterstep : Defining var [ascs.Inactive2.alpha] == 255.
+afterstep : Defining var [ascs.Inactive2.red] == 91.
+afterstep : Defining var [ascs.Inactive2.green] == 102.
+afterstep : Defining var [ascs.Inactive2.blue] == 101.
+afterstep : Defining var [ascs.Inactive2.hue] == 174.
+afterstep : Defining var [ascs.Inactive2.saturation] == 10.
+afterstep : Defining var [ascs.Inactive2.value] == 40.
+afterstep : Defining var [ascs.Active.alpha] == 255.
+afterstep : Defining var [ascs.Active.red] == 102.
+afterstep : Defining var [ascs.Active.green] == 86.
+afterstep : Defining var [ascs.Active.blue] == 70.
+afterstep : Defining var [ascs.Active.hue] == 30.
+afterstep : Defining var [ascs.Active.saturation] == 31.
+afterstep : Defining var [ascs.Active.value] == 40.
+afterstep : Defining var [ascs.InactiveText1.alpha] == 255.
+afterstep : Defining var [ascs.InactiveText1.red] == 230.
+afterstep : Defining var [ascs.InactiveText1.green] == 230.
+afterstep : Defining var [ascs.InactiveText1.blue] == 230.
+afterstep : Defining var [ascs.InactiveText1.hue] == -1.
+afterstep : Defining var [ascs.InactiveText1.saturation] == -1.
+afterstep : Defining var [ascs.InactiveText1.value] == 90.
+afterstep : Defining var [ascs.InactiveText2.alpha] == 255.
+afterstep : Defining var [ascs.InactiveText2.red] == 230.
+afterstep : Defining var [ascs.InactiveText2.green] == 230.
+afterstep : Defining var [ascs.InactiveText2.blue] == 230.
+afterstep : Defining var [ascs.InactiveText2.hue] == -1.
+afterstep : Defining var [ascs.InactiveText2.saturation] == -1.
+afterstep : Defining var [ascs.InactiveText2.value] == 90.
+afterstep : Defining var [ascs.ActiveText.alpha] == 255.
+afterstep : Defining var [ascs.ActiveText.red] == 245.
+afterstep : Defining var [ascs.ActiveText.green] == 248.
+afterstep : Defining var [ascs.ActiveText.blue] == 250.
+afterstep : Defining var [ascs.ActiveText.hue] == 204.
+afterstep : Defining var [ascs.ActiveText.saturation] == 2.
+afterstep : Defining var [ascs.ActiveText.value] == 98.
+afterstep : Defining var [ascs.HighInactive.alpha] == 255.
+afterstep : Defining var [ascs.HighInactive.red] == 138.
+afterstep : Defining var [ascs.HighInactive.green] == 136.
+afterstep : Defining var [ascs.HighInactive.blue] == 153.
+afterstep : Defining var [ascs.HighInactive.hue] == 247.
+afterstep : Defining var [ascs.HighInactive.saturation] == 11.
+afterstep : Defining var [ascs.HighInactive.value] == 60.
+afterstep : Defining var [ascs.HighActive.alpha] == 255.
+afterstep : Defining var [ascs.HighActive.red] == 153.
+afterstep : Defining var [ascs.HighActive.green] == 129.
+afterstep : Defining var [ascs.HighActive.blue] == 105.
+afterstep : Defining var [ascs.HighActive.hue] == 30.
+afterstep : Defining var [ascs.HighActive.saturation] == 31.
+afterstep : Defining var [ascs.HighActive.value] == 60.
+afterstep : Defining var [ascs.HighInactiveBack.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveBack.red] == 88.
+afterstep : Defining var [ascs.HighInactiveBack.green] == 108.
+afterstep : Defining var [ascs.HighInactiveBack.blue] == 127.
+afterstep : Defining var [ascs.HighInactiveBack.hue] == 209.
+afterstep : Defining var [ascs.HighInactiveBack.saturation] == 30.
+afterstep : Defining var [ascs.HighInactiveBack.value] == 49.
+afterstep : Defining var [ascs.HighActiveBack.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveBack.red] == 51.
+afterstep : Defining var [ascs.HighActiveBack.green] == 43.
+afterstep : Defining var [ascs.HighActiveBack.blue] == 35.
+afterstep : Defining var [ascs.HighActiveBack.hue] == 30.
+afterstep : Defining var [ascs.HighActiveBack.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveBack.value] == 20.
+afterstep : Defining var [ascs.HighInactiveText.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveText.red] == 230.
+afterstep : Defining var [ascs.HighInactiveText.green] == 230.
+afterstep : Defining var [ascs.HighInactiveText.blue] == 230.
+afterstep : Defining var [ascs.HighInactiveText.hue] == -1.
+afterstep : Defining var [ascs.HighInactiveText.saturation] == -1.
+afterstep : Defining var [ascs.HighInactiveText.value] == 90.
+afterstep : Defining var [ascs.HighActiveText.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveText.red] == 245.
+afterstep : Defining var [ascs.HighActiveText.green] == 248.
+afterstep : Defining var [ascs.HighActiveText.blue] == 250.
+afterstep : Defining var [ascs.HighActiveText.hue] == 204.
+afterstep : Defining var [ascs.HighActiveText.saturation] == 2.
+afterstep : Defining var [ascs.HighActiveText.value] == 98.
+afterstep : Defining var [ascs.DisabledText.alpha] == 255.
+afterstep : Defining var [ascs.DisabledText.red] == 38.
+afterstep : Defining var [ascs.DisabledText.green] == 45.
+afterstep : Defining var [ascs.DisabledText.blue] == 51.
+afterstep : Defining var [ascs.DisabledText.hue] == 207.
+afterstep : Defining var [ascs.DisabledText.saturation] == 25.
+afterstep : Defining var [ascs.DisabledText.value] == 20.
+afterstep : Defining var [ascs.BaseDark.alpha] == 255.
+afterstep : Defining var [ascs.BaseDark.red] == 0.
+afterstep : Defining var [ascs.BaseDark.green] == 0.
+afterstep : Defining var [ascs.BaseDark.blue] == 0.
+afterstep : Defining var [ascs.BaseDark.hue] == -1.
+afterstep : Defining var [ascs.BaseDark.saturation] == -1.
+afterstep : Defining var [ascs.BaseDark.value] == 0.
+afterstep : Defining var [ascs.BaseLight.alpha] == 255.
+afterstep : Defining var [ascs.BaseLight.red] == 123.
+afterstep : Defining var [ascs.BaseLight.green] == 151.
+afterstep : Defining var [ascs.BaseLight.blue] == 179.
+afterstep : Defining var [ascs.BaseLight.hue] == 210.
+afterstep : Defining var [ascs.BaseLight.saturation] == 31.
+afterstep : Defining var [ascs.BaseLight.value] == 70.
+afterstep : Defining var [ascs.Inactive1Dark.alpha] == 255.
+afterstep : Defining var [ascs.Inactive1Dark.red] == 46.
+afterstep : Defining var [ascs.Inactive1Dark.green] == 45.
+afterstep : Defining var [ascs.Inactive1Dark.blue] == 51.
+afterstep : Defining var [ascs.Inactive1Dark.hue] == 249.
+afterstep : Defining var [ascs.Inactive1Dark.saturation] == 11.
+afterstep : Defining var [ascs.Inactive1Dark.value] == 20.
+afterstep : Defining var [ascs.Inactive1Light.alpha] == 255.
+afterstep : Defining var [ascs.Inactive1Light.red] == 138.
+afterstep : Defining var [ascs.Inactive1Light.green] == 136.
+afterstep : Defining var [ascs.Inactive1Light.blue] == 153.
+afterstep : Defining var [ascs.Inactive1Light.hue] == 247.
+afterstep : Defining var [ascs.Inactive1Light.saturation] == 11.
+afterstep : Defining var [ascs.Inactive1Light.value] == 60.
+afterstep : Defining var [ascs.Inactive2Dark.alpha] == 255.
+afterstep : Defining var [ascs.Inactive2Dark.red] == 45.
+afterstep : Defining var [ascs.Inactive2Dark.green] == 51.
+afterstep : Defining var [ascs.Inactive2Dark.blue] == 50.
+afterstep : Defining var [ascs.Inactive2Dark.hue] == 169.
+afterstep : Defining var [ascs.Inactive2Dark.saturation] == 11.
+afterstep : Defining var [ascs.Inactive2Dark.value] == 20.
+afterstep : Defining var [ascs.Inactive2Light.alpha] == 255.
+afterstep : Defining var [ascs.Inactive2Light.red] == 136.
+afterstep : Defining var [ascs.Inactive2Light.green] == 153.
+afterstep : Defining var [ascs.Inactive2Light.blue] == 152.
+afterstep : Defining var [ascs.Inactive2Light.hue] == 176.
+afterstep : Defining var [ascs.Inactive2Light.saturation] == 11.
+afterstep : Defining var [ascs.Inactive2Light.value] == 60.
+afterstep : Defining var [ascs.ActiveDark.alpha] == 255.
+afterstep : Defining var [ascs.ActiveDark.red] == 51.
+afterstep : Defining var [ascs.ActiveDark.green] == 43.
+afterstep : Defining var [ascs.ActiveDark.blue] == 35.
+afterstep : Defining var [ascs.ActiveDark.hue] == 30.
+afterstep : Defining var [ascs.ActiveDark.saturation] == 31.
+afterstep : Defining var [ascs.ActiveDark.value] == 20.
+afterstep : Defining var [ascs.ActiveLight.alpha] == 255.
+afterstep : Defining var [ascs.ActiveLight.red] == 153.
+afterstep : Defining var [ascs.ActiveLight.green] == 129.
+afterstep : Defining var [ascs.ActiveLight.blue] == 105.
+afterstep : Defining var [ascs.ActiveLight.hue] == 30.
+afterstep : Defining var [ascs.ActiveLight.saturation] == 31.
+afterstep : Defining var [ascs.ActiveLight.value] == 60.
+afterstep : Defining var [ascs.HighInactiveDark.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveDark.red] == 92.
+afterstep : Defining var [ascs.HighInactiveDark.green] == 91.
+afterstep : Defining var [ascs.HighInactiveDark.blue] == 102.
+afterstep : Defining var [ascs.HighInactiveDark.hue] == 245.
+afterstep : Defining var [ascs.HighInactiveDark.saturation] == 10.
+afterstep : Defining var [ascs.HighInactiveDark.value] == 40.
+afterstep : Defining var [ascs.HighInactiveLight.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveLight.red] == 184.
+afterstep : Defining var [ascs.HighInactiveLight.green] == 182.
+afterstep : Defining var [ascs.HighInactiveLight.blue] == 204.
+afterstep : Defining var [ascs.HighInactiveLight.hue] == 245.
+afterstep : Defining var [ascs.HighInactiveLight.saturation] == 10.
+afterstep : Defining var [ascs.HighInactiveLight.value] == 80.
+afterstep : Defining var [ascs.HighActiveDark.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveDark.red] == 102.
+afterstep : Defining var [ascs.HighActiveDark.green] == 86.
+afterstep : Defining var [ascs.HighActiveDark.blue] == 70.
+afterstep : Defining var [ascs.HighActiveDark.hue] == 30.
+afterstep : Defining var [ascs.HighActiveDark.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveDark.value] == 40.
+afterstep : Defining var [ascs.HighActiveLight.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveLight.red] == 204.
+afterstep : Defining var [ascs.HighActiveLight.green] == 173.
+afterstep : Defining var [ascs.HighActiveLight.blue] == 141.
+afterstep : Defining var [ascs.HighActiveLight.hue] == 30.
+afterstep : Defining var [ascs.HighActiveLight.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveLight.value] == 80.
+afterstep : Defining var [ascs.HighInactiveBackDark.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveBackDark.red] == 52.
+afterstep : Defining var [ascs.HighInactiveBackDark.green] == 64.
+afterstep : Defining var [ascs.HighInactiveBackDark.blue] == 76.
+afterstep : Defining var [ascs.HighInactiveBackDark.hue] == 210.
+afterstep : Defining var [ascs.HighInactiveBackDark.saturation] == 31.
+afterstep : Defining var [ascs.HighInactiveBackDark.value] == 29.
+afterstep : Defining var [ascs.HighInactiveBackLight.alpha] == 255.
+afterstep : Defining var [ascs.HighInactiveBackLight.red] == 123.
+afterstep : Defining var [ascs.HighInactiveBackLight.green] == 151.
+afterstep : Defining var [ascs.HighInactiveBackLight.blue] == 179.
+afterstep : Defining var [ascs.HighInactiveBackLight.hue] == 210.
+afterstep : Defining var [ascs.HighInactiveBackLight.saturation] == 31.
+afterstep : Defining var [ascs.HighInactiveBackLight.value] == 70.
+afterstep : Defining var [ascs.HighActiveBackDark.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveBackDark.red] == 0.
+afterstep : Defining var [ascs.HighActiveBackDark.green] == 0.
+afterstep : Defining var [ascs.HighActiveBackDark.blue] == 0.
+afterstep : Defining var [ascs.HighActiveBackDark.hue] == -1.
+afterstep : Defining var [ascs.HighActiveBackDark.saturation] == -1.
+afterstep : Defining var [ascs.HighActiveBackDark.value] == 0.
+afterstep : Defining var [ascs.HighActiveBackLight.alpha] == 255.
+afterstep : Defining var [ascs.HighActiveBackLight.red] == 102.
+afterstep : Defining var [ascs.HighActiveBackLight.green] == 86.
+afterstep : Defining var [ascs.HighActiveBackLight.blue] == 70.
+afterstep : Defining var [ascs.HighActiveBackLight.hue] == 30.
+afterstep : Defining var [ascs.HighActiveBackLight.saturation] == 31.
+afterstep : Defining var [ascs.HighActiveBackLight.value] == 40.
+afterstep : Defining var [ascs.Cursor.alpha] == 255.
+afterstep : Defining var [ascs.Cursor.red] == 12.
+afterstep : Defining var [ascs.Cursor.green] == 127.
+afterstep : Defining var [ascs.Cursor.blue] == 12.
+afterstep : Defining var [ascs.Cursor.hue] == 120.
+afterstep : Defining var [ascs.Cursor.saturation] == 90.
+afterstep : Defining var [ascs.Cursor.value] == 49.
+afterstep : Custom color "Base" found with argb #FF34404C
+afterstep : Custom color "Base" found with argb #FF34404C
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [arrow_short_small_icon.width] == 15.
+afterstep : Defining var [arrow_short_small_icon.height] == 15.
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Defining var [arrow_short_small_icon_black.width] == 16.
+afterstep : Defining var [arrow_short_small_icon_black.height] == 16.
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveDark" found with argb #FF332B23
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveLight" found with argb #FF998169
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveDark" found with argb #FF332B23
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveLight" found with argb #FF998169
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveLight" found with argb #FF998169
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveDark" found with argb #FF332B23
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : LOOK configuration loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_look" ...
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "HighInactiveText" found with argb #FFE6E6E6
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "DisabledText" found with argb #FF262D33
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "HighInactive" found with argb #FF8A8899
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "HighInactiveText" found with argb #FFE6E6E6
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "HighInactive" found with argb #FF8A8899
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "HighInactiveText" found with argb #FFE6E6E6
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "DisabledText" found with argb #FF262D33
+afterstep : Custom color "Base" found with argb #FF34404C
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "Inactive1Light" found with argb #FF8A8899
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "HighInactiveText" found with argb #FFE6E6E6
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "HighInactiveDark" found with argb #FF5C5B66
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "HighInactiveBack" found with argb #FF586C7F
+afterstep : Custom color "HighInactiveBack" found with argb #FF586C7F
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "HighInactiveBack" found with argb #FF586C7F
+afterstep : Custom color "HighInactiveDark" found with argb #FF5C5B66
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "HighInactiveBack" found with argb #FF586C7F
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "Inactive1Light" found with argb #FF8A8899
+afterstep : Custom color "HighInactiveBack" found with argb #FF586C7F
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+number of items in /home/arch/afterstep/_install/share/afterstep/applications = 18
+number of items in /usr/share/applications = 78
+number of items in /usr/share/applications = 78
+number of items in /usr/share/applications = 78
+number of items in /usr/share/applications = 78
+number of items in /usr/share/applications = 78
+afterstep : MENU loaded from "/home/arch/afterstep/_install/share/afterstep/start" ...
+afterstep : FEEL configuration loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_feel" ...
+afterstep : AUTOEXEC configuration loaded from "/home/arch/afterstep/_install/share/afterstep/autoexec" ...
+afterstep : WORKSPACE STATE configuration loaded from "/tmp/tmp.VNuhqAdoGz/.afterstep/non-configurable/workspace_state" ...
+afterstep : DATABASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/database" ...
+afterstep : Done loading configuration.
+afterstep : Defining var [menu.recent_submenu_items] == 4.
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "HighActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "HighActiveBack" found with argb #FF332B23
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveDark" found with argb #FF332B23
+afterstep : Custom color "ActiveLight" found with argb #FF998169
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "Inactive1Dark" found with argb #FF2E2D33
+afterstep : Custom color "Inactive1Light" found with argb #FF8A8899
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "Inactive2Dark" found with argb #FF2D3332
+afterstep : Custom color "Inactive2Light" found with argb #FF889998
+afterstep : Custom color "InactiveText1" found with argb #FFE6E6E6
+afterstep : Custom color "HighInactive" found with argb #FF8A8899
+afterstep : Custom color "HighInactiveDark" found with argb #FF5C5B66
+afterstep : Custom color "HighInactiveLight" found with argb #FFB8B6CC
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "HighActive" found with argb #FF998169
+afterstep : Custom color "HighActiveDark" found with argb #FF665646
+afterstep : Custom color "HighActiveLight" found with argb #FFCCAD8D
+afterstep : Custom color "HighInactiveText" found with argb #FFE6E6E6
+afterstep : Custom color "HighInactiveBack" found with argb #FF586C7F
+afterstep : Custom color "HighInactiveBackDark" found with argb #FF34404C
+afterstep : Custom color "HighInactiveBackLight" found with argb #FF7B97B3
+afterstep : Custom color "HighActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "HighActiveBack" found with argb #FF332B23
+afterstep : Custom color "HighActiveBackLight" found with argb #FF665646
+afterstep : Custom color "HighActiveBackDark" found with argb #FF000000
+afterstep : Custom color "DisabledText" found with argb #FF262D33
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [menu.folder_pixmap.width] == 56.
+afterstep : Defining var [menu.folder_pixmap.height] == 56.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveDark" found with argb #FF332B23
+afterstep : Custom color "ActiveLight" found with argb #FF998169
+afterstep : Custom color "HighInactiveText" found with argb #FFE6E6E6
+afterstep : Custom color "HighInactiveBack" found with argb #FF586C7F
+afterstep : Custom color "HighInactiveBackDark" found with argb #FF34404C
+afterstep : Custom color "HighInactiveBackLight" found with argb #FF7B97B3
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "Inactive2Dark" found with argb #FF2D3332
+afterstep : Custom color "Inactive2Light" found with argb #FF889998
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveLight" found with argb #FF998169
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "ActiveDark" found with argb #FF332B23
+afterstep : Custom color "ActiveLight" found with argb #FF998169
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "Inactive2Light" found with argb #FF889998
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "InactiveText2" found with argb #FFE6E6E6
+afterstep : Custom color "Inactive2" found with argb #FF5B6665
+afterstep : Custom color "Inactive2Light" found with argb #FF889998
+afterstep : Custom color "Inactive2Dark" found with argb #FF2D3332
+afterstep : Custom color "Inactive2Dark" found with argb #FF2D3332
+afterstep : Custom color "Inactive2Light" found with argb #FF889998
+afterstep : Defining var [title.font.size] == 0.
+afterstep : Successfully loaded freetype font "DefaultFancy.ttf"
+afterstep : Successfully loaded freetype font "Default.ttf"
+afterstep : Successfully loaded freetype font "DefaultBoldOblique.ttf"
+afterstep : Successfully loaded freetype font "Default.ttf"
+afterstep : Successfully loaded freetype font "DefaultBold.ttf"
+afterstep : Successfully loaded freetype font "DefaultFancy.ttf"
+afterstep : Defining var [menu.font.size] == 19.
+afterstep : Successfully loaded freetype font "DefaultSans.ttf"
+afterstep : Defining var [icon.button.width] == 64.
+afterstep : Defining var [icon.button.height] == 64.
+afterstep : Defining var [minipixmap.width] == 19.
+afterstep : Defining var [minipixmap.height] == 19.
+afterstep : Defining var [menu.show_minipixmaps] == 1.
+afterstep : Defining var [menu.show_unavailable] == 0.
+afterstep : Defining var [menu.texture_items_individualy] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Defining var [text_fgimage.width] == 64.
+afterstep : Defining var [text_fgimage.height] == 64.
+afterstep : Custom color "BaseLight" found with argb #FF7B97B3
+afterstep : Custom color "BaseDark" found with argb #FF000000
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Custom color "Inactive1" found with argb #FF5C5B66
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : BACKGROUND for desktop 0 loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_background" ...
+afterstep : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_look" ...
+afterstep : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_feel" ...
+BALLOON.set_flags = 0x3F
+BALLOON.flags = 0x1
+afterstep : BALLOON.BorderHilite = 0x6;
+BALLOON.XOffset = 10;
+BALLOON.YOffset = 10;
+BALLOON.Delay = 200;
+BALLOON.CloseDelay = 2000;
+BALLOON.Style = "TitleButtonBalloon";
+BALLOON.set_flags = 0x3F
+BALLOON.flags = 0x1
+afterstep : BALLOON.BorderHilite = 0x6;
+BALLOON.XOffset = 100;
+BALLOON.YOffset = -50;
+BALLOON.Delay = 2000;
+BALLOON.CloseDelay = 10000;
+BALLOON.Style = "menu_hilite_style";
+afterstep : Custom color "Cursor" found with argb #FF0C7F0C
+afterstep : Custom color "ActiveText" found with argb #FFF5F8FA
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : looking for image "xfce4-settings" in path []
+afterstep : looking for image "xfce4-settings" in path [(null)]
+afterstep : looking for image "xfce4-settings.gz" in path []
+afterstep : looking for image "xfce4-settings.gz" in path [(null)]
+afterstep : looking for image "xfce4-settings.Z" in path []
+afterstep : looking for image "xfce4-settings.Z" in path [(null)]
+afterstep : looking for image "xfce4-settings.png" in path []
+afterstep : looking for image "xfce4-settings.png" in path [(null)]
+afterstep : looking for image "xfce4-settings.svg" in path []
+afterstep : looking for image "xfce4-settings.svg" in path [(null)]
+afterstep : looking for image "ibus-setup" in path []
+afterstep : looking for image "ibus-setup" in path [(null)]
+afterstep : looking for image "ibus-setup.gz" in path []
+afterstep : looking for image "ibus-setup.gz" in path [(null)]
+afterstep : looking for image "ibus-setup.Z" in path []
+afterstep : looking for image "ibus-setup.Z" in path [(null)]
+afterstep : looking for image "ibus-setup.png" in path []
+afterstep : looking for image "ibus-setup.png" in path [(null)]
+afterstep : looking for image "ibus-setup.svg" in path []
+afterstep : looking for image "ibus-setup.svg" in path [(null)]
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [z_text_black.width] == 9.
+afterstep : Defining var [z_text_black.height] == 19.
+afterstep : Defining var [z_text_white.width] == 7.
+afterstep : Defining var [z_text_white.height] == 18.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : looking for image "xfce4-settings" in path []
+afterstep : looking for image "xfce4-settings" in path [(null)]
+afterstep : looking for image "xfce4-settings.gz" in path []
+afterstep : looking for image "xfce4-settings.gz" in path [(null)]
+afterstep : looking for image "xfce4-settings.Z" in path []
+afterstep : looking for image "xfce4-settings.Z" in path [(null)]
+afterstep : looking for image "xfce4-settings.png" in path []
+afterstep : looking for image "xfce4-settings.png" in path [(null)]
+afterstep : looking for image "xfce4-settings.svg" in path []
+afterstep : looking for image "xfce4-settings.svg" in path [(null)]
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : looking for image "network-wired" in path []
+afterstep : looking for image "network-wired" in path [(null)]
+afterstep : looking for image "network-wired.gz" in path []
+afterstep : looking for image "network-wired.gz" in path [(null)]
+afterstep : looking for image "network-wired.Z" in path []
+afterstep : looking for image "network-wired.Z" in path [(null)]
+afterstep : looking for image "network-wired.png" in path []
+afterstep : looking for image "network-wired.png" in path [(null)]
+afterstep : looking for image "network-wired.svg" in path []
+afterstep : looking for image "network-wired.svg" in path [(null)]
+afterstep : looking for image "hwloc" in path []
+afterstep : looking for image "hwloc" in path [(null)]
+afterstep : looking for image "hwloc.gz" in path []
+afterstep : looking for image "hwloc.gz" in path [(null)]
+afterstep : looking for image "hwloc.Z" in path []
+afterstep : looking for image "hwloc.Z" in path [(null)]
+afterstep : looking for image "hwloc.png" in path []
+afterstep : looking for image "hwloc.png" in path [(null)]
+afterstep : looking for image "hwloc.svg" in path []
+afterstep : looking for image "hwloc.svg" in path [(null)]
+afterstep : looking for image "htop" in path []
+afterstep : looking for image "htop" in path [(null)]
+afterstep : looking for image "htop.gz" in path []
+afterstep : looking for image "htop.gz" in path [(null)]
+afterstep : looking for image "htop.Z" in path []
+afterstep : looking for image "htop.Z" in path [(null)]
+afterstep : looking for image "java21-openjdk" in path []
+afterstep : looking for image "java21-openjdk" in path [(null)]
+afterstep : looking for image "java21-openjdk.gz" in path []
+afterstep : looking for image "java21-openjdk.gz" in path [(null)]
+afterstep : looking for image "java21-openjdk.Z" in path []
+afterstep : looking for image "java21-openjdk.Z" in path [(null)]
+afterstep : looking for image "java21-openjdk.png" in path []
+afterstep : looking for image "java21-openjdk.png" in path [(null)]
+afterstep : looking for image "java21-openjdk.svg" in path []
+afterstep : looking for image "java21-openjdk.svg" in path [(null)]
+afterstep : looking for image "java21-openjdk" in path []
+afterstep : looking for image "java21-openjdk" in path [(null)]
+afterstep : looking for image "java21-openjdk.gz" in path []
+afterstep : looking for image "java21-openjdk.gz" in path [(null)]
+afterstep : looking for image "java21-openjdk.Z" in path []
+afterstep : looking for image "java21-openjdk.Z" in path [(null)]
+afterstep : looking for image "java21-openjdk.png" in path []
+afterstep : looking for image "java21-openjdk.png" in path [(null)]
+afterstep : looking for image "java21-openjdk.svg" in path []
+afterstep : looking for image "java21-openjdk.svg" in path [(null)]
+afterstep : looking for image "java25-openjdk" in path []
+afterstep : looking for image "java25-openjdk" in path [(null)]
+afterstep : looking for image "java25-openjdk.gz" in path []
+afterstep : looking for image "java25-openjdk.gz" in path [(null)]
+afterstep : looking for image "java25-openjdk.Z" in path []
+afterstep : looking for image "java25-openjdk.Z" in path [(null)]
+afterstep : looking for image "java25-openjdk.png" in path []
+afterstep : looking for image "java25-openjdk.png" in path [(null)]
+afterstep : looking for image "java25-openjdk.svg" in path []
+afterstep : looking for image "java25-openjdk.svg" in path [(null)]
+afterstep : looking for image "java25-openjdk" in path []
+afterstep : looking for image "java25-openjdk" in path [(null)]
+afterstep : looking for image "java25-openjdk.gz" in path []
+afterstep : looking for image "java25-openjdk.gz" in path [(null)]
+afterstep : looking for image "java25-openjdk.Z" in path []
+afterstep : looking for image "java25-openjdk.Z" in path [(null)]
+afterstep : looking for image "java25-openjdk.png" in path []
+afterstep : looking for image "java25-openjdk.png" in path [(null)]
+afterstep : looking for image "java25-openjdk.svg" in path []
+afterstep : looking for image "java25-openjdk.svg" in path [(null)]
+afterstep : looking for image "xterm-color_48x48" in path []
+afterstep : looking for image "xterm-color_48x48" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.gz" in path []
+afterstep : looking for image "xterm-color_48x48.gz" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.Z" in path []
+afterstep : looking for image "xterm-color_48x48.Z" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.png" in path []
+afterstep : looking for image "xterm-color_48x48.png" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.svg" in path []
+afterstep : looking for image "xterm-color_48x48.svg" in path [(null)]
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : looking for image "mlterm-icon-gnome2.png" in path []
+afterstep : looking for image "mlterm-icon-gnome2.png" in path [(null)]
+afterstep : looking for image "xterm-color_48x48" in path []
+afterstep : looking for image "xterm-color_48x48" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.gz" in path []
+afterstep : looking for image "xterm-color_48x48.gz" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.Z" in path []
+afterstep : looking for image "xterm-color_48x48.Z" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.png" in path []
+afterstep : looking for image "xterm-color_48x48.png" in path [(null)]
+afterstep : looking for image "xterm-color_48x48.svg" in path []
+afterstep : looking for image "xterm-color_48x48.svg" in path [(null)]
+afterstep : looking for image "qv4l2" in path []
+afterstep : looking for image "qv4l2" in path [(null)]
+afterstep : looking for image "qv4l2.gz" in path []
+afterstep : looking for image "qv4l2.gz" in path [(null)]
+afterstep : looking for image "qv4l2.Z" in path []
+afterstep : looking for image "qv4l2.Z" in path [(null)]
+afterstep : looking for image "qv4l2.png" in path []
+afterstep : looking for image "qv4l2.png" in path [(null)]
+afterstep : looking for image "qv4l2.svg" in path []
+afterstep : looking for image "qv4l2.svg" in path [(null)]
+afterstep : looking for image "qvidcap" in path []
+afterstep : looking for image "qvidcap" in path [(null)]
+afterstep : looking for image "qvidcap.gz" in path []
+afterstep : looking for image "qvidcap.gz" in path [(null)]
+afterstep : looking for image "qvidcap.Z" in path []
+afterstep : looking for image "qvidcap.Z" in path [(null)]
+afterstep : looking for image "qvidcap.png" in path []
+afterstep : looking for image "qvidcap.png" in path [(null)]
+afterstep : looking for image "qvidcap.svg" in path []
+afterstep : looking for image "qvidcap.svg" in path [(null)]
+afterstep : looking for image "mpv" in path []
+afterstep : looking for image "mpv" in path [(null)]
+afterstep : looking for image "mpv.gz" in path []
+afterstep : looking for image "mpv.gz" in path [(null)]
+afterstep : looking for image "mpv.Z" in path []
+afterstep : looking for image "mpv.Z" in path [(null)]
+afterstep : looking for image "mpv.png" in path []
+afterstep : looking for image "mpv.png" in path [(null)]
+afterstep : looking for image "mpv.svg" in path []
+afterstep : looking for image "mpv.svg" in path [(null)]
+afterstep : looking for image "nvim" in path []
+afterstep : looking for image "nvim" in path [(null)]
+afterstep : looking for image "nvim.gz" in path []
+afterstep : looking for image "nvim.gz" in path [(null)]
+afterstep : looking for image "nvim.Z" in path []
+afterstep : looking for image "nvim.Z" in path [(null)]
+afterstep : looking for image "ipython" in path []
+afterstep : looking for image "ipython" in path [(null)]
+afterstep : looking for image "ipython.gz" in path []
+afterstep : looking for image "ipython.gz" in path [(null)]
+afterstep : looking for image "ipython.Z" in path []
+afterstep : looking for image "ipython.Z" in path [(null)]
+afterstep : looking for image "CMakeSetup" in path []
+afterstep : looking for image "CMakeSetup" in path [(null)]
+afterstep : looking for image "CMakeSetup.gz" in path []
+afterstep : looking for image "CMakeSetup.gz" in path [(null)]
+afterstep : looking for image "CMakeSetup.Z" in path []
+afterstep : looking for image "CMakeSetup.Z" in path [(null)]
+afterstep : looking for image "CMakeSetup.png" in path []
+afterstep : looking for image "CMakeSetup.png" in path [(null)]
+afterstep : looking for image "CMakeSetup.svg" in path []
+afterstep : looking for image "CMakeSetup.svg" in path [(null)]
+afterstep : looking for image "fluid" in path []
+afterstep : looking for image "fluid" in path [(null)]
+afterstep : looking for image "fluid.gz" in path []
+afterstep : looking for image "fluid.gz" in path [(null)]
+afterstep : looking for image "fluid.Z" in path []
+afterstep : looking for image "fluid.Z" in path [(null)]
+afterstep : looking for image "fluid.png" in path []
+afterstep : looking for image "fluid.png" in path [(null)]
+afterstep : looking for image "fluid.svg" in path []
+afterstep : looking for image "fluid.svg" in path [(null)]
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Custom color "Active" found with argb #FF665646
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : looking for image "libreoffice-math" in path []
+afterstep : looking for image "libreoffice-math" in path [(null)]
+afterstep : looking for image "libreoffice-math.gz" in path []
+afterstep : looking for image "libreoffice-math.gz" in path [(null)]
+afterstep : looking for image "libreoffice-math.Z" in path []
+afterstep : looking for image "libreoffice-math.Z" in path [(null)]
+afterstep : looking for image "libreoffice-math.png" in path []
+afterstep : looking for image "libreoffice-math.png" in path [(null)]
+afterstep : looking for image "libreoffice-math.svg" in path []
+afterstep : looking for image "libreoffice-math.svg" in path [(null)]
+afterstep : looking for image "libreoffice-math" in path []
+afterstep : looking for image "libreoffice-math" in path [(null)]
+afterstep : looking for image "libreoffice-math.gz" in path []
+afterstep : looking for image "libreoffice-math.gz" in path [(null)]
+afterstep : looking for image "libreoffice-math.Z" in path []
+afterstep : looking for image "libreoffice-math.Z" in path [(null)]
+afterstep : looking for image "libreoffice-math.png" in path []
+afterstep : looking for image "libreoffice-math.png" in path [(null)]
+afterstep : looking for image "libreoffice-math.svg" in path []
+afterstep : looking for image "libreoffice-math.svg" in path [(null)]
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : looking for image "kcolorchooser" in path []
+afterstep : looking for image "kcolorchooser" in path [(null)]
+afterstep : looking for image "kcolorchooser.gz" in path []
+afterstep : looking for image "kcolorchooser.gz" in path [(null)]
+afterstep : looking for image "kcolorchooser.Z" in path []
+afterstep : looking for image "kcolorchooser.Z" in path [(null)]
+afterstep : looking for image "kcolorchooser.png" in path []
+afterstep : looking for image "kcolorchooser.png" in path [(null)]
+afterstep : looking for image "kcolorchooser.svg" in path []
+afterstep : looking for image "kcolorchooser.svg" in path [(null)]
+afterstep : looking for image "libreoffice-draw" in path []
+afterstep : looking for image "libreoffice-draw" in path [(null)]
+afterstep : looking for image "libreoffice-draw.gz" in path []
+afterstep : looking for image "libreoffice-draw.gz" in path [(null)]
+afterstep : looking for image "libreoffice-draw.Z" in path []
+afterstep : looking for image "libreoffice-draw.Z" in path [(null)]
+afterstep : looking for image "libreoffice-draw.png" in path []
+afterstep : looking for image "libreoffice-draw.png" in path [(null)]
+afterstep : looking for image "libreoffice-draw.svg" in path []
+afterstep : looking for image "libreoffice-draw.svg" in path [(null)]
+afterstep : looking for image "network-wired" in path []
+afterstep : looking for image "network-wired" in path [(null)]
+afterstep : looking for image "network-wired.gz" in path []
+afterstep : looking for image "network-wired.gz" in path [(null)]
+afterstep : looking for image "network-wired.Z" in path []
+afterstep : looking for image "network-wired.Z" in path [(null)]
+afterstep : looking for image "network-wired.png" in path []
+afterstep : looking for image "network-wired.png" in path [(null)]
+afterstep : looking for image "network-wired.svg" in path []
+afterstep : looking for image "network-wired.svg" in path [(null)]
+afterstep : looking for image "network-wired" in path []
+afterstep : looking for image "network-wired" in path [(null)]
+afterstep : looking for image "network-wired.gz" in path []
+afterstep : looking for image "network-wired.gz" in path [(null)]
+afterstep : looking for image "network-wired.Z" in path []
+afterstep : looking for image "network-wired.Z" in path [(null)]
+afterstep : looking for image "network-wired.png" in path []
+afterstep : looking for image "network-wired.png" in path [(null)]
+afterstep : looking for image "network-wired.svg" in path []
+afterstep : looking for image "network-wired.svg" in path [(null)]
+afterstep : looking for image "normal/IRC_Transp" in path []
+afterstep : looking for image "normal/IRC_Transp" in path [(null)]
+afterstep : looking for image "normal/IRC_Transp.gz" in path []
+afterstep : looking for image "normal/IRC_Transp.gz" in path [(null)]
+afterstep : looking for image "normal/IRC_Transp.Z" in path []
+afterstep : looking for image "normal/IRC_Transp.Z" in path [(null)]
+afterstep : looking for image "normal/IRC_Transp.png" in path []
+afterstep : looking for image "normal/IRC_Transp.png" in path [(null)]
+afterstep : looking for image "normal/IRC_Transp.svg" in path []
+afterstep : looking for image "normal/IRC_Transp.svg" in path [(null)]
+afterstep : looking for image "tigervnc" in path []
+afterstep : looking for image "tigervnc" in path [(null)]
+afterstep : looking for image "tigervnc.gz" in path []
+afterstep : looking for image "tigervnc.gz" in path [(null)]
+afterstep : looking for image "tigervnc.Z" in path []
+afterstep : looking for image "tigervnc.Z" in path [(null)]
+afterstep : looking for image "tigervnc.png" in path []
+afterstep : looking for image "tigervnc.png" in path [(null)]
+afterstep : looking for image "tigervnc.svg" in path []
+afterstep : looking for image "tigervnc.svg" in path [(null)]
+afterstep : looking for image "libreoffice-startcenter" in path []
+afterstep : looking for image "libreoffice-startcenter" in path [(null)]
+afterstep : looking for image "libreoffice-startcenter.gz" in path []
+afterstep : looking for image "libreoffice-startcenter.gz" in path [(null)]
+afterstep : looking for image "libreoffice-startcenter.Z" in path []
+afterstep : looking for image "libreoffice-startcenter.Z" in path [(null)]
+afterstep : looking for image "libreoffice-startcenter.png" in path []
+afterstep : looking for image "libreoffice-startcenter.png" in path [(null)]
+afterstep : looking for image "libreoffice-startcenter.svg" in path []
+afterstep : looking for image "libreoffice-startcenter.svg" in path [(null)]
+afterstep : looking for image "libreoffice-base" in path []
+afterstep : looking for image "libreoffice-base" in path [(null)]
+afterstep : looking for image "libreoffice-base.gz" in path []
+afterstep : looking for image "libreoffice-base.gz" in path [(null)]
+afterstep : looking for image "libreoffice-base.Z" in path []
+afterstep : looking for image "libreoffice-base.Z" in path [(null)]
+afterstep : looking for image "libreoffice-base.png" in path []
+afterstep : looking for image "libreoffice-base.png" in path [(null)]
+afterstep : looking for image "libreoffice-base.svg" in path []
+afterstep : looking for image "libreoffice-base.svg" in path [(null)]
+afterstep : looking for image "libreoffice-calc" in path []
+afterstep : looking for image "libreoffice-calc" in path [(null)]
+afterstep : looking for image "libreoffice-calc.gz" in path []
+afterstep : looking for image "libreoffice-calc.gz" in path [(null)]
+afterstep : looking for image "libreoffice-calc.Z" in path []
+afterstep : looking for image "libreoffice-calc.Z" in path [(null)]
+afterstep : looking for image "libreoffice-calc.png" in path []
+afterstep : looking for image "libreoffice-calc.png" in path [(null)]
+afterstep : looking WinList : Defining var [icon.button.width] == 64.
+WinList : Defining var [icon.button.height] == 64.
+WinList : Defining var [icon.width] == 48.
+WinList : Defining var [icon.height] == 48.
+WinList : Defining var [minipixmap.width] == 24.
+WinList : Defining var [minipixmap.height] == 24.
+WinList : Defining var [title.font.size] == 14.
+WinList : Defining var [menu.font.size] == 16.
+WinList : Defining var [menu.show_minipixmaps] == 1.
+WinList : Defining var [menu.show_unavailable] == 1.
+WinList : Defining var [xroot.width] == 1280.
+WinList : Defining var [xroot.height] == 800.
+WinList : Defining var [xroot.widthmm] == 325.
+WinList : Defining var [xroot.heightmm] == 203.
+WinList : Defining var [icon.button.width] == 48.
+WinList : Defining var [icon.button.height] == 48.
+WinList : Defining var [icon.width] == 36.
+WinList : Defining var [icon.height] == 36.
+WinList : Defining var [minipixmap.width] == 19.
+WinList : Defining var [minipixmap.height] == 19.
+WinList : Defining var [title.font.size] == 11.
+WinList : Defining var [menu.font.size] == 12.
+WinList : Defining var [font.size] == 11.
+WinList : Defining var [xroot.xinerama_screens_num] == 0.
+WinList : Defining var [xroot.xinerama_screens_num] == 1.
+WinList : xroot.xinerama_screens[0] = {0, 0, 0, 1280, 800}
+WinList : Defining var [xroot.xinerama_screens[0].x] == 0.
+WinList : Defining var [xroot.xinerama_screens[0].y] == 0.
+WinList : Defining var [xroot.xinerama_screens[0].width] == 1280.
+WinList : Defining var [xroot.xinerama_screens[0].height] == 800.
+WinList : Defining var [xroot.xinerama_screens_num] == 0.
+WinList : Defining var [xroot.xinerama_screens_num] == 1.
+WinList : xroot.randr.monitor[0] = {0, 0, 1280, 800}
+WinList : Defining var [xroot.xinerama_screens[0].x] == 0.
+WinList : Defining var [xroot.xinerama_screens[0].y] == 0.
+WinList : Defining var [xroot.xinerama_screens[0].width] == 1280.
+WinList : Defining var [xroot.xinerama_screens[0].height] == 800.
+WinList : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+WinList : Terminal is set to: "/usr/bin/xterm"
+WinList : Browser is set to: "none"
+WinList : Editor is set to: "none"
+WinList : Pixmap Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons::/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons:" ...
+WinList : Font Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/fonts/:/home/arch/afterstep/_install/share/afterstep/desktop/fonts/:/usr/share/fonts/default/TrueType/:/usr/share/fonts/truetype/freefont/:/X11/fonts/TTF" ...
+WinList : hsv(245,11,40)->rgb16(23571,23331,26214)->crit23588
+WinList : hsv(175,11,40)->rgb16(23331,26214,25973)->crit25556
+WinList : hsv(30,31,40)->rgb16(26214,22151,18089)->crit22764
+WinList : hsv(210,31,30)->rgb16(13566,16613,19660)->crit16152
+WinList : hsv(210,31,50)->rgb16(22611,27689,32767)->crit26922
+WinList : hsv(30,31,20)->rgb16(13107,11076,9045)->crit11382
+WinList : COLORSCHEME loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_colorscheme" ...
+WinList : Defining color [Base] == #FF34404C.
+WinList : Defining color [Inactive1] == #FF5C5B66.
+WinList : Defining color [Inactive2] == #FF5B6665.
+WinList : Defining color [Active] == #FF665646.
+WinList : Defining color [InactiveText1] == #FFE6E6E6.
+WinList : Defining color [InactiveText2] == #FFE6E6E6.
+WinList : Defining color [ActiveText] == #FFF5F8FA.
+WinList : Defining color [HighInactive] == #FF8A8899.
+WinList : Defining color [HighActive] == #FF998169.
+WinList : Defining color [HighInactiveBack] == #FF586C7F.
+WinList : Defining color [HighActiveBack] == #FF332B23.
+WinList : Defining color [HighInactiveText] == #FFE6E6E6.
+WinList : Defining color [HighActiveText] == #FFF5F8FA.
+WinList : Defining color [DisabledText] == #FF262D33.
+WinList : Defining color [BaseDark] == #FF000000.
+WinList : Defining color [BaseLight] == #FF7B97B3.
+WinList : Defining color [Inactive1Dark] == #FF2E2D33.
+WinList : Defining color [Inactive1Light] == #FF8A8899.
+WinList : Defining color [Inactive2Dark] == #FF2D3332.
+WinList : Defining color [Inactive2Light] == #FF889998.
+WinList : Defining color [ActiveDark] == #FF332B23.
+WinList : Defining color [ActiveLight] == #FF998169.
+WinList : Defining color [HighInactiveDark] == #FF5C5B66.
+WinList : Defining color [HighInactiveLight] == #FFB8B6CC.
+WinList : Defining color [HighActiveDark] == #FF665646.
+WinList : Defining color [HighActiveLight] == #FFCCAD8D.
+WinList : Defining color [HighInactiveBackDark] == #FF34404C.
+WinList : Defining color [HighInactiveBackLight] == #FF7B97B3.
+WinList : Defining color [HighActiveBackDark] == #FF000000.
+WinList : Defining color [HighActiveBackLight] == #FF665646.
+WinList : Defining color [Cursor] == #FF0C7F0C.
+WinList : Defining var [ascs.Base.alpha] == 255.
+WinList : Defining var [ascs.Base.red] == 52.
+WinList : Defining var [ascs.Base.green] == 64.
+WinList : Defining var [ascs.Base.blue] == 76.
+WinList : Defining var [ascs.Base.hue] == 210.
+WinList : Defining var [ascs.Base.saturation] == 31.
+WinList : Defining var [ascs.Base.value] == 29.
+WinList : Defining var [ascs.Inactive1.alpha] == 255.
+WinList : Defining var [ascs.Inactive1.red] == 92.
+WinList : Defining var [ascs.Inactive1.green] == 91.
+WinList : Defining var [ascs.Inactive1.blue] == 102.
+WinList : Defining var [ascs.Inactive1.hue] == 245.
+WinList : Defining var [ascs.Inactive1.saturation] == 10.
+WinList : Defining var [ascs.Inactive1.value] == 40.
+WinList : Defining var [ascs.Inactive2.alpha] == 255.
+WinList : Defining var [ascs.Inactive2.red] == 91.
+WinList : Defining var [ascs.Inactive2.green] == 102.
+WinList : Defining var [ascs.Inactive2.blue] == 101.
+WinList : Defining var [ascs.Inactive2.hue] == 174.
+WinList : Defining var [ascs.Inactive2.saturation] == 10.
+WinList : Defining var [ascs.Inactive2.value] == 40.
+WinList : Defining var [ascs.Active.alpha] == 255.
+WinList : Defining var [ascs.Active.red] == 102.
+WinList : Defining var [ascs.Active.green] == 86.
+WinList : Defining var [ascs.Active.blue] == 70.
+WinList : Defining var [ascs.Active.hue] == 30.
+WinList : Defining var [ascs.Active.saturation] == 31.
+WinList : Defining var [ascs.Active.value] == 40.
+WinList : Defining var [ascs.InactiveText1.alpha] == 255.
+WinList : Defining var [ascs.InactiveText1.red] == 230.
+WinList : Defining var [ascs.InactiveText1.green] == 230.
+WinList : Defining var [ascs.InactiveText1.blue] == 230.
+WinList : Defining var [ascs.InactiveText1.hue] == -1.
+WinList : Defining var [ascs.InactiveText1.saturation] == -1.
+WinList : Defining var [ascs.InactiveText1.value] == 90.
+WinList : Defining var [ascs.InactiveText2.alpha] == 255.
+WinList : Defining var [ascs.InactiveText2.red] == 230.
+WinList : Defining var [ascs.InactiveText2.green] == 230.
+WinList : Defining var [ascs.InactiveText2.blue] == 230.
+WinList : Defining var [ascs.InactiveText2.hue] == -1.
+WinList : Defining var [ascs.InactiveText2.saturation] == -1.
+WinList : Defining var [ascs.InactiveText2.value] == 90.
+WinList : Defining var [ascs.ActiveText.alpha] == 255.
+WinList : Defining var [ascs.ActiveText.red] == 245.
+WinList : Defining var [ascs.ActiveText.green] == 248.
+WinList : Defining var [ascs.ActiveText.blue] == 250.
+WinList : Defining var [ascs.ActiveText.hue] == 204.
+WinList : Defining var [ascs.ActiveText.saturation] == 2.
+WinList : Defining var [ascs.ActiveText.value] == 98.
+WinList : Defining var [ascs.HighInactive.alpha] == 255.
+WinList : Defining var [ascs.HighInactive.red] == 138.
+WinList : Defining var [ascs.HighInactive.green] == 136.
+WinList : Defining var [ascs.HighInactive.blue] == 153.
+WinList : Defining var [ascs.HighInactive.hue] == 247.
+WinList : Defining var [ascs.HighInactive.saturation] == 11.
+WinList : Defining var [ascs.HighInactive.value] == 60.
+WinList : Defining var [ascs.HighActive.alpha] == 255.
+WinList : Defining var [ascs.HighActive.red] == 153.
+WinList : Defining var [ascs.HighActive.green] == 129.
+WinList : Defining var [ascs.HighActive.blue] == 105.
+WinList : Defining var [ascs.HighActive.hue] == 30.
+WinList : Defining var [ascs.HighActive.saturation] == 31.
+WinList : Defining var [ascs.HighActive.value] == 60.
+WinList : Defining var [ascs.HighInactiveBack.alpha] == 255.
+WinList : Defining var [ascs.HighInactiveBack.red] == 88.
+WinList : Defining var [ascs.HighInactiveBack.green] == 108.
+WinList : Defining var [ascs.HighInactiveBack.blue] == 127.
+WinList : Defining var [ascs.HighInactiveBack.hue] == 209.
+WinList : Defining var [ascs.HighInactiveBack.saturation] == 30.
+WinList : Defining var [ascs.HighInactiveBack.value] == 49.
+WinList : Defining var [ascs.HighActiveBack.alpha] == 255.
+WinList : Defining var [ascs.HighActiveBack.red] == 51.
+WinList : Defining var [ascs.HighActiveBack.green] == 43.
+WinList : Defining var [ascs.HighActiveBack.blue] == 35.
+WinList : Defining var [ascs.HighActiveBack.hue] == 30.
+WinList : Defining var [ascs.HighActiveBack.saturation] == 31.
+WinList : Defining var [ascs.HighActiveBack.value] == 20.
+WinList : Defining var [ascs.HighInactiveText.alpha] == 255.
+WinList : Defining var [ascs.HighInactiveText.red] == 230.
+WinList : Defining var [ascs.HighInactiveText.green] == 230.
+WinList : Defining var [ascs.HighInactiveText.blue] == 230.
+WinList : Defining var [ascs.HighInactiveText.hue] == -1.
+WinList : Defining var [ascs.HighInactiveText.saturation] == -1.
+WinList : Defining var [ascs.HighInactiveText.value] == 90.
+WinList : Defining var [ascs.HighActiveText.alpha] == 255.
+WinList : Defining var [ascs.HighActiveText.red] == 245.
+WinList : Defining var [ascs.HighActiveText.green] == 248.
+WinList : Defining var [ascs.HighActiveText.blue] == 250.
+WinList : Defining var [ascs.HighActiveText.hue] == 204.
+WinList : Defining var [ascs.HighActiveText.saturation] == 2.
+WinList : Defining var [ascs.HighActiveText.value] == 98.
+WinList : Defining var [ascs.DisabledText.alpha] == 255.
+WinList : Defining var [ascs.DisabledText.red] == 38.
+WinList : Defining var [ascs.DisabledText.green] == 45.
+WinList : Defining var [ascs.DisabledText.blue] == 51.
+WinList : Defining var [ascs.DisabledText.hue] == 207.
+WinList : Defining var [ascs.DisabledText.saturation] == 25.
+WinList : Defining var [ascs.DisabledText.value] == 20.
+WinList : Defining var [ascs.BaseDark.alpha] == 255.
+WinList : Defining var [ascs.BaseDark.red] == 0.
+WinList : Defining var [ascs.BaseDark.green] == 0.
+WinList : Defining var [ascs.BaseDark.blue] == 0.
+WinList : Defining var [ascs.BaseDark.hue] == -1.
+WinList : Defining var [ascs.BaseDark.saturation] == -1.
+WinList : Defining var [ascs.BaseDark.value] == 0.
+WinList : Defining var [ascs.BaseLight.alpha] == 255.
+WinList : Defining var [ascs.BaseLight.red] == 123.
+WinList : Defining var [ascs.BaseLight.green] == 151.
+WinList : Defining var [ascs.BaseLight.blue] == 179.
+WinList : Defining var [ascs.BaseLight.hue] == 210.
+WinList : Defining var [ascs.BaseLight.saturation] == 31.
+WinList : Defining var [ascs.BaseLight.value] == 70.
+WinList : Defining var [ascs.Inactive1Dark.alpha] == 255.
+WinList : Defining var [ascs.Inactive1Dark.red] == 46.
+WinList : Defining var [ascs.Inactive1Dark.green] == 45.
+WinList : Defining var [ascs.Inactive1Dark.blue] == 51.
+WinList : Defining var [ascs.Inactive1Dark.hue] == 249.
+WinList : Defining var [ascs.Inactive1Dark.saturation] == 11.
+WinList : Defining var [ascs.Inactive1Dark.value] == 20.
+WinList : Defining var [ascs.Inactive1Light.alpha] == 255.
+WinList : Defining var [ascs.Inactive1Light.red] == 138.
+WinList : Defining var [ascs.Inactive1Light.green] == 136.
+WinList : Defining var [ascs.Inactive1Light.blue] == 153.
+WinList : Defining var [ascs.Inactive1Light.hue] == 247.
+WinList : Defining var [ascs.Inactive1Light.saturation] == 11.
+WinList : Defining var [ascs.Inactive1Light.value] == 60.
+WinList : Defining var [ascs.Inactive2Dark.alpha] == 255.
+WinList : Defining var [ascs.Inactive2Dark.red] == 45.
+WinList : Defining var [ascs.Inactive2Dark.green] == 51.
+WinList : Defining var [ascs.Inactive2Dark.blue] == 50.
+WinList : Defining var [ascs.Inactive2Dark.hue] == 169.
+WinList : Defining var [ascs.Inactive2Dark.saturation] == 11.
+WinList : Defining var [ascs.Inactive2Dark.value] == 20.
+WinList : Defining var [ascs.Inactive2Light.alpha] == 255.
+WinList : Defining var [ascs.Inactive2Light.red] == 136.
+WinList : Defining var [ascs.Inactive2Light.green] == 153.
+WinList : Defining var [ascs.Inactive2Light.blue] == 152.
+WinList : Defining var [ascs.Inactive2Light.hue] == 176.
+WinList : Defining var [ascs.Inactive2Light.saturation] == 11.
+WinList : Defining var [ascs.Inactive2Light.value] == 60.
+WinList : Defining var [ascs.ActiveDark.alpha] == 255.
+WinList : Defining var [ascs.ActiveDark.red] == 51.
+WinList : Defining var [ascs.ActiveDark.green] == 43.
+WinList : Defining var [ascs.ActiveDark.blue] == 35.
+WinList : Defining var [ascs.ActiveDark.hue] == 30.
+WinList : Defining var [ascs.ActiveDark.saturation] == 31.
+WinList : Defining var [ascs.ActiveDark.value] == 20.
+WinList : Defining var [ascs.ActiveLight.alpha] == 255.
+WinList : Defining var [ascs.ActiveLight.red] == 153.
+WinList : Defining var [ascs.ActiveLight.green] == 129.
+WinList : Defining var [ascs.ActiveLight.blue] == 105.
+WinList : Defining var [ascs.ActiveLight.hue] == 30.
+WinList : Defining var [ascs.ActiveLight.saturation] == 31.
+WinList : Defining var [ascs.ActiveLight.value] == 60.
+WinList : Defining var [ascs.HighInactiveDark.alpha] == 255.
+WinList : Defining var [ascs.HighInactiveDark.red] == 92.
+WinList : Defining var [ascs.HighInactiveDark.green] == 91.
+WinList : Defining var [ascs.HighInactiveDark.blue] == 102.
+WinList : Defining var [ascs.HighInactiveDark.hue] == 245.
+WinList : Defining var [ascs.HighInactiveDark.saturation] == 10.
+WinList : Defining var [ascs.HighInactiveDark.value] == 40.
+WinList : Defining var [ascs.HighInactiveLight.alpha] == 255.
+WinList : Defining var [ascs.HighInactiveLight.red] == 184.
+WinList : Defining var [ascs.HighInactiveLight.green] == 182.
+WinList : Defining var [ascs.HighInactiveLight.blue] == 204.
+WinList : Defining var [ascs.HighInactiveLight.hue] == 245.
+WinList : Defining var [ascs.HighInactiveLight.saturation] == 10.
+WinList : Defining var [ascs.HighInactiveLight.value] == 80.
+WinList : Defining var [ascs.HighActiveDark.alpha] == 255.
+WinList : Defining var [ascs.HighActiveDark.red] == 102.
+WinList : Defining var [ascs.HighActiveDark.green] == 86.
+WinList : Defining var [ascs.HighActiveDark.blue] == 70.
+WinList : Defining var [ascs.HighActiveDark.hue] == 30.
+WinList : Defining var [ascs.HighActiveDark.saturation] == 31.
+WinList : Defining var [ascs.HighActiveDark.value] == 40.
+WinList : Defining var [ascs.HighActiveLight.alpha] == 255.
+WinList : Defining var [ascs.HighActiveLight.red] == 204.
+WinList : Defining var [ascs.HighActiveLight.green] == 173.
+WinList : Defining var [ascs.HighActiveLight.blue] == 141.
+WinList : Defining var [ascs.HighActiveLight.hue] == 30.
+WinList : Defining var [ascs.HighActiveLight.saturation] == 31.
+WinList : Defining var [ascs.HighActiveLight.value] == 80.
+WinList : Defining var [ascs.HighInactiveBackDark.alpha] == 255.
+WinList : Defining var [ascs.HighInactiveBackDark.red] == 52.
+WinList : Defining var [ascs.HighInactiveBackDark.green] == 64.
+WinList : Defining var [ascs.HighInactiveBackDark.blue] == 76.
+WinList : Defining var [ascs.HighInactiveBackDark.hue] == 210.
+WinList : Defining var [ascs.HighInactiveBackDark.saturation] == 31.
+WinList : Defining var [ascs.HighInactiveBackDark.value] == 29.
+WinList : Defining var [ascs.HighInactiveBackLight.alpha] == 255.
+WinList : Defining var [ascs.HighInactiveBackLight.red] == 123.
+WinList : Defining var [ascs.HighInactiveBackLight.green] == 151.
+WinList : Defining var [ascs.HighInactiveBackLight.blue] == 179.
+WinList : Defining var [ascs.HighInactiveBackLight.hue] == 210.
+WinList : Defining var [ascs.HighInactiveBackLight.saturation] == 31.
+WinList : Defining var [ascs.HighInactiveBackLight.value] == 70.
+WinList : Defining var [ascs.HighActiveBackDark.alpha] == 255.
+WinList : Defining var [ascs.HighActiveBackDark.red] == 0.
+WinList : Defining var [ascs.HighActiveBackDark.green] == 0.
+WinList : Defining var [ascs.HighActiveBackDark.blue] == 0.
+WinList : Defining var [ascs.HighActiveBackDark.hue] == -1.
+WinList : Defining var [ascs.HighActiveBackDark.saturation] == -1.
+WinList : Defining var [ascs.HighActiveBackDark.value] == 0.
+WinList : Defining var [ascs.HighActiveBackLight.alpha] == 255.
+WinList : Defining var [ascs.HighActiveBackLight.red] == 102.
+WinList : Defining var [ascs.HighActiveBackLight.green] == 86.
+WinList : Defining var [ascs.HighActiveBackLight.blue] == 70.
+WinList : Defining var [ascs.HighActiveBackLight.hue] == 30.
+WinList : Defining var [ascs.HighActiveBackLight.saturation] == 31.
+WinList : Defining var [ascs.HighActiveBackLight.value] == 40.
+WinList : Defining var [ascs.Cursor.alpha] == 255.
+WinList : Defining var [ascs.Cursor.red] == 12.
+WinList : Defining var [ascs.Cursor.green] == 127.
+WinList : Defining var [ascs.Cursor.blue] == 12.
+WinList : Defining var [ascs.Cursor.hue] == 120.
+WinList : Defining var [ascs.Cursor.saturation] == 90.
+WinList : Defining var [ascs.Cursor.value] == 49.
+WinList : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_look" ...
+WinList : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_feel" ...
+WinList : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/winlist" ...
+WinList : DATABASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/database" ...
+WinList : Defining var [title.font.size] == 0.
+for image "libreoffice-calc.svg" in path []
+afterstep : looking for image "libreoffice-calc.svg" in path [(null)]
+afterstep : looking for image "libreoffice-draw" in path []
+afterstep : looking for image "libreoffice-draw" in path [(null)]
+afterstep : looking for image "libreoffice-draw.gz" in path []
+afterstep : looking for image "libreoffice-draw.gz" in path [(null)]
+afterstep : looking for image "libreoffice-draw.Z" in path []
+afterstep : looking for image "libreoffice-draw.Z" in path [(null)]
+afterstep : looking for image "libreoffice-draw.png" in path []
+afterstep : looking for image "libreoffice-draw.png" in path [(null)]
+afterstep : looking for image "libreoffice-draw.svg" in path []
+afterstep : looking for image "libreoffice-draw.svg" in path [(null)]
+afterstep : looking for image "libreoffice-impress" in path []
+afterstep : looking for image "libreoffice-impress" in path [(null)]
+afterstep : looking for image "libreoffice-impress.gz" in path []
+afterstep : looking for image "libreoffice-impress.gz" in path [(null)]
+afterstep : looking for image "libreoffice-impress.Z" in path []
+afterstep : looking for image "libreoffice-impress.Z" in path [(null)]
+afterstep : looking for image "libreoffice-impress.png" in path []
+afterstep : looking for image "libreoffice-impress.png" in path [(null)]
+afterstep : looking for image "libreoffice-impress.svg" in path []
+afterstep : looking for image "libreoffice-impress.svg" in path [(null)]
+afterstep : looking for image "libreoffice-math" in path []
+afterstep : looking for image "libreoffice-math" in path [(null)]
+afterstep : looking for image "libreoffice-math.gz" in path []
+afterstep : looking for image "libreoffice-math.gz" in path [(null)]
+afterstep : looking for image "libreoffice-math.Z" in path []
+afterstep : looking for image "libreoffice-math.Z" in path [(null)]
+afterstep : looking for image "libreoffice-math.png" in path []
+afterstep : looking for image "libreoffice-math.png" in path [(null)]
+afterstep : looking for image "libreoffice-math.svg" in path []
+afterstep : looking for image "libreoffice-math.svg" in path [(null)]
+afterstep : looking for image "libreoffice-writer" in path []
+afterstep : looking for image "libreoffice-writer" in path [(null)]
+afterstep : looking for image "libreoffice-writer.gz" in path []
+afterstep : looking for image "libreoffice-writer.gz" in path [(null)]
+afterstep : looking for image "libreoffice-writer.Z" in path []
+afterstep : looking for image "libreoffice-writer.Z" in path [(null)]
+afterstep : looking for image "libreoffice-writer.png" in path []
+afterstep : looking for image "libreoffice-writer.png" in path [(null)]
+afterstep : looking for image "libreoffice-writer.svg" in path []
+afterstep : looking for image "libreoffice-writer.svg" in path [(null)]
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : accepted module connection
+MonitorWharf : Defining var [icon.button.width] == 64.
+MonitorWharf : Defining var [icon.button.height] == 64.
+MonitorWharf : Defining var [icon.width] == 48.
+MonitorWharf : Defining var [icon.height] == 48.
+MonitorWharf : Defining var [minipixmap.width] == 24.
+MonitorWharf : Defining var [minipixmap.height] == 24.
+MonitorWharf : Defining var [title.font.size] == 14.
+MonitorWharf : Defining var [menu.font.size] == 16.
+MonitorWharf : Defining var [menu.show_minipixmaps] == 1.
+MonitorWharf : Defining var [menu.show_unavailable] == 1.
+MonitorWharf : Defining var [xroot.width] == 1280.
+MonitorWharf : Defining var [xroot.height] == 800.
+MonitorWharf : Defining var [xroot.widthmm] == 325.
+MonitorWharf : Defining var [xroot.heightmm] == 203.
+MonitorWharf : Defining var [icon.button.width] == 48.
+MonitorWharf : Defining var [icon.button.height] == 48.
+MonitorWharf : Defining var [icon.width] == 36.
+MonitorWharf : Defining var [icon.height] == 36.
+MonitorWharf : Defining var [minipixmap.width] == 19.
+MonitorWharf : Defining var [minipixmap.height] == 19.
+MonitorWharf : Defining var [title.font.size] == 11.
+MonitorWharf : Defining var [menu.font.size] == 12.
+MonitorWharf : Defining var [font.size] == 11.
+MonitorWharf : Defining var [xroot.xinerama_screens_num] == 0.
+MonitorWharf : Defining var [xroot.xinerama_screens_num] == 1.
+MonitorWharf : xroot.xinerama_screens[0] = {0, 0, 0, 1280, 800}
+MonitorWharf : Defining var [xroot.xinerama_screens[0].x] == 0.
+MonitorWharf : Defining var [xroot.xinerama_screens[0].y] == 0.
+MonitorWharf : Defining var [xroot.xinerama_screens[0].width] == 1280.
+MonitorWharf : Defining var [xroot.xinerama_screens[0].height] == 800.
+MonitorWharf : Defining var [xroot.xinerama_screens_num] == 0.
+MonitorWharf : Defining var [xroot.xinerama_screens_num] == 1.
+MonitorWharf : xroot.randr.monitor[0] = {0, 0, 1280, 800}
+MonitorWharf : Defining var [xroot.xinerama_screens[0].x] == 0.
+MonitorWharf : Defining var [xroot.xinerama_screens[0].y] == 0.
+MonitorWharf : Defining var [xroot.xinerama_screens[0].width] == 1280.
+MonitorWharf : Defining var [xroot.xinerama_screens[0].height] == 800.
+MonitorWharf : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+MonitorWharf : Terminal is set to: "/usr/bin/xterm"
+MonitorWharf : Browser is set to: "none"
+MonitorWharf : Editor is set to: "none"
+MonitorWharf : Pixmap Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons::/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons:" ...
+MonitorWharf : Font Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/fonts/:/home/arch/afterstep/_install/share/afterstep/desktop/fonts/:/usr/share/fonts/default/TrueType/:/usr/share/fonts/truetype/freefont/:/X11/fonts/TTF" ...
+MonitorWharf : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+MonitorWharf : hsv(245,11,40)->rgb16(23571,23331,26214)->crit23588
+MonitorWharf : hsv(175,11,40)->rgb16(23331,26214,25973)->crit25556
+MonitorWharf : hsv(30,31,40)->rgb16(26214,22151,18089)->crit22764
+MonitorWharf : hsv(210,31,30)->rgb16(13566,16613,19660)->crit16152
+MonitorWharf : hsv(210,31,50)->rgb16(22611,27689,32767)->crit26922
+MonitorWharf : hsv(30,31,20)->rgb16(13107,11076,9045)->crit11382
+MonitorWharf : COLORSCHEME loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_colorscheme" ...
+MonitorWharf : Defining color [Base] == #FF34404C.
+MonitorWharf : Defining color [Inactive1] == #FF5C5B66.
+MonitorWharf : Defining color [Inactive2] == #FF5B6665.
+MonitorWharf : Defining color [Active] == #FF665646.
+MonitorWharf : Defining color [InactiveText1] == #FFE6E6E6.
+MonitorWharf : Defining color [InactiveText2] == #FFE6E6E6.
+MonitorWharf : Defining color [ActiveText] == #FFF5F8FA.
+MonitorWharf : Defining color [HighInactive] == #FF8A8899.
+MonitorWharf : Defining color [HighActive] == #FF998169.
+MonitorWharf : Defining color [HighInactiveBack] == #FF586C7F.
+MonitorWharf : Defining color [HighActiveBack] == #FF332B23.
+MonitorWharf : Defining color [HighInactiveText] == #FFE6E6E6.
+MonitorWharf : Defining color [HighActiveText] == #FFF5F8FA.
+MonitorWharf : Defining color [DisabledText] == #FF262D33.
+MonitorWharf : Defining color [BaseDark] == #FF000000.
+MonitorWharf : Defining color [BaseLight] == #FF7B97B3.
+MonitorWharf : Defining color [Inactive1Dark] == #FF2E2D33.
+MonitorWharf : Defining color [Inactive1Light] == #FF8A8899.
+MonitorWharf : Defining color [Inactive2Dark] == #FF2D3332.
+MonitorWharf : Defining color [Inactive2Light] == #FF889998.
+MonitorWharf : Defining color [ActiveDark] == #FF332B23.
+MonitorWharf : Defining color [ActiveLight] == #FF998169.
+MonitorWharf : Defining color [HighInactiveDark] == #FF5C5B66.
+MonitorWharf : Defining color [HighInactiveLight] == #FFB8B6CC.
+MonitorWharf : Defining color [HighActiveDark] == #FF665646.
+MonitorWharf : Defining color [HighActiveLight] == #FFCCAD8D.
+MonitorWharf : Defining color [HighInactiveBackDark] == #FF34404C.
+MonitorWharf : Defining color [HighInactiveBackLight] == #FF7B97B3.
+MonitorWharf : Defining color [HighActiveBackDark] == #FF000000.
+MonitorWharf : Defining color [HighActiveBackLight] == #FF665646.
+MonitorWharf : Defining color [Cursor] == #FF0C7F0C.
+MonitorWharf : Defining var [ascs.Base.alpha] == 255.
+MonitorWharf : Defining var [ascs.Base.red] == 52.
+MonitorWharf : Defining var [ascs.Base.green] == 64.
+MonitorWharf : Defining var [ascs.Base.blue] == 76.
+MonitorWharf : Defining var [ascs.Base.hue] == 210.
+MonitorWharf : Defining var [ascs.Base.saturation] == 31.
+MonitorWharf : Defining var [ascs.Base.value] == 29.
+MonitorWharf : Defining var [ascs.Inactive1.alpha] == 255.
+MonitorWharf : Defining var [ascs.Inactive1.red] == 92.
+MonitorWharf : Defining var [ascs.Inactive1.green] == 91.
+MonitorWharf : Defining var [ascs.Inactive1.blue] == 102.
+MonitorWharf : Defining var [ascs.Inactive1.hue] == 245.
+MonitorWharf : Defining var [ascs.Inactive1.saturation] == 10.
+MonitorWharf : Defining var [ascs.Inactive1.value] == 40.
+MonitorWharf : Defining var [ascs.Inactive2.alpha] == 255.
+MonitorWharf : Defining var [ascs.Inactive2.red] == 91.
+MonitorWharf : Defining var [ascs.Inactive2.green] == 102.
+MonitorWharf : Defining var [ascs.Inactive2.blue] == 101.
+MonitorWharf : Defining var [ascs.Inactive2.hue] == 174.
+MonitorWharf : Defining var [ascs.Inactive2.saturation] == 10.
+MonitorWharf : Defining var [ascs.Inactive2.value] == 40.
+MonitorWharf : Defining var [ascs.Active.alpha] == 255.
+MonitorWharf : Defining var [ascs.Active.red] == 102.
+MonitorWharf : Defining var [ascs.Active.green] == 86.
+MonitorWharf : Defining var [ascs.Active.blue] == 70.
+MonitorWharf : Defining var [ascs.Active.hue] == 30.
+MonitorWharf : Defining var [ascs.Active.saturation] == 31.
+MonitorWharf : Defining var [ascs.Active.value] == 40.
+MonitorWharf : Defining var [ascs.InactiveText1.alpha] == 255.
+MonitorWharf : Defining var [ascs.InactiveText1.red] == 230.
+MonitorWharf : Defining var [ascs.InactiveText1.green] == 230.
+MonitorWharf : Defining var [ascs.InactiveText1.blue] == 230.
+MonitorWharf : Defining var [ascs.InactiveText1.hue] == -1.
+MonitorWharf : Defining var [ascs.InactiveText1.saturation] == -1.
+MonitorWharf : Defining var [ascs.InactiveText1.value] == 90.
+MonitorWharf : Defining var [ascs.InactiveText2.alpha] == 255.
+MonitorWharf : Defining var [ascs.InactiveText2.red] == 230.
+MonitorWharf : Defining var [ascs.InactiveText2.green] == 230.
+MonitorWharf : Defining var [ascs.InactiveText2.blue] == 230.
+MonitorWharf : Defining var [ascs.InactiveText2.hue] == -1.
+MonitorWharf : Defining var [ascs.InactiveText2.saturation] == -1.
+MonitorWharf : Defining var [ascs.InactiveText2.value] == 90.
+MonitorWharf : Defining var [ascs.ActiveText.alpha] == 255.
+MonitorWharf : Defining var [ascs.ActiveText.red] == 245.
+MonitorWharf : Defining var [ascs.ActiveText.green] == 248.
+MonitorWharf : Defining var [ascs.ActiveText.blue] == 250.
+MonitorWharf : Defining var [ascs.ActiveText.hue] == 204.
+MonitorWharf : Defining var [ascs.ActiveText.saturation] == 2.
+MonitorWharf : Defining var [ascs.ActiveText.value] == 98.
+MonitorWharf : Defining var [ascs.HighInactive.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighInactive.red] == 138.
+MonitorWharf : Defining var [ascs.HighInactive.green] == 136.
+MonitorWharf : Defining var [ascs.HighInactive.blue] == 153.
+MonitorWharf : Defining var [ascs.HighInactive.hue] == 247.
+MonitorWharf : Defining var [ascs.HighInactive.saturation] == 11.
+MonitorWharf : Defining var [ascs.HighInactive.value] == 60.
+MonitorWharf : Defining var [ascs.HighActive.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighActive.red] == 153.
+MonitorWharf : Defining var [ascs.HighActive.green] == 129.
+MonitorWharf : Defining var [ascs.HighActive.blue] == 105.
+MonitorWharf : Defining var [ascs.HighActive.hue] == 30.
+MonitorWharf : Defining var [ascs.HighActive.saturation] == 31.
+MonitorWharf : Defining var [ascs.HighActive.value] == 60.
+MonitorWharf : Defining var [ascs.HighInactiveBack.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighInactiveBack.red] == 88.
+MonitorWharf : Defining var [ascs.HighInactiveBack.green] == 108.
+MonitorWharf : Defining var [ascs.HighInactiveBack.blue] == 127.
+MonitorWharf : Defining var [ascs.HighInactiveBack.hue] == 209.
+MonitorWharf : Defining var [ascs.HighInactiveBack.saturation] == 30.
+MonitorWharf : Defining var [ascs.HighInactiveBack.value] == 49.
+MonitorWharf : Defining var [ascs.HighActiveBack.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighActiveBack.red] == 51.
+MonitorWharf : Defining var [ascs.HighActiveBack.green] == 43.
+MonitorWharf : Defining var [ascs.HighActiveBack.blue] == 35.
+MonitorWharf : Defining var [ascs.HighActiveBack.hue] == 30.
+MonitorWharf : Defining var [ascs.HighActiveBack.saturation] == 31.
+MonitorWharf : Defining var [ascs.HighActiveBack.value] == 20.
+MonitorWharf : Defining var [ascs.HighInactiveText.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighInactiveText.red] == 230.
+MonitorWharf : Defining var [ascs.HighInactiveText.green] == 230.
+MonitorWharf : Defining var [ascs.HighInactiveText.blue] == 230.
+MonitorWharf : Defining var [ascs.HighInactiveText.hue] == -1.
+MonitorWharf : Defining var [ascs.HighInactiveText.saturation] == -1.
+MonitorWharf : Defining var [ascs.HighInactiveText.value] == 90.
+MonitorWharf : Defining var [ascs.HighActiveText.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighActiveText.red] == 245.
+MonitorWharf : Defining var [ascs.HighActiveText.green] == 248.
+MonitorWharf : Defining var [ascs.HighActiveText.blue] == 250.
+MonitorWharf : Defining var [ascs.HighActiveText.hue] == 204.
+MonitorWharf : Defining var [ascs.HighActiveText.saturation] == 2.
+MonitorWharf : Defining var [ascs.HighActiveText.value] == 98.
+MonitorWharf : Defining var [ascs.DisabledText.alpha] == 255.
+MonitorWharf : Defining var [ascs.DisabledText.red] == 38.
+MonitorWharf : Defining var [ascs.DisabledText.green] == 45.
+MonitorWharf : Defining var [ascs.DisabledText.blue] == 51.
+MonitorWharf : Defining var [ascs.DisabledText.hue] == 207.
+MonitorWharf : Defining var [ascs.DisabledText.saturation] == 25.
+MonitorWharf : Defining var [ascs.DisabledText.value] == 20.
+MonitorWharf : Defining var [ascs.BaseDark.alpha] == 255.
+MonitorWharf : Defining var [ascs.BaseDark.red] == 0.
+MonitorWharf : Defining var [ascs.BaseDark.green] == 0.
+MonitorWharf : Defining var [ascs.BaseDark.blue] == 0.
+MonitorWharf : Defining var [ascs.BaseDark.hue] == -1.
+MonitorWharf : Defining var [ascs.BaseDark.saturation] == -1.
+MonitorWharf : Defining var [ascs.BaseDark.value] == 0.
+MonitorWharf : Defining var [ascs.BaseLight.alpha] == 255.
+MonitorWharf : Defining var [ascs.BaseLight.red] == 123.
+MonitorWharf : Defining var [ascs.BaseLight.green] == 151.
+MonitorWharf : Defining var [ascs.BaseLight.blue] == 179.
+MonitorWharf : Defining var [ascs.BaseLight.hue] == 210.
+MonitorWharf : Defining var [ascs.BaseLight.saturation] == 31.
+MonitorWharf : Defining var [ascs.BaseLight.value] == 70.
+MonitorWharf : Defining var [ascs.Inactive1Dark.alpha] == 255.
+MonitorWharf : Defining var [ascs.Inactive1Dark.red] == 46.
+MonitorWharf : Defining var [ascs.Inactive1Dark.green] == 45.
+MonitorWharf : Defining var [ascs.Inactive1Dark.blue] == 51.
+MonitorWharf : Defining var [ascs.Inactive1Dark.hue] == 249.
+MonitorWharf : Defining var [ascs.Inactive1Dark.saturation] == 11.
+MonitorWharf : Defining var [ascs.Inactive1Dark.value] == 20.
+MonitorWharf : Defining var [ascs.Inactive1Light.alpha] == 255.
+MonitorWharf : Defining var [ascs.Inactive1Light.red] == 138.
+MonitorWharf : Defining var [ascs.Inactive1Light.green] == 136.
+MonitorWharf : Defining var [ascs.Inactive1Light.blue] == 153.
+MonitorWharf : Defining var [ascs.Inactive1Light.hue] == 247.
+MonitorWharf : Defining var [ascs.Inactive1Light.saturation] == 11.
+MonitorWharf : Defining var [ascs.Inactive1Light.value] == 60.
+MonitorWharf : Defining var [ascs.Inactive2Dark.alpha] == 255.
+MonitorWharf : Defining var [ascs.Inactive2Dark.red] == 45.
+MonitorWharf : Defining var [ascs.Inactive2Dark.green] == 51.
+MonitorWharf : Defining var [ascs.Inactive2Dark.blue] == 50.
+MonitorWharf : Defining var [ascs.Inactive2Dark.hue] == 169.
+MonitorWharf : Defining var [ascs.Inactive2Dark.saturation] == 11.
+MonitorWharf : Defining var [ascs.Inactive2Dark.value] == 20.
+MonitorWharf : Defining var [ascs.Inactive2Light.alpha] == 255.
+MonitorWharf : Defining var [ascs.Inactive2Light.red] == 136.
+MonitorWharf : Defining var [ascs.Inactive2Light.green] == 153.
+MonitorWharf : Defining var [ascs.Inactive2Light.blue] == 152.
+MonitorWharf : Defining var [ascs.Inactive2Light.hue] == 176.
+MonitorWharf : Defining var [ascs.Inactive2Light.saturation] == 11.
+MonitorWharf : Defining var [ascs.Inactive2Light.value] == 60.
+MonitorWharf : Defining var [ascs.ActiveDark.alpha] == 255.
+MonitorWharf : Defining var [ascs.ActiveDark.red] == 51.
+MonitorWharf : Defining var [ascs.ActiveDark.green] == 43.
+MonitorWharf : Defining var [ascs.ActiveDark.blue] == 35.
+MonitorWharf : Defining var [ascs.ActiveDark.hue] == 30.
+MonitorWharf : Defining var [ascs.ActiveDark.saturation] == 31.
+MonitorWharf : Defining var [ascs.ActiveDark.value] == 20.
+MonitorWharf : Defining var [ascs.ActiveLight.alpha] == 255.
+MonitorWharf : Defining var [ascs.ActiveLight.red] == 153.
+MonitorWharf : Defining var [ascs.ActiveLight.green] == 129.
+MonitorWharf : Defining var [ascs.ActiveLight.blue] == 105.
+MonitorWharf : Defining var [ascs.ActiveLight.hue] == 30.
+MonitorWharf : Defining var [ascs.ActiveLight.saturation] == 31.
+MonitorWharf : Defining var [ascs.ActiveLight.value] == 60.
+MonitorWharf : Defining var [ascs.HighInactiveDark.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighInactiveDark.red] == 92.
+MonitorWharf : Defining var [ascs.HighInactiveDark.green] == 91.
+MonitorWharf : Defining var [ascs.HighInactiveDark.blue] == 102.
+MonitorWharf : Defining var [ascs.HighInactiveDark.hue] == 245.
+MonitorWharf : Defining var [ascs.HighInactiveDark.saturation] == 10.
+MonitorWharf : Defining var [ascs.HighInactiveDark.value] == 40.
+MonitorWharf : Defining var [ascs.HighInactiveLight.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighInactiveLight.red] == 184.
+MonitorWharf : Defining var [ascs.HighInactiveLight.green] == 182.
+MonitorWharf : Defining var [ascs.HighInactiveLight.blue] == 204.
+MonitorWharf : Defining var [ascs.HighInactiveLight.hue] == 245.
+MonitorWharf : Defining var [ascs.HighInactiveLight.saturation] == 10.
+MonitorWharf : Defining var [ascs.HighInactiveLight.value] == 80.
+MonitorWharf : Defining var [ascs.HighActiveDark.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighActiveDark.red] == 102.
+MonitorWharf : Defining var [ascs.HighActiveDark.green] == 86.
+MonitorWharf : Defining var [ascs.HighActiveDark.blue] == 70.
+MonitorWharf : Defining var [ascs.HighActiveDark.hue] == 30.
+MonitorWharf : Defining var [ascs.HighActiveDark.saturation] == 31.
+MonitorWharf : Defining var [ascs.HighActiveDark.value] == 40.
+MonitorWharf : Defining var [ascs.HighActiveLight.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighActiveLight.red] == 204.
+MonitorWharf : Defining var [ascs.HighActiveLight.green] == 173.
+MonitorWharf : Defining var [ascs.HighActiveLight.blue] == 141.
+MonitorWharf : Defining var [ascs.HighActiveLight.hue] == 30.
+MonitorWharf : Defining var [ascs.HighActiveLight.saturation] == 31.
+MonitorWharf : Defining var [ascs.HighActiveLight.value] == 80.
+MonitorWharf : Defining var [ascs.HighInactiveBackDark.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighInactiveBackDark.red] == 52.
+MonitorWharf : Defining var [ascs.HighInactiveBackDark.green] == 64.
+MonitorWharf : Defining var [ascs.HighInactiveBackDark.blue] == 76.
+MonitorWharf : Defining var [ascs.HighInactiveBackDark.hue] == 210.
+MonitorWharf : Defining var [ascs.HighInactiveBackDark.saturation] == 31.
+MonitorWharf : Defining var [ascs.HighInactiveBackDark.value] == 29.
+MonitorWharf : Defining var [ascs.HighInactiveBackLight.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighInactiveBackLight.red] == 123.
+MonitorWharf : Defining var [ascs.HighInactiveBackLight.green] == 151.
+MonitorWharf : Defining var [ascs.HighInactiveBackLight.blue] == 179.
+MonitorWharf : Defining var [ascs.HighInactiveBackLight.hue] == 210.
+MonitorWharf : Defining var [ascs.HighInactiveBackLight.saturation] == 31.
+MonitorWharf : Defining var [ascs.HighInactiveBackLight.value] == 70.
+MonitorWharf : Defining var [ascs.HighActiveBackDark.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighActiveBackDark.red] == 0.
+MonitorWharf : Defining var [ascs.HighActiveBackDark.green] == 0.
+MonitorWharf : Defining var [ascs.HighActiveBackDark.blue] == 0.
+MonitorWharf : Defining var [ascs.HighActiveBackDark.hue] == -1.
+MonitorWharf : Defining var [ascs.HighActiveBackDark.saturation] == -1.
+MonitorWharf : Defining var [ascs.HighActiveBackDark.value] == 0.
+MonitorWharf : Defining var [ascs.HighActiveBackLight.alpha] == 255.
+MonitorWharf : Defining var [ascs.HighActiveBackLight.red] == 102.
+MonitorWharf : Defining var [ascs.HighActiveBackLight.green] == 86.
+MonitorWharf : Defining var [ascs.HighActiveBackLight.blue] == 70.
+MonitorWharf : Defining var [ascs.HighActiveBackLight.hue] == 30.
+MonitorWharf : Defining var [ascs.HighActiveBackLight.saturation] == 31.
+MonitorWharf : Defining var [ascs.HighActiveBackLight.value] == 40.
+MonitorWharf : Defining var [ascs.Cursor.alpha] == 255.
+MonitorWharf : Defining var [ascs.Cursor.red] == 12.
+MonitorWharf : Defining var [ascs.Cursor.green] == 127.
+MonitorWharf : Defining var [ascs.Cursor.blue] == 12.
+MonitorWharf : Defining var [ascs.Cursor.hue] == 120.
+MonitorWharf : Defining var [ascs.Cursor.saturation] == 90.
+MonitorWharf : Defining var [ascs.Cursor.value] == 49.
+MonitorWharf ERROR: in Module:Wharf (line 105):Heh, it seems that I've encountered an obsolete config option. I'll ignore it for now, OK ?![FullPush]
+MonitorWharf : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/wharf" ...
+MonitorWharf warning: Application "wmusic -w &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "AudioPlayer" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "asfsm_lite -bg Grey30 -fg Grey70 -bp None -pbg Grey40 -pfg Grey70 -pbp None -i 30 &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "asfsm" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "asload -shape -exe "x-terminal-emulator -e top" &" cannot be found in the PATH.
+MonitorWharf warning: Application "wmavgload -shape -led red &" cannot be found in the PATH.
+MonitorWharf warning: Application "wmcpuload -bl -w &" cannot be found in the PATH.
+MonitorWharf warning: Application "wmload -shape -led red &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "loadmonitor" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "wmfire -f 2 &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "loadinstantmonitor" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "asmon &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "asmon" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "wmtop &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "wmtop" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "wmnet --driver=devstats &" cannot be found in the PATH.
+MonitorWharf warning: Application "wmnd -i eth0 &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "netmonitor" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "asmail -geometry +0+0 &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "asmail" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "asclock -shape -24 -theme penguin -position +1+1 &" cannot be found in the PATH.
+MonitorWharf warning: Application "wmclockmon &" cannot be found in the PATH.
+MonitorWharf warning: Application "wmitime &" cannot be found in the PATH.
+MonitorWharf warning: Application "ASWallpaper &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "ASWallpaper" can be found in the PATH. Button will be disabled
+MonitorWharf warning: Application "GWCommand &" cannot be found in the PATH.
+MonitorWharf warning: None of Applications assigned to the button "GWCommand" can be found in the PATH. Button will be disabled
+MonitorWharf warning: None of Applications assigned to the button "EndSession" can be found in the PATH. Button will be disabled
+MonitorWharf warning: None of Applications assigned to the button "Suspend" can be found in the PATH. Button will be disabled
+MonitorWharf warning: None of Applications assigned to the button "Hibernate" can be found in the PATH. Button will be disabled
+MonitorWharf warning: None of Applications assigned to the button "Shutdown" can be found in the PATH. Button will be disabled
+Wharf : Defining var [icon.button.width] == 64.
+Wharf : Defining var [icon.button.height] == 64.
+Wharf : Defining var [icon.width] == 48.
+Wharf : Defining var [icon.height] == 48.
+Wharf : Defining var [minipixmap.width] == 24.
+Wharf : Defining var [minipixmap.height] == 24.
+Wharf : Defining var [title.font.size] == 14.
+Wharf : Defining var [menu.font.size] == 16.
+Wharf : Defining var [menu.show_minipixmaps] == 1.
+Wharf : Defining var [menu.show_unavailable] == 1.
+Wharf : Defining var [xroot.width] == 1280.
+Wharf : Defining var [xroot.height] == 800.
+Wharf : Defining var [xroot.widthmm] == 325.
+Wharf : Defining var [xroot.heightmm] == 203.
+Wharf : Defining var [icon.button.width] == 48.
+Wharf : Defining var [icon.button.height] == 48.
+Wharf : Defining var [icon.width] == 36.
+Wharf : Defining var [icon.height] == 36.
+Wharf : Defining var [minipixmap.width] == 19.
+Wharf : Defining var [minipixmap.height] == 19.
+Wharf : Defining var [title.font.size] == 11.
+Wharf : Defining var [menu.font.size] == 12.
+Wharf : Defining var [font.size] == 11.
+Wharf : Defining var [xroot.xinerama_screens_num] == 0.
+Wharf : Defining var [xroot.xinerama_screens_num] == 1.
+Wharf : xroot.xinerama_screens[0] = {0, 0, 0, 1280, 800}
+Wharf : Defining var [xroot.xinerama_screens[0].x] == 0.
+Wharf : Defining var [xroot.xinerama_screens[0].y] == 0.
+Wharf : Defining var [xroot.xinerama_screens[0].width] == 1280.
+Wharf : Defining var [xroot.xinerama_screens[0].height] == 800.
+Wharf : Defining var [xroot.xinerama_screens_num] == 0.
+Wharf : Defining var [xroot.xinerama_screens_num] == 1.
+Wharf : xroot.randr.monitor[0] = {0, 0, 1280, 800}
+Wharf : Defining var [xroot.xinerama_screens[0].x] == 0.
+Wharf : Defining var [xroot.xinerama_screens[0].y] == 0.
+Wharf : Defining var [xroot.xinerama_screens[0].width] == 1280.
+Wharf : Defining var [xroot.xinerama_screens[0].height] == 800.
+Wharf : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+WinTabs : Defining var [icon.button.width] == 64.
+WinTabs : Defining var [icon.button.height] == 64.
+WinTabs : Defining var [icon.width] == 48.
+WinTabs : Defining var [icon.height] == 48.
+WinTabs : Defining var [minipixmap.width] == 24.
+WinTabs : Defining var [minipixmap.height] == 24.
+WinTabs : Defining var [title.font.size] == 14.
+WinTabs : Defining var [menu.font.size] == 16.
+WinTabs : Defining var [menu.show_minipixmaps] == 1.
+WinTabs : Defining var [menu.show_unavailable] == 1.
+Pager : Defining var [icon.button.width] == 64.
+Pager : Defining var [icon.button.height] == 64.
+Pager : Defining var [icon.width] == 48.
+Pager : Defining var [icon.height] == 48.
+Pager : Defining var [minipixmap.width] == 24.
+Pager : Defining var [minipixmap.height] == 24.
+Pager : Defining var [title.font.size] == 14.
+Pager : Defining var [menu.font.size] == 16.
+Pager : Defining var [menu.show_minipixmaps] == 1.
+Pager : Defining var [menu.show_unavailable] == 1.
+Wharf : Terminal is set to: "/usr/bin/xterm"
+Wharf : Browser is set to: "none"
+Wharf : Editor is set to: "none"
+Wharf : Pixmap Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons::/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons:" ...
+Wharf : Font Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/fonts/:/home/arch/afterstep/_install/share/afterstep/desktop/fonts/:/usr/share/fonts/default/TrueType/:/usr/share/fonts/truetype/freefont/:/X11/fonts/TTF" ...
+Wharf : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+Pager : Defining var [xroot.width] == 1280.
+Pager : Defining var [xroot.height] == 800.
+Pager : Defining var [xroot.widthmm] == 325.
+Pager : Defining var [xroot.heightmm] == 203.
+Pager : Defining var [icon.button.width] == 48.
+Pager : Defining var [icon.button.height] == 48.
+Pager : Defining var [icon.width] == 36.
+Pager : Defining var [icon.height] == 36.
+Pager : Defining var [minipixmap.width] == 19.
+Pager : Defining var [minipixmap.height] == 19.
+Pager : Defining var [title.font.size] == 11.
+Pager : Defining var [menu.font.size] == 12.
+Pager : Defining var [font.size] == 11.
+Pager : Defining var [xroot.xinerama_screens_num] == 0.
+Pager : Defining var [xroot.xinerama_screens_num] == 1.
+Pager : xroot.xinerama_screens[0] = {0, 0, 0, 1280, 800}
+Pager : Defining var [xroot.xinerama_screens[0].x] == 0.
+Pager : Defining var [xroot.xinerama_screens[0].y] == 0.
+Pager : Defining var [xroot.xinerama_screens[0].width] == 1280.
+Pager : Defining var [xroot.xinerama_screens[0].height] == 800.
+Pager : Defining var [xroot.xinerama_screens_num] == 0.
+Pager : Defining var [xroot.xinerama_screens_num] == 1.
+Pager : xroot.randr.monitor[0] = {0, 0, 1280, 800}
+Pager : Defining var [xroot.xinerama_screens[0].x] == 0.
+Pager : Defining var [xroot.xinerama_screens[0].y] == 0.
+Pager : Defining var [xroot.xinerama_screens[0].width] == 1280.
+Pager : Defining var [xroot.xinerama_screens[0].height] == 800.
+Pager : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+Wharf : hsv(245,11,40)->rgb16(23571,23331,26214)->crit23588
+Wharf : hsv(175,11,40)->rgb16(23331,26214,25973)->crit25556
+Wharf : hsv(30,31,40)->rgb16(26214,22151,18089)->crit22764
+Wharf : hsv(210,31,30)->rgb16(13566,16613,19660)->crit16152
+Wharf : hsv(210,31,50)->rgb16(22611,27689,32767)->crit26922
+Wharf : hsv(30,31,20)->rgb16(13107,11076,9045)->crit11382
+Wharf : COLORSCHEME loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_colorscheme" ...
+Wharf : Defining color [Base] == #FF34404C.
+Wharf : Defining color [Inactive1] == #FF5C5B66.
+Wharf : Defining color [Inactive2] == #FF5B6665.
+Wharf : Defining color [Active] == #FF665646.
+Wharf : Defining color [InactiveText1] == #FFE6E6E6.
+Wharf : Defining color [InactiveText2] == #FFE6E6E6.
+Wharf : Defining color [ActiveText] == #FFF5F8FA.
+Wharf : Defining color [HighInactive] == #FF8A8899.
+Wharf : Defining color [HighActive] == #FF998169.
+Wharf : Defining color [HighInactiveBack] == #FF586C7F.
+Wharf : Defining color [HighActiveBack] == #FF332B23.
+Wharf : Defining color [HighInactiveText] == #FFE6E6E6.
+Wharf : Defining color [HighActiveText] == #FFF5F8FA.
+Wharf : Defining color [DisabledText] == #FF262D33.
+Wharf : Defining color [BaseDark] == #FF000000.
+Wharf : Defining color [BaseLight] == #FF7B97B3.
+Wharf : Defining color [Inactive1Dark] == #FF2E2D33.
+Wharf : Defining color [Inactive1Light] == #FF8A8899.
+Wharf : Defining color [Inactive2Dark] == #FF2D3332.
+Wharf : Defining color [Inactive2Light] == #FF889998.
+Wharf : Defining color [ActiveDark] == #FF332B23.
+Wharf : Defining color [ActiveLight] == #FF998169.
+Wharf : Defining color [HighInactiveDark] == #FF5C5B66.
+Wharf : Defining color [HighInactiveLight] == #FFB8B6CC.
+Wharf : Defining color [HighActiveDark] == #FF665646.
+Wharf : Defining color [HighActiveLight] == #FFCCAD8D.
+Wharf : Defining color [HighInactiveBackDark] == #FF34404C.
+Wharf : Defining color [HighInactiveBackLight] == #FF7B97B3.
+Wharf : Defining color [HighActiveBackDark] == #FF000000.
+Wharf : Defining color [HighActiveBackLight] == #FF665646.
+Wharf : Defining color [Cursor] == #FF0C7F0C.
+Wharf : Defining var [ascs.Base.alpha] == 255.
+Wharf : Defining var [ascs.Base.red] == 52.
+Wharf : Defining var [ascs.Base.green] == 64.
+Wharf : Defining var [ascs.Base.blue] == 76.
+Wharf : Defining var [ascs.Base.hue] == 210.
+Wharf : Defining var [ascs.Base.saturation] == 31.
+Wharf : Defining var [ascs.Base.value] == 29.
+Wharf : Defining var [ascs.Inactive1.alpha] == 255.
+Wharf : Defining var [ascs.Inactive1.red] == 92.
+Wharf : Defining var [ascs.Inactive1.green] == 91.
+Wharf : Defining var [ascs.Inactive1.blue] == 102.
+Wharf : Defining var [ascs.Inactive1.hue] == 245.
+Wharf : Defining var [ascs.Inactive1.saturation] == 10.
+Wharf : Defining var [ascs.Inactive1.value] == 40.
+Wharf : Defining var [ascs.Inactive2.alpha] == 255.
+Wharf : Defining var [ascs.Inactive2.red] == 91.
+Wharf : Defining var [ascs.Inactive2.green] == 102.
+Wharf : Defining var [ascs.Inactive2.blue] == 101.
+Wharf : Defining var [ascs.Inactive2.hue] == 174.
+Wharf : Defining var [ascs.Inactive2.saturation] == 10.
+Wharf : Defining var [ascs.Inactive2.value] == 40.
+Wharf : Defining var [ascs.Active.alpha] == 255.
+Pager : Wharf : Terminal is set to: "/usr/bin/xterm"Defining var [ascs.Active.red] == 102.
+
+Wharf : Defining var [ascs.Active.green] == 86.
+Wharf : Defining var [ascs.Active.blue] == 70.
+Wharf : Defining var [ascs.Active.hue] == 30.
+Wharf : Defining var [ascs.Active.saturation] == 31.
+Wharf : Defining var [ascs.Active.value] == 40.
+Wharf : Defining var [ascs.InactiveText1.alpha] == 255.
+Wharf : Defining var [ascs.InactiveText1.red] == 230.
+Wharf : Defining var [ascs.InactiveText1.green] == 230.
+Wharf : Defining var [ascs.InactiveText1.blue] == 230.
+Wharf : Defining var [ascs.InactiveText1.hue] == -1.
+Wharf : Defining var [ascs.InactiveText1.saturation] == -1.
+Wharf : Defining var [ascs.InactiveText1.value] == 90.
+Wharf : Defining var [ascs.InactiveText2.alpha] == 255.
+Wharf : Defining var [ascs.InactiveText2.red] == 230.
+Wharf : Defining var [ascs.InactiveText2.green] == 230.
+Wharf : Defining var [ascs.InactiveText2.blue] == 230.
+Wharf : Defining var [ascs.InactiveText2.hue] == -1.
+Wharf : Defining var [ascs.InactiveText2.saturation] == -1.
+Wharf : Defining var [ascs.InactiveText2.value] == 90.
+Wharf : Defining var [ascs.ActiveText.alpha] == 255.
+Wharf : Defining var [ascs.ActiveText.red] == 245.
+Wharf : Defining var [ascs.ActiveText.green] == 248.
+Wharf : Defining var [ascs.ActiveText.blue] == 250.
+Wharf : Defining var [ascs.ActiveText.hue] == 204.
+Wharf : Defining var [ascs.ActiveText.saturation] == 2.
+Wharf : Defining var [ascs.ActiveText.value] == 98.
+Wharf : Defining var [ascs.HighInactive.alpha] == 255.
+Wharf : Defining var [ascs.HighInactive.red] == 138.
+Wharf : Defining var [ascs.HighInactive.green] == 136.
+Wharf : Defining var [ascs.HighInactive.blue] == 153.
+Wharf : Defining var [ascs.HighInactive.hue] == 247.
+Wharf : Defining var [ascs.HighInactive.saturation] == 11.
+Wharf : Defining var [ascs.HighInactive.value] == 60.
+Wharf : Defining var [ascs.HighActive.alpha] == 255.
+Wharf : Defining var [ascs.HighActive.red] == 153.
+Wharf : Defining var [ascs.HighActive.green] == 129.
+Wharf : Defining var [ascs.HighActive.blue] == 105.
+Wharf : Defining var [ascs.HighActive.hue] == 30.
+Wharf : Defining var [ascs.HighActive.saturation] == 31.
+Wharf : Defining var [ascs.HighActive.value] == 60.
+Wharf : Defining var [ascs.HighInactiveBack.alpha] == 255.
+Wharf : Defining var [ascs.HighInactiveBack.red] == 88.
+Wharf : Defining var [ascs.HighInactiveBack.green] == 108.
+Wharf : Defining var [ascs.HighInactiveBack.blue] == 127.
+Wharf : Defining var [ascs.HighInactiveBack.hue] == 209.
+Wharf : Defining var [ascs.HighInactiveBack.saturation] == 30.
+Wharf : Defining var [ascs.HighInactiveBack.value] == 49.
+Wharf : Defining var [ascs.HighActiveBack.alpha] == 255.
+Wharf : Defining var [ascs.HighActiveBack.red] == 51.
+Wharf : Defining var [ascs.HighActiveBack.green] == 43.
+Wharf : Defining var [ascs.HighActiveBack.blue] == 35.
+Wharf : Defining var [ascs.HighActiveBack.hue] == 30.
+Wharf : Defining var [ascs.HighActiveBack.saturation] == 31.
+Wharf : Defining var [ascs.HighActiveBack.value] == 20.
+Wharf : Defining var [ascs.HighInactiveText.alpha] == 255.
+Wharf : Defining var [ascs.HighInactiveText.red] == 230.
+Wharf : Defining var [ascs.HighInactiveText.green] == 230.
+Wharf : Defining var [ascs.HighInactiveText.blue] == 230.
+Wharf : Defining var [ascs.HighInactiveText.hue] == -1.
+Wharf : Defining var [ascs.HighInactiveText.saturation] == -1.
+Wharf : Defining var [ascs.HighInactiveText.value] == 90.
+Wharf : Defining var [ascs.HighActiveText.alpha] == 255.
+Wharf : Defining var [ascs.HighActiveText.red] == 245.Pager : 
+Browser is set to: "none"Wharf : 
+Defining var [ascs.HighActiveText.green] == 248.
+Wharf : Defining var [ascs.HighActiveText.blue] == 250.
+Wharf : Defining var [ascs.HighActiveText.hue] == 204.
+Wharf : Defining var [ascs.HighActiveText.saturation] == 2.
+Wharf : Defining var [ascs.HighActiveText.value] == 98.
+Wharf : Defining var [ascs.DisabledText.alpha] == 255.
+Wharf : Defining var [ascs.DisabledText.red] == 38.
+Wharf : Defining var [ascs.DisabledText.green] == 45.
+Wharf : Defining var [ascs.DisabledText.blue] == 51.
+Wharf : Defining var [ascs.DisabledText.hue] == 207.
+Wharf : Defining var [ascs.DisabledText.saturation] == 25.
+Wharf : Defining var [ascs.DisabledText.value] == 20.
+Wharf : Defining var [ascs.BaseDark.alpha] == 255.
+Wharf : Defining var [ascs.BaseDark.red] == 0.
+Wharf : Defining var [ascs.BaseDark.green] == 0.
+Wharf : Defining var [ascs.BaseDark.blue] == 0.
+Wharf : Defining var [ascs.BaseDark.hue] == -1.
+Wharf : Defining var [ascs.BaseDark.saturation] == -1.
+Wharf : Defining var [ascs.BaseDark.value] == 0.
+Wharf : Defining var [ascs.BaseLight.alpha] == 255.
+Wharf : Defining var [ascs.BaseLight.red] == 123.
+Wharf : Defining var [ascs.BaseLight.green] == 151.
+Wharf : Defining var [ascs.BaseLight.blue] == 179.
+Wharf : Defining var [ascs.BaseLight.hue] == 210.
+Wharf : Defining var [ascs.BaseLight.saturation] == 31.
+Wharf : Defining var [ascs.BaseLight.value] == 70.
+Wharf : Defining var [ascs.Inactive1Dark.alpha] == 255.
+Wharf : Defining var [ascs.Inactive1Dark.red] == 46.
+Wharf : Defining var [ascs.Inactive1Dark.green] == 45.
+Wharf : Defining var [ascs.Inactive1Dark.blue] == 51.
+Wharf : Defining var [ascs.Inactive1Dark.hue] == 249.
+Wharf : Defining var [ascs.Inactive1Dark.saturation] == 11.
+Wharf : Defining var [ascs.Inactive1Dark.value] == 20.
+Wharf : Defining var [ascs.Inactive1Light.alpha] == 255.
+Wharf : Defining var [ascs.Inactive1Light.red] == 138.
+Wharf : Defining var [ascs.Inactive1Light.green] == 136.
+Wharf : Defining var [ascs.Inactive1Light.blue] == 153.
+Wharf : Defining var [ascs.Inactive1Light.hue] == 247.
+Wharf : Defining var [ascs.Inactive1Light.saturation] == 11.
+Wharf : Defining var [ascs.Inactive1Light.value] == 60.
+Wharf : Defining var [ascs.Inactive2Dark.alpha] == 255.
+Wharf : Defining var [ascs.Inactive2Dark.red] == 45.
+Wharf : Defining var [ascs.Inactive2Dark.green] == 51.
+Wharf : Defining var [ascs.Inactive2Dark.blue] == 50.
+Wharf : Defining var [ascs.Inactive2Dark.hue] == 169.
+Wharf : Defining var [ascs.Inactive2Dark.saturation] == 11.
+Wharf : Defining var [ascs.Inactive2Dark.value] == 20.
+Wharf : Defining var [ascs.Inactive2Light.alpha] == 255.
+Wharf : Defining var [ascs.Inactive2Light.red] == 136.
+Wharf : Defining var [ascs.Inactive2Light.green] == 153.
+Wharf : Defining var [ascs.Inactive2Light.blue] == 152.
+Wharf : Defining var [ascs.Inactive2Light.hue] == 176.
+Wharf : Defining var [ascs.Inactive2Light.saturation] == 11.
+Wharf : Defining var [ascs.Inactive2Light.value] == 60.
+Wharf : Defining var [ascs.ActiveDark.alpha] == 255.
+Wharf : Defining var [ascs.ActiveDark.red] == 51.
+Wharf : Defining var [ascs.ActiveDark.green] == 43.
+Wharf : Defining var [ascs.ActiveDark.blue] == 35.
+Wharf : Defining var [ascs.ActiveDark.hue] == 30.
+Wharf : Defining var [ascs.ActiveDark.saturation] == 31.
+Wharf : Defining var [ascs.ActiveDark.value] == 20.
+Wharf : Defining var [ascs.ActiveLight.alpha] == 255.
+Wharf : Pager : Defining var [ascs.ActiveLight.red] == 153.Editor is set to: "none"
+
+Wharf : Defining var [ascs.ActiveLight.green] == 129.
+Wharf : Defining var [ascs.ActiveLight.blue] == 105.
+Wharf : Pager : Defining var [ascs.ActiveLight.hue] == 30.Pixmap Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icon
+s/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/hoWharf : me/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-instaDefining var [ascs.ActiveLight.saturation] == 31.ll/icons::/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VN
+uhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttoWharf : ns/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/aftersDefining var [ascs.ActiveLight.value] == 60.tep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons:" ...
+
+Wharf : Defining var [ascs.HighInactiveDark.alpha] == 255.
+Wharf : Defining var [ascs.HighInactiveDark.red] == 92.
+Wharf : Defining var [ascs.HighInactiveDark.green] == 91.
+Wharf : Defining var [ascs.HighInactiveDark.blue] == 102.
+Wharf : Defining var [ascs.HighInactiveDark.hue] == 245.
+Wharf : Defining var [ascs.HighInactiveDark.saturation] == 10.
+Wharf : Defining var [ascs.HighInactiveDark.value] == 40.
+Wharf : Defining var [ascs.HighInactiveLight.alpha] == 255.
+Wharf : Defining var [ascs.HighInactiveLight.red] == 184.
+Wharf : Defining var [ascs.HighInactiveLight.green] == 182.
+Wharf : Defining var [ascs.HighInactiveLight.blue] == 204.
+Wharf : Defining var [ascs.HighInactiveLight.hue] == 245.
+Wharf : Defining var [ascs.HighInactiveLight.saturation] == 10.
+Wharf : Defining var [ascs.HighInactiveLight.value] == 80.
+Wharf : Defining var [ascs.HighActiveDark.alpha] == 255.
+Wharf : Defining var [ascs.HighActiveDark.red] == 102.
+Wharf : Defining var [ascs.HighActiveDark.green] == 86.
+Wharf : Defining var [ascs.HighActiveDark.blue] == 70.
+Wharf : Defining var [ascs.HighActiveDark.hue] == 30.
+Wharf : Pager : Defining var [ascs.HighActiveDark.saturation] == 31.Font Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/fonts/:/home/arch/afterstep/_install/share/afterstep/desktop/fonts/
+:/usr/share/fonts/default/TrueType/:/usr/share/fonts/truetype/freefont/:/X11/fonts/TTF" ...
+Wharf : Defining var [ascs.HighActiveDark.value] == 40.
+Pager : Wharf : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...Defining var [ascs.HighActiveLight.alpha] == 255.
+
+Wharf : Defining var [ascs.HighActiveLight.red] == 204.
+Wharf : Defining var [ascs.HighActiveLight.green] == 173.
+Wharf : Defining var [ascs.HighActiveLight.blue] == 141.
+Wharf : Defining var [ascs.HighActiveLight.hue] == 30.
+Wharf : Defining var [ascs.HighActiveLight.saturation] == 31.
+Wharf : Defining var [ascs.HighActiveLight.value] == 80.
+Wharf : Defining var [ascs.HighInactiveBackDark.alpha] == 255.
+Wharf : Defining var [ascs.HighInactiveBackDark.red] == 52.
+Wharf : Defining var [ascs.HighInactiveBackDark.green] == 64.
+Wharf : Defining var [ascs.HighInactiveBackDark.blue] == 76.
+Wharf : Defining var [ascs.HighInactiveBackDark.hue] == 210.
+Wharf : Defining var [ascs.HighInactiveBackDark.saturation] == 31.
+Wharf : Defining var [ascs.HighInactiveBackDark.value] == 29.
+Wharf : Defining var [ascs.HighInactiveBackLight.alpha] == 255.
+Wharf : Defining var [ascs.HighInactiveBackLight.red] == 123.
+Wharf : Defining var [ascs.HighInactiveBackLight.green] == 151.
+Wharf : Defining var [ascs.HighInactiveBackLight.blue] == 179.
+Wharf : Defining var [ascs.HighInactiveBackLight.hue] == 210.
+Wharf : Pager : Defining var [ascs.HighInactiveBackLight.saturation] == 31.
+hsv(245,11,40)->rgb16(23571,23331,26214)->crit23588Wharf : 
+Defining var [ascs.HighInactiveBackLight.value] == 70.Pager : 
+hsv(175,11,40)->rgb16(23331,26214,25973)->crit25556Wharf : 
+Defining var [ascs.HighActiveBackDark.alpha] == 255.Pager : 
+hsv(30,31,40)->rgb16(26214,22151,18089)->crit22764Wharf : 
+Defining var [ascs.HighActiveBackDark.red] == 0.Pager : 
+hsv(210,31,30)->rgb16(13566,16613,19660)->crit16152Wharf : 
+Defining var [ascs.HighActiveBackDark.green] == 0.Pager : 
+hsv(210,31,50)->rgb16(22611,27689,32767)->crit26922Wharf : 
+Defining var [ascs.HighActiveBackDark.blue] == 0.Pager : 
+hsv(30,31,20)->rgb16(13107,11076,9045)->crit11382Wharf : 
+Defining var [ascs.HighActiveBackDark.hue] == -1.
+Wharf : Defining var [ascs.HighActiveBackDark.saturation] == -1.Pager : 
+COLORSCHEME loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_colorscheme" ...Wharf : 
+Defining var [ascs.HighActiveBackDark.value] == 0.
+Pager : Wharf : Defining color [Base] == #FF34404C.Defining var [ascs.HighActiveBackLight.alpha] == 255.
+
+Pager : Wharf : Defining color [Inactive1] == #FF5C5B66.Defining var [ascs.HighActiveBackLight.red] == 102.
+
+Pager : Wharf : Defining color [Inactive2] == #FF5B6665.Defining var [ascs.HighActiveBackLight.green] == 86.
+
+Pager : Wharf : Defining color [Active] == #FF665646.Defining var [ascs.HighActiveBackLight.blue] == 70.
+
+Pager : Wharf : Defining color [InactiveText1] == #FFE6E6E6.Defining var [ascs.HighActiveBackLight.hue] == 30.
+
+Pager : Wharf : Defining color [InactiveText2] == #FFE6E6E6.Defining var [ascs.HighActiveBackLight.saturation] == 31.
+
+Pager : Wharf : Defining color [ActiveText] == #FFF5F8FA.Defining var [ascs.HighActiveBackLight.value] == 40.
+
+Pager : Wharf : Defining color [HighInactive] == #FF8A8899.Defining var [ascs.Cursor.alpha] == 255.
+
+Pager : Wharf : Defining color [HighActive] == #FF998169.Defining var [ascs.Cursor.red] == 12.
+
+Pager : Wharf : Defining color [HighInactiveBack] == #FF586C7F.Defining var [ascs.Cursor.green] == 127.
+
+Pager : Wharf : Defining color [HighActiveBack] == #FF332B23.Defining var [ascs.Cursor.blue] == 12.
+
+Pager : Wharf : Defining color [HighInactiveText] == #FFE6E6E6.Defining var [ascs.Cursor.hue] == 120.
+
+Pager : Wharf : Defining color [HighActiveText] == #FFF5F8FA.Defining var [ascs.Cursor.saturation] == 90.
+
+Pager : Wharf : Defining color [DisabledText] == #FF262D33.Defining var [ascs.Cursor.value] == 49.
+
+Pager : Defining color [BaseDark] == #FF000000.
+Pager : Defining color [BaseLight] == #FF7B97B3.
+Pager : Defining color [Inactive1Dark] == #FF2E2D33.
+Pager : Defining color [Inactive1Light] == #FF8A8899.
+Pager : Defining color [Inactive2Dark] == #FF2D3332.
+Pager : Defining color [Inactive2Light] == #FF889998.
+Pager : Defining color [ActiveDark] == #FF332B23.
+Pager : Defining color [ActiveLight] == #FF998169.
+Pager : Defining color [HighInactiveDark] == #FF5C5B66.
+Pager : Defining color [HighInactiveLight] == #FFB8B6CC.
+Pager : Defining color [HighActiveDark] == #FF665646.
+Pager : Defining color [HighActiveLight] == #FFCCAD8D.
+Pager : Defining color [HighInactiveBackDark] == #FF34404C.
+Pager : Defining color [HighInactiveBackLight] == #FF7B97B3.
+Pager : Defining color [HighActiveBackDark] == #FF000000.
+Pager : Defining color [HighActiveBackLight] == #FF665646.
+Pager : Defining color [Cursor] == #FF0C7F0C.
+Pager : Defining var [ascs.Base.alpha] == 255.
+Pager : Defining var [ascs.Base.red] == 52.
+Pager : Defining var [ascs.Base.green] == 64.
+Pager : Defining var [ascs.Base.blue] == 76.
+Pager : Defining var [ascs.Base.hue] == 210.
+Wharf ERROR: Pager : in Module:Wharf (line 5):Heh, it seems that I've encountered an obsolete config option. I'll ignore it for now, OK ?![FullPush]
+Wharf : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/wharf" ...
+WinTabs : Defining var [xroot.width] == 1280.
+WinTabs : Defining var [xroot.height] == 800.
+WinTabs : Defining var [xroot.widthmm] == 325.
+WinTabs : Defining var [xroot.heightmm] == 203.
+WinTabs : Defining var [icon.button.width] == 48.
+WinTabs : Defining var [icon.button.height] == 48.
+WinTabs : Defining var [icon.width] == 36.
+WinTabs : Defining var [icon.height] == 36.
+WinTabs : Defining var [minipixmap.width] == 19.
+WinTabs : Defining var [minipixmap.height] == 19.
+WinTabs : Defining var [title.font.size] == 11.
+WinTabs : Defining var [menu.font.size] == 12.
+WinTabs : Defining var [font.size] == 11.
+WinTabs : Defining var [xroot.xinerama_screens_num] == 0.
+WinTabs : Defining var [xroot.xinerama_screens_num] == 1.
+WinTabs : xroot.xinerama_screens[0] = {0, 0, 0, 1280, 800}
+WinTabs : Defining var [xroot.xinerama_screens[0].x] == 0.
+WinTabs : Defining var [xroot.xinerama_screens[0].y] == 0.
+WinTabs : Defining var [xroot.xinerama_screens[0].width] == 1280.
+WinTabs : Defining var [xroot.xinerama_screens[0].height] == 800.
+WinTabs : Defining var [xroot.xinerama_screens_num] == 0.
+WinTabs : Defining var [xroot.xinerama_screens_num] == 1.
+WinTabs : xroot.randr.monitor[0] = {0, 0, 1280, 800}
+WinTabs : Defining var [xroot.xinerama_screens[0].x] == 0.
+WinTabs : Defining var [xroot.xinerama_screens[0].y] == 0.
+WinTabs : Defining var [xroot.xinerama_screens[0].width] == 1280.
+WinTabs : Defining var [xroot.xinerama_screens[0].height] == 800.
+WinTabs : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+WinTabs : Terminal is set to: "/usr/bin/xterm"
+WinTabs : Browser is set to: "none"
+WinTabs : Editor is set to: "none"
+WinTabs : Pixmap Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons::/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons:" ...
+WinTabs : Font Path changed to "/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/fonts/:/home/arch/afterstep/_install/share/afterstep/desktop/fonts/:/usr/share/fonts/default/TrueType/:/usr/share/fonts/truetype/freefont/:/X11/fonts/TTF" ...
+WinTabs : BASE configuration loaded from "/home/arch/afterstep/_install/share/afterstep/base" ...
+WinTabs : hsv(245,11,40)->rgb16(23571,23331,26214)->crit23588
+WinTabs : hsv(175,11,40)->rgb16(23331,26214,25973)->crit25556
+WinTabs : hsv(30,31,40)->rgb16(26214,22151,18089)->crit22764
+WinTabs : hsv(210,31,30)->rgb16(13566,16613,19660)->crit16152
+WinTabs : hsv(210,31,50)->rgb16(22611,27689,32767)->crit26922
+WinTabs : hsv(30,31,20)->rgb16(13107,11076,9045)->crit11382
+WinTabs : COLORSCHEME loaded from "/home/arch/afterstep/_install/share/afterstep/non-configurable/0_colorscheme" ...
+WinTabs : Defining color [Base] == #FF34404C.
+WinTabs : Defining color [Inactive1] == #FF5C5B66.
+WinTabs : Defining color [Inactive2] == #FF5B6665.
+WinTabs : Defining color [Active] == #FF665646.
+WinTabs : Defining color [InactiveText1] == #FFE6E6E6.
+WinTabs : Defining color [InactiveText2] == #FFE6E6E6.
+WinTabs : Defining color [ActiveText] == #FFF5F8FA.
+WinTabs : Defining color [HighInactive] == #FF8A8899.
+WinTabs : Defining color [HighActive] == #FF998169.
+WinTabs : Defining color [HighInactiveBack] == #FF586C7F.
+WinTabs : Defining color [HighActiveBack] == #FF332B23.
+WinTabs : Defining color [HighInactiveText] == #FFE6E6E6.
+WinTabs : Defining color [HighActiveText] == #FFF5F8FA.
+WinTabs : Defining color [DisabledText] == #FF262D33.
+WinTabs : Defining color [BaseDark] == #FF000000.
+WinTabs : Defining color [BaseLight] == #FF7B97B3.
+WinTabs : Defining color [Inactive1Dark] == #FF2E2D33.
+WinTabs : Defining color [Inactive1Light] == #FF8A8899.
+WinTabs : Defining color [Inactive2Dark] == #FF2D3332.
+WinTabs : Defining color [Inactive2Light] == #FF889998.
+WinTabs : Defining color [ActiveDark] == #FF332B23.
+WinTabs : Defining color [ActiveLight] == #FF998169.
+WinTabs : Defining color [HighInactiveDark] == #FF5C5B66.
+WinTabs : Defining color [HighInactiveLight] == #FFB8B6CC.
+WinTabs : Defining color [HighActiveDark] == #FF665646.
+WinTabs : Defining color [HighActiveLight] == #FFCCAD8D.
+WinTabs : Defining color [HighInactiveBackDark] == #FF34404C.
+WinTabs : Defining color [HighInactiveBackLight] == #FF7B97B3.
+WinTabs : Defining color [HighActiveBackDark] == #FF000000.
+WinTabs : Defining color [HighActiveBackLight] == #FF665646.
+WinTabs : Defining color [Cursor] == #FF0C7F0C.
+WinTabs : Defining var [ascs.Base.alpha] == 255.
+WinTabs : Defining var [ascs.Base.red] == 52.
+WinTabs : Defining var [ascs.Base.green] == 64.
+WinTabs : Defining var [ascs.Base.blue] == 76.
+WinTabs : Defining var [ascs.Base.hue] == 210.
+WinTabs : Defining var [ascs.Base.saturation] == 31.
+WinTabs : Defining var [ascs.Base.value] == 29.
+WinTabs : Defining var [ascs.Inactive1.alpha] == 255.
+WinTabs : Defining var [ascs.Inactive1.red] == 92.
+WinTabs : Defining var [ascs.Inactive1.green] == 91.
+WinTabs : Defining var [ascs.Inactive1.blue] == 102.
+WinTabs : Defining var [ascs.Inactive1.hue] == 245.
+WinTabs : Defining var [ascs.Inactive1.saturation] == 10.
+WinTabs : Defining var [ascs.Inactive1.value] == 40.
+WinTabs : Defining var [ascs.Inactive2.alpha] == 255.
+WinTabs : Defining var [ascs.Inactive2.red] == 91.
+WinTabs : Defining var [ascs.Inactive2.green] == 102.
+WinTabs : Defining var [ascs.Inactive2.blue] == 101.
+WinTabs : Defining var [ascs.Inactive2.hue] == 174.
+WinTabs : Defining var [ascs.Inactive2.saturation] == 10.
+WinTabs : Defining var [ascs.Inactive2.value] == 40.
+WinTabs : Defining var [ascs.Active.alpha] == 255.
+WinTabs : Defining var [ascs.Active.red] == 102.
+WinTabs : Defining var [ascs.Active.green] == 86.
+WinTabs : Defining var [ascs.Active.blue] == 70.
+WinTabs : Defining var [ascs.Active.hue] == 30.
+WinTabs : Defining var [ascs.Active.saturation] == 31.
+WinTabs : Defining var [ascs.Active.value] == 40.
+WinTabs : Defining var [ascs.InactiveText1.alpha] == 255.
+WinTabs : Defining var [ascs.InactiveText1.red] == 230.
+WinTabs : Defining var [ascs.InactiveText1.green] == 230.
+WinTabs : Defining var [ascs.InactiveText1.blue] == 230.
+WinTabs : Defining var [ascs.InactiveText1.hue] == -1.
+WinTabs : Defining var [ascs.InactiveText1.saturation] == -1.
+WinTabs : Defining var [ascs.InactiveText1.value] == 90.
+WinTabs : Defining var [ascs.InactiveText2.alpha] == 255.
+WinTabs : Defining var [ascs.InactiveText2.red] == 230.
+WinTabs : Defining var [ascs.InactiveText2.green] == 230.
+WinTabs : Defining var [ascs.InactiveText2.blue] == 230.
+WinTabs : Defining var [ascs.InactiveText2.hue] == -1.
+WinTabs : Defining var [ascs.InactiveText2.saturation] == -1.
+WinTabs : Defining var [ascs.InactiveText2.value] == 90.
+WinTabs : Defining var [ascs.ActiveText.alpha] == 255.
+WinTabs : Defining var [ascs.ActiveText.red] == 245.
+WinTabs : Defining var [ascs.ActiveText.green] == 248.
+WinTabs : Defining var [ascs.ActiveText.blue] == 250.
+WinTabs : Defining var [ascs.ActiveText.hue] == 204.
+WinTabs : Defining var [ascs.ActiveText.saturation] == 2.
+WinTabs : Defining var [ascs.ActiveText.value] == 98.
+WinTabs : Defining var [ascs.HighInactive.alpha] == 255.
+WinTabs : Defining var [ascs.HighInactive.red] == 138.
+WinTabs : Defining var [ascs.HighInactive.green] == 136.
+WinTabs : Defining var [ascs.HighInactive.blue] == 153.
+WinTabs : Defining var [ascs.HighInactive.hue] == 247.
+WinTabs : Defining var [ascs.HighInactive.saturation] == 11.
+WinTabs : Defining var [ascs.HighInactive.value] == 60.
+WinTabs : Defining var [ascs.HighActive.alpha] == 255.
+WinTabs : Defining var [ascs.HighActive.red] == 153.
+WinTabs : Defining var [ascs.HighActive.green] == 129.
+WinTabs : Defining var [ascs.HighActive.blue] == 105.
+WinTabs : Defining var [ascs.HighActive.hue] == 30.
+WinTabs : Defining var [ascs.HighActive.saturation] == 31.
+WinTabs : Defining var [ascs.HighActive.value] == 60.
+WinTabs : Defining var [ascs.Base.saturation] == 31.
+Pager : Defining var [ascs.Base.value] == 29.
+Pager : Defining var [ascs.Inactive1.alpha] == 255.
+Pager : Defining var [ascs.Inactive1.red] == 92.
+Pager : Defining var [ascs.Inactive1.green] == 91.
+Pager : Defining var [ascs.Inactive1.blue] == 102.
+Pager : Defining var [ascs.Inactive1.hue] == 245.
+Pager : Defining var [ascs.Inactive1.saturation] == 10.
+Pager : Defining var [ascs.Inactive1.value] == 40.
+Pager : Defining var [ascs.Inactive2.alpha] == 255.
+Pager : Defining var [ascs.Inactive2.red] == 91.
+Pager : Defining var [ascs.Inactive2.green] == 102.
+Pager : Defining var [ascs.Inactive2.blue] == 101.
+Pager : Defining var [ascs.Inactive2.hue] == 174.
+Pager : Defining var [ascs.Inactive2.saturation] == 10.
+Pager : Defining var [ascs.Inactive2.value] == 40.
+Pager : Defining var [ascs.Active.alpha] == 255.
+Pager : Defining var [ascs.Active.red] == 102.
+Pager : Defining var [ascs.Active.green] == 86.
+Pager : Defining var [ascs.Active.blue] == 70.
+Pager : Defining var [ascs.Active.hue] == 30.
+Pager : Defining var [ascs.Active.saturation] == 31.
+Pager : Defining var [ascs.Active.value] == 40.
+Pager : Defining var [ascs.InactiveText1.alpha] == 255.
+Pager : Defining var [ascs.InactiveText1.red] == 230.
+Pager : Defining var [ascs.InactiveText1.green] == 230.
+Pager : Defining var [ascs.InactiveText1.blue] == 230.
+Pager : Defining var [ascs.InactiveText1.hue] == -1.
+Pager : Defining var [ascs.InactiveText1.saturation] == -1.
+Pager : Defining var [ascs.InactiveText1.value] == 90.
+Pager : Defining var [ascs.InactiveText2.alpha] == 255.
+Pager : Defining var [ascs.InactiveText2.red] == 230.
+Pager : Defining var [ascs.InactiveText2.green] == 230.
+Pager : Defining var [ascs.InactiveText2.blue] == 230.
+Pager : Defining var [ascs.InactiveText2.hue] == -1.
+Pager : Defining var [ascs.InactiveText2.saturation] == -1.
+Pager : Defining var [ascs.InactiveText2.value] == 90.
+Pager : Defining var [ascs.ActiveText.alpha] == 255.
+Pager : Defining var [ascs.ActiveText.red] == 245.
+Pager : Defining var [ascs.ActiveText.green] == 248.
+Pager : Defining var [ascs.ActiveText.blue] == 250.
+Pager : Defining var [ascs.ActiveText.hue] == 204.
+Pager : Defining var [ascs.ActiveText.saturation] == 2.
+Pager : Defining var [ascs.ActiveText.value] == 98.
+Pager : Defining var [ascs.HighInactive.alpha] == 255.
+Pager : Defining var [ascs.HighInactive.red] == 138.
+Pager : Defining var [ascs.HighInactive.green] == 136.
+Pager : Defining var [ascs.HighInactive.blue] == 153.
+Pager : Defining var [ascs.HighInactive.hue] == 247.
+Pager : Defining var [ascs.HighInactive.saturation] == 11.
+Pager : Defining var [ascs.HighInactive.value] == 60.
+Pager : Defining var [ascs.HighActive.alpha] == 255.
+Pager : Defining var [ascs.HighActive.red] == 153.
+Pager : Defining var [ascs.HighActive.green] == 129.
+Pager : Defining var [ascs.HighActive.blue] == 105.
+Pager : Defining var [ascs.HighActive.hue] == 30.
+Pager : Defining var [ascs.HighActive.saturation] == 31.
+Pager : Defining var [ascs.HighActive.value] == 60.
+Pager : Defining var [ascs.HighInactiveBack.alpha] == 255.
+Pager : Defining var [ascs.HighInactiveBack.red] == 88.
+Pager : Defining var [ascs.HighInactiveBack.green] == 108.
+Pager : Defining var [ascs.HighInactiveBack.blue] == 127.
+Pager : Defining var [ascs.HighInactiveBack.hue] == 209.
+Pager : Defining var [ascs.HighInactiveBack.saturation] == 30.
+Pager : Defining var [ascs.HighInactiveBack.value] == 49.
+Pager : Defining var [ascs.HighActiveBack.alpha] == 255.
+Pager : Defining var [ascs.HighActiveBack.red] == 51.
+Pager : Defining var [ascs.HighActiveBack.green] == 43.
+Pager : Defining var [ascs.HighActiveBack.blue] == 35.
+Pager : Defining var [ascs.HighActiveBack.hue] == 30.
+Pager : Defining var [ascs.HighActiveBack.saturation] == 31.
+Pager : Defining var [ascs.HighActiveBack.value] == 20.
+Pager : Defining var [ascs.HighInactiveText.alpha] == 255.
+Pager : Defining var [ascs.HighInactiveText.red] == 230.
+Pager : Defining var [ascs.HighInactiveText.green] == 230.
+Pager : Defining var [ascs.HighInactiveText.blue] == 230.
+Pager : Defining var [ascs.HighInactiveText.hue] == -1.
+Pager : Defining var [ascs.HighInactiveText.saturation] == -1.
+Pager : Defining var [ascs.HighInactiveText.value] == 90.
+Pager : Defining var [ascs.HighActiveText.alpha] == 255.
+Pager : Defining var [ascs.HighActiveText.red] == 245.
+Pager : Defining var [ascs.HighActiveText.green] == 248.
+Pager : Defining var [ascs.HighActiveText.blue] == 250.
+Pager : Defining var [ascs.HighActiveText.hue] == 204.
+Pager : Defining var [ascs.HighActiveText.saturation] == 2.
+Pager : Defining var [ascs.HighActiveText.value] == 98.
+Pager : Defining var [ascs.DisabledText.alpha] == 255.
+Pager : Defining var [ascs.DisabledText.red] == 38.
+Pager : Defining var [ascs.DisabledText.green] == 45.
+Pager : Defining var [ascs.DisabledText.blue] == 51.
+Pager : Defining var [ascs.DisabledText.hue] == 207.
+Pager : Defining var [ascs.DisabledText.saturation] == 25.
+Pager : Defining var [ascs.DisabledText.value] == 20.
+Pager : Defining var [ascs.BaseDark.alpha] == 255.
+Pager : Defining var [ascs.BaseDark.red] == 0.
+Pager : Defining var [ascs.BaseDark.green] == 0.
+Pager : Defining var [ascs.BaseDark.blue] == 0.
+Pager : Defining var [ascs.BaseDark.hue] == -1.
+Pager : Defining var [ascs.BaseDark.saturation] == -1.
+Pager : Defining var [ascs.BaseDark.value] == 0.
+Pager : Defining var [ascs.BaseLight.alpha] == 255.
+Pager : Defining var [ascs.BaseLight.red] == 123.
+Pager : Defining var [ascs.BaseLight.green] == 151.
+Pager : Defining var [ascs.BaseLight.blue] == 179.
+Pager : Defining var [ascs.BaseLight.hue] == 210.
+Pager : Defining var [ascs.BaseLight.saturation] == 31.
+Pager : Defining var [ascs.BaseLight.value] == 70.
+Pager : Defining var [ascs.Inactive1Dark.alpha] == 255.
+Pager : Defining var [ascs.Inactive1Dark.red] == 46.
+Pager : Defining var [ascs.Inactive1Dark.green] == 45.
+Pager : Defining var [ascs.Inactive1Dark.blue] == 51.
+Pager : Defining var [ascs.Inactive1Dark.hue] == 249.
+Pager : Defining var [ascs.Inactive1Dark.saturation] == 11.
+Pager : Defining var [ascs.Inactive1Dark.value] == 20.
+Pager : Defining var [ascs.Inactive1Light.alpha] == 255.
+Pager : Defining var [ascs.Inactive1Light.red] == 138.
+Pager : Defining var [ascs.Inactive1Light.green] == 136.
+Pager : Defining var [ascs.Inactive1Light.blue] == 153.
+Pager : Defining var [ascs.Inactive1Light.hue] == 247.
+Pager : Defining var [ascs.Inactive1Light.saturation] == 11.
+Pager : Defining var [ascs.Inactive1Light.value] == 60.
+Pager : Defining var [ascs.Inactive2Dark.alpha] == 255.
+Pager : Defining var [ascs.Inactive2Dark.red] == 45.
+Pager : Defining var [ascs.Inactive2Dark.green] == 51.
+Pager : Defining var [ascs.Inactive2Dark.blue] == 50.
+Pager : Defining var [ascs.Inactive2Dark.hue] == 169.
+Pager : Defining var [ascs.Inactive2Dark.saturation] == 11.
+Pager : Defining var [ascs.Inactive2Dark.value] == 20.
+Pager : Defining var [ascs.Inactive2Light.alpha] == 255.
+Pager : Defining var [ascs.Inactive2Light.red] == 136.
+Pager : Defining var [ascs.Inactive2Light.green] == 153.
+Pager : Defining var [ascs.Inactive2Light.blue] == 152.
+Pager : Defining var [ascs.Inactive2Light.hue] == 176.
+Pager : Defining var [ascs.Inactive2Light.saturation] == 11.
+Pager : Defining var [ascs.Inactive2Light.value] == 60.
+Pager : Defining var [ascs.ActiveDark.alpha] == 255.
+Pager : Defining var [ascs.ActiveDark.red] == 51.
+Pager : Defining var [ascs.ActiveDark.green] == 43.
+Pager : Defining var [ascs.ActiveDark.blue] == 35.
+Pager : Defining var [ascs.ActiveDark.hue] == 30.
+Pager : Defining var [ascs.ActiveDark.saturation] == 31.
+Pager : Defining var [ascs.ActiveDark.value] == 20.
+Pager : Defining var [ascs.ActiveLight.alpha] == 255.
+Pager : Defining var [ascs.ActiveLight.red] == 153.
+Pager : Defining var [ascs.ActiveLight.green] == 129.
+Pager : Defining var [ascs.ActiveLight.blue] == 105.
+Pager : Defining var [ascs.ActiveLight.hue] == 30.
+Pager : Defining var [ascs.ActiveLight.saturation] == 31.
+Pager : Defining var [ascs.ActiveLight.value] == 60.
+Pager : Defining var [ascs.HighInactiveDark.alpha] == 255.
+Pager : Defining var [ascs.HighInactiveDark.red] == 92.
+Pager : Defining var [ascs.HighInactiveDark.green] == 91.
+Pager : Defining var [ascs.HighInactiveDark.blue] == 102.
+Pager : Defining var [ascs.HighInactiveDark.hue] == 245.
+Pager : Defining var [ascs.HighInactiveDark.saturation] == 10.
+Pager : Defining var [ascs.HighInactiveDark.value] == 40.
+Pager : Defining var [ascs.HighInactiveLight.alpha] == 255.
+Pager : Defining var [ascs.HighInactiveLight.red] == 184.
+Pager : Defining var [ascs.HighInactiveLight.green] == 182.
+Pager : Defining var [ascs.HighInactiveLight.blue] == 204.
+Pager : Defining var [ascs.HighInactiveLight.hue] == 245.
+Pager : Defining var [ascs.HighInactiveLight.saturation] == 10.
+Pager : Defining var [ascs.HighInactiveLight.value] == 80.
+Pager : Defining var [ascs.HighActiveDark.alpha] == 255.
+Pager : Defining var [ascs.HighActiveDark.red] == 102.
+Pager : Defining var [ascs.HighActiveDark.green] == 86.
+Pager : Defining var [ascs.HighActiveDark.blue] == 70.
+Pager : Defining var [ascs.HighActiveDark.hue] == 30.
+Pager : Defining var [ascs.HighActiveDark.saturation] == 31.
+Pager : Defining var [ascs.HighActiveDark.value] == 40.
+Pager : Defining var [ascs.HighActiveLight.alpha] == 255.
+Pager : Defining var [ascs.HighActiveLight.red] == 204.
+Pager : Defining var [ascs.HighActiveLight.green] == 173.
+Pager : Defining var [ascs.HighActiveLight.blue] == 141.
+Pager : Defining var [ascs.HighActiveLight.hue] == 30.
+Pager : Defining var [ascs.HighActiveLight.saturation] == 31.
+Pager : Defining var [ascs.HighActiveLight.value] == 80.
+Pager : Defining var [ascs.HighInactiveBackDark.alpha] == 255.
+Pager : Defining var [ascs.HighInactiveBackDark.red] == 52.
+Pager : Defining var [ascs.HighInactiveBackDark.green] == 64.
+Pager : Defining var [ascs.HighInactiveBackDark.blue] == 76.
+Pager : Defining var [ascs.HighInactiveBackDark.hue] == 210.
+Pager : Defining var [ascs.HighInactiveBackDark.saturation] == 31.
+Pager : Defining var [ascs.HighInactiveBackDark.value] == 29.
+Pager : Defining var [ascs.HighInactiveBackLight.alpha] == 255.
+Pager : Defining var [ascs.HighInactiveBackLight.red] == 123.
+Pager : Defining var [ascs.HighInactiveBackLight.green] == 151.
+Pager : Defining var [ascs.HighInactiveBackLight.blue] == 179.
+Pager : Defining var [ascs.HighInactiveBackLight.hue] == 210.
+Pager : Defining var [ascs.HighInactiveBackLight.saturation] == 31.
+Pager : Defining var [ascs.HighInactiveBackLight.value] == 70.
+Pager : Defining var [ascs.HighActiveBackDark.alpha] == 255.
+Pager : Defining var [ascs.HighActiveBackDark.red] == 0.
+Pager : Defining var [ascs.HighActiveBackDark.green] == 0.
+Pager : Defining var [ascs.HighActiveBackDark.blue] == 0.
+Pager : Defining var [ascs.HighActiveBackDark.hue] == -1.
+Pager : Defining var [ascs.HighActiveBackDark.saturation] == -1.
+Pager : Defining var [ascs.HighActiveBackDark.value] == 0.
+Pager : Defining var [ascs.HighActiveBackLight.alpha] == 255.
+Pager : Defining var [ascs.HighActiveBackLight.red] == 102.
+Pager : Defining var [ascs.HighActiveBackLight.green] == 86.
+Pager : Defining var [ascs.HighActiveBackLight.blue] == 70.
+Pager : Defining var [ascs.HighActiveBackLight.hue] == 30.
+Pager : Defining var [ascs.HighActiveBackLight.saturation] == 31.
+Pager : Defining var [ascs.HighActiveBackLight.value] == 40.
+Pager : Defining var [ascs.Cursor.alpha] == 255.
+Pager : Defining var [ascs.Cursor.red] == 12.
+Pager : Defining var [ascs.Cursor.green] == 127.
+Pager : Defining var [ascs.Cursor.blue] == 12.
+Pager : Defining var [ascs.Cursor.hue] == 120.
+Pager : Defining var [ascs.Cursor.saturation] == 90.
+Pager : Defining var [ascs.Cursor.value] == 49.
+Pager : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/pager" ...
+Pager : Custom color "BaseDark" found with argb #FF000000
+Pager : Custom color "HighActiveLight" found with argb #FFCCAD8D
+Pager : Custom color "Inactive2Dark" found with argb #FF2D3332
+Defining var [ascs.HighInactiveBack.alpha] == 255.
+WinTabs : Defining var [ascs.HighInactiveBack.red] == 88.
+WinTabs : Defining var [ascs.HighInactiveBack.green] == 108.
+WinTabs : Defining var [ascs.HighInactiveBack.blue] == 127.
+WinTabs : Defining var [ascs.HighInactiveBack.hue] == 209.
+WinTabs : Defining var [ascs.HighInactiveBack.saturation] == 30.
+WinTabs : Defining var [ascs.HighInactiveBack.value] == 49.
+WinTabs : Defining var [ascs.HighActiveBack.alpha] == 255.
+WinTabs : Defining var [ascs.HighActiveBack.red] == 51.
+WinTabs : Defining var [ascs.HighActiveBack.green] == 43.
+WinTabs : Defining var [ascs.HighActiveBack.blue] == 35.
+WinTabs : Defining var [ascs.HighActiveBack.hue] == 30.
+WinTabs : Defining var [ascs.HighActiveBack.saturation] == 31.
+WinTabs : Defining var [ascs.HighActiveBack.value] == 20.
+WinTabs : Defining var [ascs.HighInactiveText.alpha] == 255.
+WinTabs : Defining var [ascs.HighInactiveText.red] == 230.
+WinTabs : Defining var [ascs.HighInactiveText.green] == 230.
+WinTabs : Defining var [ascs.HighInactiveText.blue] == 230.
+WinTabs : Defining var [ascs.HighInactiveText.hue] == -1.
+WinTabs : Defining var [ascs.HighInactiveText.saturation] == -1.
+WinTabs : Defining var [ascs.HighInactiveText.value] == 90.
+WinTabs : Defining var [ascs.HighActiveText.alpha] == 255.
+WinTabs : Defining var [ascs.HighActiveText.red] == 245.
+WinTabs : Defining var [ascs.HighActiveText.green] == 248.
+WinTabs : Defining var [ascs.HighActiveText.blue] == 250.
+WinTabs : Defining var [ascs.HighActiveText.hue] == 204.
+WinTabs : Defining var [ascs.HighActiveText.saturation] == 2.
+WinTabs : Defining var [ascs.HighActiveText.value] == 98.
+WinTabs : Defining var [ascs.DisabledText.alpha] == 255.
+WinTabs : Defining var [ascs.DisabledText.red] == 38.
+WinTabs : Defining var [ascs.DisabledText.green] == 45.
+WinTabs : Defining var [ascs.DisabledText.blue] == 51.
+WinTabs : Defining var [ascs.DisabledText.hue] == 207.
+WinTabs : Defining var [ascs.DisabledText.saturation] == 25.
+WinTabs : Defining var [ascs.DisabledText.value] == 20.
+WinTabs : Defining var [ascs.BaseDark.alpha] == 255.
+WinTabs : Defining var [ascs.BaseDark.red] == 0.
+WinTabs : Defining var [ascs.BaseDark.green] == 0.
+WinTabs : Defining var [ascs.BaseDark.blue] == 0.
+WinTabs : Defining var [ascs.BaseDark.hue] == -1.
+WinTabs : Defining var [ascs.BaseDark.saturation] == -1.
+WinTabs : Defining var [ascs.BaseDark.value] == 0.
+WinTabs : Defining var [ascs.BaseLight.alpha] == 255.
+WinTabs : Defining var [ascs.BaseLight.red] == 123.
+WinTabs : Defining var [ascs.BaseLight.green] == 151.
+WinTabs : Defining var [ascs.BaseLight.blue] == 179.
+WinTabs : Defining var [ascs.BaseLight.hue] == 210.
+WinTabs : Defining var [ascs.BaseLight.saturation] == 31.
+WinTabs : Defining var [ascs.BaseLight.value] == 70.
+WinTabs : Defining var [ascs.Inactive1Dark.alpha] == 255.
+WinTabs : Defining var [ascs.Inactive1Dark.red] == 46.
+WinTabs : Defining var [ascs.Inactive1Dark.green] == 45.
+WinTabs : Defining var [ascs.Inactive1Dark.blue] == 51.
+WinTabs : Defining var [ascs.Inactive1Dark.hue] == 249.
+WinTabs : Defining var [ascs.Inactive1Dark.saturation] == 11.
+WinTabs : Defining var [ascs.Inactive1Dark.value] == 20.
+WinTabs : Defining var [ascs.Inactive1Light.alpha] == 255.
+WinTabs : Defining var [ascs.Inactive1Light.red] == 138.
+WinTabs : Defining var [ascs.Inactive1Light.green] == 136.
+WinTabs : Defining var [ascs.Inactive1Light.blue] == 153.
+WinTabs : Defining var [ascs.Inactive1Light.hue] == 247.
+WinTabs : Defining var [ascs.Inactive1Light.saturation] == 11.
+WinTabs : Defining var [ascs.Inactive1Light.value] == 60.
+WinTabs : Defining var [ascs.Inactive2Dark.alpha] == 255.
+WinTabs : Defining var [ascs.Inactive2Dark.red] == 45.
+WinTabs : Defining var [ascs.Inactive2Dark.green] == 51.
+WinTabs : Defining var [ascs.Inactive2Dark.blue] == 50.
+WinTabs : Defining var [ascs.Inactive2Dark.hue] == 169.
+WinTabs : Defining var [ascs.Inactive2Dark.saturation] == 11.
+WinTabs : Defining var [ascs.Inactive2Dark.value] == 20.
+WinTabs : Defining var [ascs.Inactive2Light.alpha] == 255.
+WinTabs : Defining var [ascs.Inactive2Light.red] == 136.
+WinTabs : Defining var [ascs.Inactive2Light.green] == 153.
+WinTabs : Defining var [ascs.Inactive2Light.blue] == 152.
+WinTabs : Defining var [ascs.Inactive2Light.hue] == 176.
+WinTabs : Defining var [ascs.Inactive2Light.saturation] == 11.
+WinTabs : Defining var [ascs.Inactive2Light.value] == 60.
+WinTabs : Defining var [ascs.ActiveDark.alpha] == 255.
+WinTabs : Defining var [ascs.ActiveDark.red] == 51.
+WinTabs : Defining var [ascs.ActiveDark.green] == 43.
+WinTabs : Defining var [ascs.ActiveDark.blue] == 35.
+WinTabs : Defining var [ascs.ActiveDark.hue] == 30.
+WinTabs : Defining var [ascs.ActiveDark.saturation] == 31.
+WinTabs : Defining var [ascs.ActiveDark.value] == 20.
+WinTabs : Defining var [ascs.ActiveLight.alpha] == 255.
+WinTabs : Defining var [ascs.ActiveLight.red] == 153.
+WinTabs : Defining var [ascs.ActiveLight.green] == 129.
+WinTabs : Defining var [ascs.ActiveLight.blue] == 105.
+WinTabs : Defining var [ascs.ActiveLight.hue] == 30.
+WinTabs : Defining var [ascs.ActiveLight.saturation] == 31.
+WinTabs : Defining var [ascs.ActiveLight.value] == 60.
+WinTabs : Defining var [ascs.HighInactiveDark.alpha] == 255.
+WinTabs : Defining var [ascs.HighInactiveDark.red] == 92.
+WinTabs : Defining var [ascs.HighInactiveDark.green] == 91.
+WinTabs : Defining var [ascs.HighInactiveDark.blue] == 102.
+WinTabs : Defining var [ascs.HighInactiveDark.hue] == 245.
+WinTabs : Defining var [ascs.HighInactiveDark.saturation] == 10.
+WinTabs : Defining var [ascs.HighInactiveDark.value] == 40.
+WinTabs : Defining var [ascs.HighInactiveLight.alpha] == 255.
+WinTabs : Defining var [ascs.HighInactiveLight.red] == 184.
+WinTabs : Defining var [ascs.HighInactiveLight.green] == 182.
+WinTabs : Defining var [ascs.HighInactiveLight.blue] == 204.
+WinTabs : Defining var [ascs.HighInactiveLight.hue] == 245.
+WinTabs : Defining var [ascs.HighInactiveLight.saturation] == 10.
+WinTabs : Defining var [ascs.HighInactiveLight.value] == 80.
+WinTabs : Defining var [ascs.HighActiveDark.alpha] == 255.
+WinTabs : Defining var [ascs.HighActiveDark.red] == 102.
+WinTabs : Defining var [ascs.HighActiveDark.green] == 86.
+WinTabs : Defining var [ascs.HighActiveDark.blue] == 70.
+WinTabs : Defining var [ascs.HighActiveDark.hue] == 30.
+WinTabs : Defining var [ascs.HighActiveDark.saturation] == 31.
+WinTabs : Defining var [ascs.HighActiveDark.value] == 40.
+WinTabs : Defining var [ascs.HighActiveLight.alpha] == 255.
+WinTabs : Defining var [ascs.HighActiveLight.red] == 204.
+WinTabs : Defining var [ascs.HighActiveLight.green] == 173.
+WinTabs : Defining var [ascs.HighActiveLight.blue] == 141.
+WinTabs : Defining var [ascs.HighActiveLight.hue] == 30.
+WinTabs : Defining var [ascs.HighActiveLight.saturation] == 31.
+WinTabs : Defining var [ascs.HighActiveLight.value] == 80.
+WinTabs : Defining var [ascs.HighInactiveBackDark.alpha] == 255.
+WinTabs : Defining var [ascs.HighInactiveBackDark.red] == 52.
+WinTabs : Defining var [ascs.HighInactiveBackDark.green] == 64.
+WinTabs : Defining var [ascs.HighInactiveBackDark.blue] == 76.
+WinTabs : Defining var [ascs.HighInactiveBackDark.hue] == 210.
+WinTabs : Defining var [ascs.HighInactiveBackDark.saturation] == 31.
+WinTabs : Defining var [ascs.HighInactiveBackDark.value] == 29.
+WinTabs : Defining var [ascs.HighInactiveBackLight.alpha] == 255.
+WinTabs : Defining var [ascs.HighInactiveBackLight.red] == 123.
+WinTabs : Defining var [ascs.HighInactiveBackLight.green] == 151.
+WinTabs : Defining var [ascs.HighInactiveBackLight.blue] == 179.
+WinTabs : Defining var [ascs.HighInactiveBackLight.hue] == 210.
+WinTabs : Defining var [ascs.HighInactiveBackLight.saturation] == 31.
+WinTabs : Defining var [ascs.HighInactiveBackLight.value] == 70.
+WinTabs : Defining var [ascs.HighActiveBackDark.alpha] == 255.
+WinTabs : Defining var [ascs.HighActiveBackDark.red] == 0.
+WinTabs : Defining var [ascs.HighActiveBackDark.green] == 0.
+WinTabs : Defining var [ascs.HighActiveBackDark.blue] == 0.
+WinTabs : Defining var [ascs.HighActiveBackDark.hue] == -1.
+WinTabs : Defining var [ascs.HighActiveBackDark.saturation] == -1.
+WinTabs : Defining var [ascs.HighActiveBackDark.value] == 0.
+WinTabs : Defining var [ascs.HighActiveBackLight.alpha] == 255.
+WinTabs : Defining var [ascs.HighActiveBackLight.red] == 102.
+WinTabs : Defining var [ascs.HighActiveBackLight.green] == 86.
+WinTabs : Defining var [ascs.HighActiveBackLight.blue] == 70.
+WinTabs : Defining var [ascs.HighActiveBackLight.hue] == 30.
+WinTabs : Defining var [ascs.HighActiveBackLight.saturation] == 31.
+WinTabs : Defining var [ascs.HighActiveBackLight.value] == 40.
+WinTabs : Defining var [ascs.Cursor.alpha] == 255.
+WinTabs : Defining var [ascs.Cursor.red] == 12.
+WinTabs : Defining var [ascs.Cursor.green] == 127.
+WinTabs : Defining var [ascs.Cursor.blue] == 12.
+WinTabs : Defining var [ascs.Cursor.hue] == 120.
+WinTabs : Defining var [ascs.Cursor.saturation] == 90.
+WinTabs : Defining var [ascs.Cursor.value] == 49.
+WinTabs : configuration loaded from "/home/arch/afterstep/_install/share/afterstep/wintabs" ...
+WinTabs : Successfully loaded freetype font "DefaultSansBold.ttf"
+WinTabs : Successfully loaded freetype font "DefaultSans.ttf"
+Wharf warning: Application "x-terminal-emulator &" cannot be found in the PATH.
+Wharf warning: Application "urxvt &" cannot be found in the PATH.
+Wharf warning: Application "rxvt -tr -fg yellow -bg black &" cannot be found in the PATH.
+Wharf warning: Application "Eterm -O --tint blue -fg yellow -bg black &" cannot be found in the PATH.
+Wharf warning: Application "mc &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "MidnightCommander" can be found in the PATH. Button will be disabled
+Wharf warning: Application "krusader &" cannot be found in the PATH.
+Wharf warning: Application "gentoo &" cannot be found in the PATH.
+Wharf warning: Application "rox &" cannot be found in the PATH.
+Wharf warning: Application "nautilus --no-desktop &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "GUIFileManager" can be found in the PATH. Button will be disabled
+Wharf warning: Application "konqueror &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "Konqueror" can be found in the PATH. Button will be disabled
+Wharf warning: Application "x-www-browser &" cannot be found in the PATH.
+Wharf warning: Application "iceweasel &" cannot be found in the PATH.
+Wharf warning: Application "firefox &" cannot be found in the PATH.
+Wharf warning: Application "mozilla-firefox &" cannot be found in the PATH.
+Wharf warning: Application "iceape &" cannot be found in the PATH.
+Wharf warning: Application "mozilla &" cannot be found in the PATH.
+Wharf warning: Application "opera &" cannot be found in the PATH.
+Wharf warning: Application "sensible-browser &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "WebBrowser" can be found in the PATH. Button will be disabled
+Wharf warning: Application "icedove &" cannot be found in the PATH.
+Wharf warning: Application "thunderbird &" cannot be found in the PATH.
+Wharf warning: Application "mozilla-thunderbird &" cannot be found in the PATH.
+Wharf warning: Application "mozilla --mail &" cannot be found in the PATH.
+Wharf warning: Application "kmail &" cannot be found in the PATH.
+Wharf warning: Application "balsa &" cannot be found in the PATH.
+Wharf warning: Application "mutt &" cannot be found in the PATH.
+Wharf warning: Application "pine &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "Mail" can be found in the PATH. Button will be disabled
+Wharf warning: Application "gimp &" cannot be found in the PATH.
+Wharf warning: Application "xv &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "ImageEditor" can be found in the PATH. Button will be disabled
+Wharf warning: Application "medit &" cannot be found in the PATH.
+Wharf warning: Application "nedit &" cannot be found in the PATH.
+Wharf warning: Application "cooledit &" cannot be found in the PATH.
+Wharf warning: Application "emacs &" cannot be found in the PATH.
+Wharf warning: Application "gvim &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "TextEditor" can be found in the PATH. Button will be disabled
+Wharf warning: Application "abiword &" cannot be found in the PATH.
+Wharf warning: Application "kword &" cannot be found in the PATH.
+Wharf warning: Application "pw &" cannot be found in the PATH.
+Wharf warning: Application "kwrite &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "WordProcessor" can be found in the PATH. Button will be disabled
+Wharf warning: Application "kspread &" cannot be found in the PATH.
+Wharf warning: Application "gnumeric &" cannot be found in the PATH.
+Wharf warning: Application "siag &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "Spreadsheet" can be found in the PATH. Button will be disabled
+Wharf warning: Application "xchat &" cannot be found in the PATH.
+Wharf warning: Application "BitchX irc.freenode.net &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "IRC" can be found in the PATH. Button will be disabled
+Wharf warning: None of Applications assigned to the button "Games" can be found in the PATH. Button will be disabled
+Wharf warning: Application "xmms &" cannot be found in the PATH.
+Wharf warning: Application "wmxmms2 -c blue &" cannot be found in the PATH.
+Wharf warning: Application "wmxmms --single &" cannot be found in the PATH.
+Wharf warning: Application "ascd &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "AudioPlayer" can be found in the PATH. Button will be disabled
+Wharf warning: Application "AlsaMixer.app -1 Master -2 Master -3 Master &" cannot be found in the PATH.
+Wharf warning: Application "wmmixer &" cannot be found in the PATH.
+Wharf warning: Application "asmixer -g -1-1 &" cannot be found in the PATH.
+Wharf warning: Application "asmix -shape &" cannot be found in the PATH.
+Wharf warning: None of Applications assigned to the button "mixer" can be found in the PATH. Button will be disabled
+WinList : Successfully loaded freetype font "DefaultSansBold.ttf"
+Wharf : looking for image "normal/Terminal" in path []
+Wharf : looking for image "normal/Terminal" in path [/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons]
+Wharf : looking for image "normal/Terminal" in path [(null)]
+Wharf : looking for image "normal/Terminal.gz" in path []
+Wharf : looking for image "normal/Terminal.gz" in path [/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons]
+Wharf : looking for image "normal/Terminal.gz" in path [(null)]
+Wharf : looking for image "normal/Terminal.Z" in path []
+Wharf : looking for image "normal/Terminal.Z" in path [/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons]
+Wharf : looking for image "normal/Terminal.Z" in path [(null)]
+Wharf : looking for image "normal/Terminal.png" in path []
+Wharf : looking for image "normal/Terminal.png" in path [/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons]
+Wharf : looking for image "normal/Terminal.png" in path [(null)]
+Wharf : looking for image "normal/Terminal.svg" in path []
+Wharf : looking for image "normal/Terminal.svg" in path [/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/icons/:/home/arch/afterstep/_install/share/afterstep/desktop/icons/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/:/home/arch/afterstep/_install/share/afterstep/desktop/:/tmp/tmp.VNuhqAdoGz/.afterstep/desktop/buttons/:/home/arch/afterstep/_install/share/afterstep/desktop/buttons/:/tmp/tmp.VNuhqAdoGz/.afterstep/backgrounds/:/home/arch/afterstep/_install/share/afterstep/backgrounds/:/X11/pixmaps/:/usr/share/pixmaps/:/usr/share/icons/:/usr/share/app-install/icons]
+Wharf : looking for image "normal/Terminal.svg" in path [(null)]
+WinList : Successfully loaded freetype font "DefaultSans.ttf"
+WinList : message 4 window 400002 data (nil)
+WinList : message 800 window 400002 data 0x55fe08b49600
+WinList : message 1000 window 400002 data 0x55fe08b49600
+WinList : message 400 window 400002 data 0x55fe08b49600
+WinList : message 100 window 400002 data 0x55fe08b49600
+WinList : message 200 window 400002 data 0x55fe08b49600
+WinList : message 8 window 400002 data 0x55fe08b49600
+WinList : message 20 window 400002 data 0x55fe08b49600
+WinList : message 10 window 600006 data (nil)
+WinList : message 10 window 600006 data 0x55fe08b2d050
+WinList : message 4 window 600006 data 0x55fe08b2d050
+WinList : message 800 window 600006 data 0x55fe08b2d050
+WinList : message 1000 window 600006 data 0x55fe08b2d050
+WinList : message 400 window 600006 data 0x55fe08b2d050
+WinList : message 100 window 600006 data 0x55fe08b2d050
+WinList : message 200 window 600006 data 0x55fe08b2d050
+WinList : message 20 window 600006 data 0x55fe08b2d050
+WinList : message 10 window 800006 data (nil)
+WinList : message 10 window 800006 data 0x55fe08b2c450
+WinList : message 4 window 800006 data 0x55fe08b2c450
+WinList : message 800 window 800006 data 0x55fe08b2c450
+WinList : message 1000 window 800006 data 0x55fe08b2c450
+WinList : message 400 window 800006 data 0x55fe08b2c450
+WinList : message 100 window 800006 data 0x55fe08b2c450
+WinList : message 200 window 800006 data 0x55fe08b2c450
+WinList : message 20 window 800006 data 0x55fe08b2c450
+WinList : message 10 window E00006 data (nil)
+WinList : message 10 window E00006 data 0x55fe08b2c6b0
+WinList : message 4 window E00006 data 0x55fe08b2c6b0
+WinList : message 800 window E00006 data 0x55fe08b2c6b0
+WinList : message 1000 window E00006 data 0x55fe08b2c6b0
+WinList : message 400 window E00006 data 0x55fe08b2c6b0
+WinList : message 100 window E00006 data 0x55fe08b2c6b0
+WinList : message 200 window E00006 data 0x55fe08b2c6b0
+WinList : message 20 window E00006 data 0x55fe08b2c6b0
+WinList : message 10 window C00005 data (nil)
+WinList : message 4 window C00005 data 0x55fe08b31bb0
+WinList : message 800 window C00005 data 0x55fe08b31bb0
+WinList : message 1000 window C00005 data 0x55fe08b31bb0
+WinList : message 400 window C00005 data 0x55fe08b31bb0
+WinList : message 100 window C00005 data 0x55fe08b31bb0
+WinList : message 200 window C00005 data 0x55fe08b31bb0
+WinList : message 8 window C00005 data 0x55fe08b31bb0
+WinList : message 20 window C00005 data 0x55fe08b31bb0
+WinList : message 10 window A00006 data (nil)
+WinList : message 10 window A00006 data 0x55fe08b31d10
+WinList : message 4 window A00006 data 0x55fe08b31d10
+WinList : message 800 window A00006 data 0x55fe08b31d10
+WinList : message 1000 window A00006 data 0x55fe08b31d10
+WinList : message 400 window A00006 data 0x55fe08b31d10
+WinList : message 100 window A00006 data 0x55fe08b31d10
+WinList : message 200 window A00006 data 0x55fe08b31d10
+WinList : message 20 window A00006 data 0x55fe08b31d10
+WinList : message 8 window 600006 data 0x55fe08b2d050
+WinList : message 8 window 600006 data 0x55fe08b2d050
+WinList : message 8 window 600006 data 0x55fe08b2d050
+WinList : message 8 window 600006 data 0x55fe08b2d050
+Pager : Successfully loaded freetype font "DefaultSansOblique.ttf"
+Pager : Successfully loaded freetype font "DefaultSansOblique.ttf"
+WinList : message 8 window E00006 data 0x55fe08b2c6b0
+WinList : message 8 window 600006 data 0x55fe08b2d050
+Pager : Successfully loaded freetype font "DefaultBold.ttf"
+Pager : Successfully loaded freetype font "DefaultBold.ttf"
+Pager : Successfully loaded freetype font "DefaultBold.ttf"
+WinList : message 80 window 400002 data 0x55fe08b49600
+WinTabs : Custom color "Base" found with argb #FF34404C
+Pager : Custom color "Base" found with argb #FF34404C
+WinList : Custom color "Base" found with argb #FF34404C
+MonitorWharf : Custom color "Base" found with argb #FF34404C
+Wharf : Custom color "Base" found with argb #FF34404C
+afterstep : Successfully loaded freetype font "DefaultSans.ttf"
+afterstep : Successfully loaded freetype font "DefaultSans.ttf"
+afterstep : Successfully loaded freetype font "DefaultSans.ttf"
+afterstep : accepted module connection
+afterstep : accepted module connection
+afterstep : accepted module connection
+afterstep : accepted module connection
+afterstep : Defining var [target.width] == -1.
+afterstep : Defining var [target.height] == -1.
+afterstep : Defining var [target.width] == 0.
+afterstep : Defining var [target.height] == 0.
+afterstep : Successfully loaded freetype font "DefaultSansBold.ttf"
+afterstep : Shuting down Modules subsystem ...
+afterstep : Closing down all modules ...
+afterstep : Custom color "Base" found with argb #FF34404C
+afterstep : giving up Window Management selection on screen 0. Bye-bye!

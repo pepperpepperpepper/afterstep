@@ -446,7 +446,7 @@ Key Sys_Req     A       A       GetHelp
 # One should note that it is the "asterisk key" that is bound, not the "* key".
 # To get the keymap table : $ xmodmap -pke
 # Binding the asterisk key + Ctrl to display a term window
-Key asterisk    A       C       Exec "x-terminal-emulator" exec x-terminal-emulator
+Key asterisk    A       C       ExecInTerm "Terminal" if(xterm){-fa Monospace -fs 12} -e bash
 
 ################################################################################
 # XMMS keybindings
@@ -459,4 +459,3 @@ Key asterisk    A       C       Exec "x-terminal-emulator" exec x-terminal-emula
 #Key t           A       CS      Exec "-" xmms --play-pause
 #Key b           A       CS      Exec "-" xmms --rew
 #Key f           A       CS      Exec "-" xmms --fwd
-

@@ -499,6 +499,8 @@ LOCAL_DEBUG_OUT ("Parsing \"%s\"", file);
 	}
 	free (str);
 	fclose (fp);
+	if (exclusions)
+		destroy_ashash (&exclusions);
 	return 0;
 }
 
@@ -628,6 +630,15 @@ int dirtree_compar (const dirtree_t ** d1, const dirtree_t ** d2)
 	return diff;
 }
 
+static int
+dirtree_qsort_compar (const void *a, const void *b)
+{
+	const dirtree_t **d1 = (const dirtree_t **)a;
+	const dirtree_t **d2 = (const dirtree_t **)b;
+
+	return dirtree_compar (d1, d2);
+}
+
 /* sort entries based their base_order; 0 comes before 1000 */
 int
 dirtree_compar_base_order (const dirtree_t ** d1, const dirtree_t ** d2)
@@ -674,11 +685,11 @@ void dirtree_sort (dirtree_t * tree)
 	for (n = 0, t = tree->child; t != NULL; t = t->next, n++) ;
 	list = (dirtree_t **) safemalloc (n * sizeof (dirtree_t *));
 	for (n = 0, t = tree->child; t != NULL; t = t->next, n++)
-		list[n] = t;
-	qsort (list, n, sizeof (dirtree_t *), (int (*)())dirtree_compar);
+			list[n] = t;
+	qsort (list, n, sizeof (dirtree_t *), dirtree_qsort_compar);
 	tree->child = list[0];
 	for (i = 1; i < n; i++)
-		list[i - 1]->next = list[i];
+			list[i - 1]->next = list[i];
 	list[n - 1]->next = NULL;
 	free (list);
 

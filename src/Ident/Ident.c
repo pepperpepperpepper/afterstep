@@ -89,7 +89,7 @@ void HandleEvents();
 void DispatchEvent (ASEvent * event);
 void process_message (send_data_type type, send_data_type *body);
 
-Window make_ident_window();
+Window make_ident_window (int width, int height);
 void fill_window_data();
 void display_window_data();
 void add_property( const char *name, const char *value, unsigned long value_encoding, Bool span_cols );
@@ -1024,5 +1024,4 @@ add_property( const char *name, const char *value, unsigned long value_encoding,
 		++(IdentState.used_props);
 	}
 }
-
 

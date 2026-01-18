@@ -13,6 +13,8 @@ install.data:
 	@if [ -d $(AFTER_DOC_DIR)/html ] ; then \
 		echo "$(INSTALL_DATA) as20new.html      $(AFTER_DOC_DIR)/html/"; \
 		$(INSTALL_DATA) as20new.html      $(AFTER_DOC_DIR)/html/; \
+		echo "$(INSTALL_DATA) extras.html      $(AFTER_DOC_DIR)/html/"; \
+		$(INSTALL_DATA) extras.html      $(AFTER_DOC_DIR)/html/; \
 		echo "$(INSTALL_DATA) asxmlimages.html  $(AFTER_DOC_DIR)/html/"; \
 		$(INSTALL_DATA) asxmlimages.html  $(AFTER_DOC_DIR)/html/; \
 	fi

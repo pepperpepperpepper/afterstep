@@ -59,7 +59,7 @@ struct wild_reg_exp;
 /* the following is needed for MATCH_ enum - see styledb.c for more */
 #define STYLE_MYSTYLES          (1 << 29)   /*  */
 #define STYLE_BUTTONS           (1 << 30)   /*  */
-#define STYLE_FLAGS             (1 << 31)   /*  */
+#define STYLE_FLAGS             (1UL << 31)   /*  */
 
 #define STYLE_DEFAULTS		(STYLE_PAGER | STYLE_TITLE|STYLE_CIRCULATE|STYLE_WINLIST| \
 							 STYLE_FOCUS|STYLE_FOCUS_ON_MAP|STYLE_HANDLES| \

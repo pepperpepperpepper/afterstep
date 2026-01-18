@@ -544,6 +544,7 @@ static char* get_thumbnail_image_path(const char * file, ASImageImportParams *ip
 	if (stat(realfilename, &rbuf) == -1)
 	{
 		DEBUG_OUT("image file %s does not exist", realfilename);
+		free(realfilename);
 		return NULL;
 	}
 
@@ -551,6 +552,7 @@ static char* get_thumbnail_image_path(const char * file, ASImageImportParams *ip
 							    iparams->height, iparams->width) >= sizeof(result))
 	{
 		DEBUG_OUT("thumbnail path too long for file %s", file);
+		free(realfilename);
 		return NULL;
 	}
 
@@ -563,6 +565,7 @@ static char* get_thumbnail_image_path(const char * file, ASImageImportParams *ip
 		thbuf.st_ctime = 0;
 
 	*need_save = rbuf.st_ctime > thbuf.st_ctime;
+	free(realfilename);
 	return result;
 }
 
@@ -2899,4 +2902,3 @@ argb2ASImage( const char *path, ASImageImportParams *params )
 	
 	return im ;
 }
-

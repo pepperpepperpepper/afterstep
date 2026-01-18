@@ -33,6 +33,7 @@
 #include "../../libAfterStep/session.h"
 #include "../../libAfterStep/wmprops.h"
 #include "../../libAfterStep/moveresize.h"
+#include "../../libAfterBase/fs.h"
 
 
 /**************************************************************************/
@@ -490,13 +491,11 @@ void CleanupScreen ()
 	XSetInputFocus (dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
 	XSync (dpy, 0);
 
-#ifdef HAVE_XINERAMA
 	if (Scr.xinerama_screens) {
 		free (Scr.xinerama_screens);
 		Scr.xinerama_screens_num = 0;
 		Scr.xinerama_screens = NULL;
 	}
-#endif													/* XINERAMA */
 
 
 	for (i = 0; i < MAX_CURSORS; ++i)
@@ -703,16 +702,20 @@ Bool RequestLogout ()
 
 Bool CanShutdown ()
 {
-	return asdbus_GetCanShutdown ();
+	return (is_executable_in_path ("loginctl") || is_executable_in_path ("systemctl") ||
+					is_executable_in_path ("shutdown") || is_executable_in_path ("poweroff") ||
+					asdbus_GetCanShutdown ());
 }
 
 Bool CanSuspend ()
 {
-	return (asdbus_GetCanSuspend ());
+	return (is_executable_in_path ("loginctl") || is_executable_in_path ("systemctl") ||
+					asdbus_GetCanSuspend ());
 }
 Bool CanHibernate ()
 {
-	return (asdbus_GetCanHibernate ());
+	return (is_executable_in_path ("loginctl") || is_executable_in_path ("systemctl") ||
+					asdbus_GetCanHibernate ());
 }
 
 Bool CanLogout ()
@@ -747,8 +750,16 @@ void RemapFunctions()
 	if (!CanQuit())
 		REMAP_FUNC(QuitWM);
 
-	if (!CanLogout())
-		REMAP_FUNC(Logout);
+	if (!CanLogout()) {
+		/* If we can't perform a session-manager logout, fall back to quitting the
+		 * WM so UI elements like MonitorWharf's "EndSession" don't disappear. */
+		if (CanQuit()) {
+			change_func_code ("Logout", F_QUIT_WM);
+			if (fp)	fprintf (fp, "\tRemap \"Logout\" QuitWM\n");
+		} else {
+			REMAP_FUNC(Logout);
+		}
+	}
 
 	if (!CanShutdown())
 		REMAP_FUNC(SystemShutdown);
@@ -775,20 +786,91 @@ void RemapFunctions()
 Bool RequestShutdown (FunctionCode kind)
 {
 	Bool requested = False;
-	switch(kind)
-	{
-		case F_SYSTEM_SHUTDOWN :
+	pid_t pid;
+
+	/* Prefer systemd/logind tooling when available (modern Linux distros), and
+	 * fall back to old UPower/gnome-session DBus code paths only if needed. */
+	char *const loginctl_suspend[] = { "loginctl", "suspend", NULL };
+	char *const loginctl_hibernate[] = { "loginctl", "hibernate", NULL };
+	char *const loginctl_poweroff[] = { "loginctl", "poweroff", NULL };
+	char *const systemctl_suspend[] = { "systemctl", "suspend", NULL };
+	char *const systemctl_hibernate[] = { "systemctl", "hibernate", NULL };
+	char *const systemctl_poweroff[] = { "systemctl", "poweroff", NULL };
+	char *const shutdown_halt[] = { "shutdown", "-h", "now", NULL };
+	char *const poweroff_cmd[] = { "poweroff", NULL };
+
+	char *const *argv = NULL;
+	const char *cmd = NULL;
+
+	switch (kind) {
+		case F_SYSTEM_SHUTDOWN:
+			/* If we are registered with a session manager that can shutdown,
+			 * use it (lets the session manager prompt/coordinate). */
 			if (GnomeSessionClientID && asdbus_GetCanShutdown ())
 				requested = asdbus_Shutdown (500);
+
+			if (!requested) {
+				if (is_executable_in_path ("loginctl")) {
+					cmd = "loginctl";
+					argv = loginctl_poweroff;
+				} else if (is_executable_in_path ("systemctl")) {
+					cmd = "systemctl";
+					argv = systemctl_poweroff;
+				} else if (is_executable_in_path ("shutdown")) {
+					cmd = "shutdown";
+					argv = shutdown_halt;
+				} else if (is_executable_in_path ("poweroff")) {
+					cmd = "poweroff";
+					argv = poweroff_cmd;
+				}
+			}
 			break;
-		case F_SUSPEND :
-			if (asdbus_GetCanSuspend ())
-				requested = asdbus_Suspend (500);
+		case F_SUSPEND:
+			if (is_executable_in_path ("loginctl")) {
+				cmd = "loginctl";
+				argv = loginctl_suspend;
+			} else if (is_executable_in_path ("systemctl")) {
+				cmd = "systemctl";
+				argv = systemctl_suspend;
+			}
 			break;
-		case F_HIBERNATE :
-			if (asdbus_GetCanHibernate ())
-				requested = asdbus_Hibernate (500);
+		case F_HIBERNATE:
+			if (is_executable_in_path ("loginctl")) {
+				cmd = "loginctl";
+				argv = loginctl_hibernate;
+			} else if (is_executable_in_path ("systemctl")) {
+				cmd = "systemctl";
+				argv = systemctl_hibernate;
+			}
 			break;
+		default:
+			break;
+	}
+
+	if (!requested && cmd && argv) {
+		pid = fork ();
+		if (pid == 0) {
+			setsid ();
+			execvp (cmd, argv);
+			_exit (127);
+		}
+		requested = (pid > 0);
+	}
+
+	/* Old fallbacks (non-systemd, legacy setups). */
+	if (!requested) {
+		switch (kind) {
+			case F_SUSPEND:
+				if (asdbus_GetCanSuspend ())
+					requested = asdbus_Suspend (500);
+				break;
+			case F_HIBERNATE:
+				if (asdbus_GetCanHibernate ())
+					requested = asdbus_Hibernate (500);
+				break;
+			default:
+				break;
+		}
 	}
 	return requested;
 }

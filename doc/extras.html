@@ -1,0 +1,133 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <title>AfterStep Wharf Extras (Optional)</title>
+</head>
+<body>
+<h2>AfterStep Wharf/MonitorWharf extras (optional)</h2>
+
+<p>
+AfterStep’s NeXTStep-style edge “dock” is provided by the <b>Wharf</b> and
+<b>MonitorWharf</b> modules. Many buttons are <i>opportunistic</i>:
+if the referenced application is not installed (not in <code>$PATH</code>),
+the button may be disabled/hidden. This is why a fresh install can look “sparse”.
+</p>
+
+<p>
+Tip: the default Wharf config includes a <b>“Wharf extras”</b> button that opens this page.
+</p>
+
+<h3>Modern defaults</h3>
+<ul>
+  <li><b>Terminal</b>: configured via <code>ExecInTerm</code> so it can use any terminal emulator.</li>
+  <li><b>Common apps</b>: Wharf tries modern, widely-used applications first (Firefox/Chromium, Thunar/Dolphin/Nautilus, etc.).</li>
+  <li><b>Fallback monitors</b>: if classic dockapps aren’t present, MonitorWharf falls back to built-in tools like <code>top</code>, <code>df</code>, and <code>ip</code> via <code>watch</code> inside a terminal.</li>
+</ul>
+
+<p>
+To override the terminal AfterStep uses, set <code>$TERMINAL</code> (recommended),
+or edit <code>TermCommand</code> in <code>~/.afterstep/base</code>.
+</p>
+
+<h3>Arch Linux (examples)</h3>
+<p>
+Install a modern “everyday” set from the official repos (populate the docks with a terminal, browser, file manager, editor, and mixer):
+</p>
+<pre>
+sudo pacman -S --needed xterm xdg-utils firefox thunar mousepad pavucontrol mc htop
+</pre>
+
+<p>
+For the classic dockapp look, many dockapps are in the AUR. Examples that match
+the default Wharf/MonitorWharf config:
+</p>
+<pre>
+yay -S --needed asclock-classic wmcpuload wmnet wmnd wmtop wmfire wmitime wmclockmon wmmixer alsamixer.app wmusic ascd
+</pre>
+
+<p>
+If a package name above doesn’t exist (AUR names sometimes vary), search:
+</p>
+<pre>
+yay -Ss asclock
+yay -Ss wmcpuload
+</pre>
+
+<h3>What maps to what</h3>
+<table border="1" cellpadding="6" cellspacing="0">
+  <tr>
+    <th>Dock button</th>
+    <th>Modern equivalents (repos)</th>
+    <th>Classic dockapps (often AUR)</th>
+  </tr>
+  <tr>
+    <td>Terminal</td>
+    <td>xterm, alacritty, kitty, xfce4-terminal</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>Clock</td>
+    <td>xclock</td>
+    <td>asclock, wmclockmon, wmitime</td>
+  </tr>
+  <tr>
+    <td>CPU / load</td>
+    <td>top, htop</td>
+    <td>wmcpuload, wmtop, wmfire</td>
+  </tr>
+  <tr>
+    <td>Disk</td>
+    <td>df</td>
+    <td>asfsm, asfsm_lite</td>
+  </tr>
+  <tr>
+    <td>Network</td>
+    <td>ip (iproute2)</td>
+    <td>wmnet, wmnd</td>
+  </tr>
+  <tr>
+    <td>Mixer</td>
+    <td>pavucontrol, alsamixer</td>
+    <td>wmmixer, AlsaMixer.app, asmixer</td>
+  </tr>
+  <tr>
+    <td>Browser</td>
+    <td>xdg-open + your default browser</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>File manager</td>
+    <td>thunar, dolphin, nautilus, nemo, pcmanfm</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>TUI file manager</td>
+    <td>mc, ranger, nnn, lf</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td>Mail</td>
+    <td>xdg-email + your default mail handler</td>
+    <td>asmail</td>
+  </tr>
+  <tr>
+    <td>IRC / chat</td>
+    <td>hexchat, weechat, irssi</td>
+    <td>BitchX</td>
+  </tr>
+</table>
+
+<h3>Customize</h3>
+<p>
+Copy the system Wharf config to your home config and edit it:
+</p>
+<pre>
+cp /usr/share/afterstep/wharf ~/.afterstep/wharf
+</pre>
+<p>
+Then restart AfterStep (or use the “Restart” menu item) to reload the config.
+</p>
+
+</body>
+</html>

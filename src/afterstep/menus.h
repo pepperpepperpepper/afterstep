@@ -95,7 +95,7 @@ MenuData* FindPopup( const char* name, int quiet );
 
 void DeleteMenuItem( MenuDataItem* item );
 
-MenuData *CreateMenuData();
+MenuData *CreateMenuData (char *name);
 MenuData *NewMenuData (char *name);
 void DeleteMenuData (MenuData * menu);
 

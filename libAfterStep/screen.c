@@ -136,8 +136,19 @@ reload_screen_image_manager (ScreenInfo * scr,
 
 /*************************************************************************/
 
-void get_Xinerama_rectangles (ScreenInfo * scr)
-{
+	void get_Xinerama_rectangles (ScreenInfo * scr)
+	{
+#ifdef HAVE_XRANDR
+		Bool used_randr_monitors = False;
+#endif
+
+		if (scr->xinerama_screens) {
+			free (scr->xinerama_screens);
+			scr->xinerama_screens = NULL;
+		}
+		scr->xinerama_screens_num = 0;
+		asxml_var_insert ("xroot.xinerama_screens_num", 0);
+
 #ifdef HAVE_XINERAMA
 	if (XineramaQueryExtension
 			(dpy, &(scr->XineEventBase), &(scr->XineErrorBase))) {
@@ -184,14 +195,169 @@ void get_Xinerama_rectangles (ScreenInfo * scr)
 			}
 			XFree (s);
 		}
-	} else
-#endif
-	{
-		scr->xinerama_screens = NULL;
-		scr->xinerama_screens_num = 0;
-		asxml_var_insert ("xroot.xinerama_screens_num", 0);
 	}
-}
+#endif
+
+	#ifdef HAVE_XRANDR
+		{
+			int rr_event_base = 0, rr_error_base = 0;
+
+		if (!XRRQueryExtension (dpy, &rr_event_base, &rr_error_base))
+			return;
+
+	#ifdef HAVE_XRANDR_MONITORS
+			{
+				int monitors_num = 0;
+				XRRMonitorInfo *monitors =
+						XRRGetMonitors (dpy, scr->Root, True, &monitors_num);
+				if (monitors) {
+					register int i;
+
+					if (monitors_num > 0 && monitors_num >= scr->xinerama_screens_num) {
+						static char buf[256];
+
+						if (scr->xinerama_screens) {
+							free (scr->xinerama_screens);
+							scr->xinerama_screens = NULL;
+					}
+					scr->xinerama_screens_num = 0;
+					asxml_var_insert ("xroot.xinerama_screens_num", 0);
+
+					scr->xinerama_screens_num = monitors_num;
+					scr->xinerama_screens =
+							safemalloc (sizeof (XRectangle) *
+													scr->xinerama_screens_num);
+					asxml_var_insert ("xroot.xinerama_screens_num",
+														scr->xinerama_screens_num);
+
+					for (i = 0; i < monitors_num; ++i) {
+						show_progress ("xroot.randr.monitor[%d] = {%d, %d, %d, %d}", i,
+													 monitors[i].x, monitors[i].y, monitors[i].width,
+													 monitors[i].height);
+
+						snprintf (buf, sizeof (buf), "xroot.xinerama_screens[%d].",
+											i);
+						{
+							char *append_point = &buf[0] + strlen (&buf[0]);
+
+							append_point[0] = 'x';
+							append_point[1] = '\0';
+							asxml_var_insert (&buf[0], monitors[i].x);
+							scr->xinerama_screens[i].x = monitors[i].x;
+
+							append_point[0] = 'y';
+							asxml_var_insert (&buf[0], monitors[i].y);
+							scr->xinerama_screens[i].y = monitors[i].y;
+
+							strcpy (append_point, "width");
+							asxml_var_insert (&buf[0], monitors[i].width);
+							scr->xinerama_screens[i].width = monitors[i].width;
+
+							strcpy (append_point, "height");
+							asxml_var_insert (&buf[0], monitors[i].height);
+							scr->xinerama_screens[i].height = monitors[i].height;
+							}
+						}
+						used_randr_monitors = True;
+					}
+					XRRFreeMonitors (monitors);
+				}
+			}
+	#endif
+
+			{
+				XRRScreenResources *resources = NULL;
+				int active_crtcs = 0;
+
+			resources = XRRGetScreenResources (dpy, scr->Root);
+			if (resources) {
+				register int i;
+
+				for (i = 0; i < resources->ncrtc; ++i) {
+					XRRCrtcInfo *crtc =
+							XRRGetCrtcInfo (dpy, resources, resources->crtcs[i]);
+					if (crtc) {
+						if (crtc->mode != None && crtc->noutput > 0 && crtc->width > 0
+								&& crtc->height > 0)
+							++active_crtcs;
+						XRRFreeCrtcInfo (crtc);
+					}
+				}
+
+					if (active_crtcs > 0
+							&& (active_crtcs > scr->xinerama_screens_num
+									|| (!used_randr_monitors
+											&& active_crtcs == scr->xinerama_screens_num))) {
+						static char buf[256];
+						int rect_i = 0;
+
+						if (scr->xinerama_screens) {
+							free (scr->xinerama_screens);
+						scr->xinerama_screens = NULL;
+					}
+					scr->xinerama_screens_num = 0;
+					asxml_var_insert ("xroot.xinerama_screens_num", 0);
+
+					scr->xinerama_screens_num = active_crtcs;
+					scr->xinerama_screens =
+							safemalloc (sizeof (XRectangle) *
+													scr->xinerama_screens_num);
+					asxml_var_insert ("xroot.xinerama_screens_num",
+														scr->xinerama_screens_num);
+
+					for (i = 0; i < resources->ncrtc && rect_i < active_crtcs; ++i) {
+						XRRCrtcInfo *crtc =
+								XRRGetCrtcInfo (dpy, resources, resources->crtcs[i]);
+						if (crtc == NULL)
+							continue;
+						if (crtc->mode == None || crtc->noutput <= 0 || crtc->width <= 0
+								|| crtc->height <= 0) {
+							XRRFreeCrtcInfo (crtc);
+							continue;
+						}
+
+						show_progress ("xroot.randr.crtc[%d] = {%d, %d, %d, %d}", rect_i,
+													 crtc->x, crtc->y, crtc->width, crtc->height);
+
+						snprintf (buf, sizeof (buf), "xroot.xinerama_screens[%d].",
+											rect_i);
+						{
+							char *append_point = &buf[0] + strlen (&buf[0]);
+
+							append_point[0] = 'x';
+							append_point[1] = '\0';
+							asxml_var_insert (&buf[0], crtc->x);
+							scr->xinerama_screens[rect_i].x = crtc->x;
+
+							append_point[0] = 'y';
+							asxml_var_insert (&buf[0], crtc->y);
+							scr->xinerama_screens[rect_i].y = crtc->y;
+
+							strcpy (append_point, "width");
+							asxml_var_insert (&buf[0], crtc->width);
+							scr->xinerama_screens[rect_i].width = crtc->width;
+
+							strcpy (append_point, "height");
+							asxml_var_insert (&buf[0], crtc->height);
+							scr->xinerama_screens[rect_i].height = crtc->height;
+						}
+
+						++rect_i;
+						XRRFreeCrtcInfo (crtc);
+					}
+
+					if (rect_i != scr->xinerama_screens_num) {
+						scr->xinerama_screens_num = rect_i;
+						asxml_var_insert ("xroot.xinerama_screens_num",
+															scr->xinerama_screens_num);
+					}
+				}
+				XRRFreeScreenResources (resources);
+			}
+		}
+	}
+	#endif
+	}
 
 Bool set_synchronous_mode (Bool enable)
 {
@@ -402,6 +568,27 @@ int ConnectXDisplay (Display * display, ScreenInfo * scr, Bool as_manager)
 	scr->menu_grab_Timestamp = CurrentTime;
 
 	setup_modifiers ();
+
+	#ifdef HAVE_XRANDR
+		if (XRRQueryExtension (dpy, &(scr->RandREventBase), &(scr->RandRErrorBase))) {
+			long rr_mask =
+					RRScreenChangeNotifyMask | RRCrtcChangeNotifyMask |
+					RROutputChangeNotifyMask | RROutputPropertyNotifyMask;
+#ifdef RRResourceChangeNotifyMask
+			rr_mask |= RRResourceChangeNotifyMask;
+#endif
+#ifdef RRProviderChangeNotifyMask
+			rr_mask |= RRProviderChangeNotifyMask;
+#endif
+#ifdef RRProviderPropertyNotifyMask
+			rr_mask |= RRProviderPropertyNotifyMask;
+#endif
+#ifdef RRMonitorChangeNotifyMask
+			rr_mask |= RRMonitorChangeNotifyMask;
+#endif
+			XRRSelectInput (dpy, scr->Root, (int)rr_mask);
+		}
+	#endif
 
 	get_Xinerama_rectangles (scr);
 
@@ -626,10 +813,35 @@ void check_screen_panframes (ScreenInfo * scr)
 	int wrapX;
 	int wrapY;
 	Bool map_frame[PAN_FRAME_SIDES] = { False, False, False, False };
+	XRectangle frame_rects[PAN_FRAME_SIDES];
 	register int i;
 
 	if (scr == NULL)
 		scr = ASDefaultScr;
+
+	frame_rects[FR_N].x = 0;
+	frame_rects[FR_N].y = 0;
+	frame_rects[FR_N].width = scr->MyDisplayWidth;
+	frame_rects[FR_N].height = SCROLL_REGION;
+
+	frame_rects[FR_E].x = (scr->MyDisplayWidth > SCROLL_REGION) ?
+			(scr->MyDisplayWidth - SCROLL_REGION) : 0;
+	frame_rects[FR_E].y = SCROLL_REGION;
+	frame_rects[FR_E].width = SCROLL_REGION;
+	frame_rects[FR_E].height =
+			(scr->MyDisplayHeight > (SCROLL_REGION * 2)) ?
+			(scr->MyDisplayHeight - (SCROLL_REGION * 2)) : 1;
+
+	frame_rects[FR_S].x = 0;
+	frame_rects[FR_S].y = (scr->MyDisplayHeight > SCROLL_REGION) ?
+			(scr->MyDisplayHeight - SCROLL_REGION) : 0;
+	frame_rects[FR_S].width = scr->MyDisplayWidth;
+	frame_rects[FR_S].height = SCROLL_REGION;
+
+	frame_rects[FR_W].x = 0;
+	frame_rects[FR_W].y = SCROLL_REGION;
+	frame_rects[FR_W].width = SCROLL_REGION;
+	frame_rects[FR_W].height = frame_rects[FR_E].height;
 
 	wrapX = get_flags (scr->Feel.flags, EdgeWrapX);
 	wrapY = get_flags (scr->Feel.flags, EdgeWrapY);
@@ -652,6 +864,9 @@ void check_screen_panframes (ScreenInfo * scr)
 	 * temporarily disabled */
 	for (i = 0; i < PAN_FRAME_SIDES; i++) {
 		if (scr->PanFrame[i].win) {
+			XMoveResizeWindow (dpy, scr->PanFrame[i].win,
+												 frame_rects[i].x, frame_rects[i].y,
+												 frame_rects[i].width, frame_rects[i].height);
 			if (map_frame[i] != scr->PanFrame[i].isMapped) {
 				if (map_frame[i]) {
 					LOCAL_DEBUG_OUT ("mapping PanFrame %d(%lX)", i,

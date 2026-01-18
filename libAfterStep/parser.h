@@ -52,7 +52,7 @@ typedef enum ASValueType
 typedef struct TermDef  
 {
   /* the following needs to be defined by module */
-#define TF_SYNTAX_TERMINATOR    (1<<31)	/* will tell parser that reading of config */
+#define TF_SYNTAX_TERMINATOR    (1UL<<31)	/* will tell parser that reading of config */
   /* in context of current syntax completed */
   /* for example ~MyStyle ends MyStyle syntax */
   /* reading */

@@ -179,6 +179,18 @@ Categories=AfterStepInfo
 TryExec=afterstepdoc
 
 [Desktop Entry]
+Name=Wharf extras (optional)
+GenericName=Local File Link
+Comment=How to enable classic dockapps and modern equivalents
+Exec=afterstepdoc extras.html
+Icon=normal/Info
+Terminal=false
+Type=Application
+Encoding=UTF-8
+Categories=AfterStepInfo
+TryExec=afterstepdoc
+
+[Desktop Entry]
 Name=AfterStep Wikipedia entry
 GenericName=URL Link
 Comment=http://en.wikipedia.org/wiki/Afterstep

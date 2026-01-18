@@ -172,12 +172,13 @@ char *filter_out_geometry (char *cmd_args, char **geom_keyword,
 						geom_start[i] = '\0';
 					}
 				}
-				if (original_size && get_flags (flags, WidthValue | HeightValue)) {
-					char *tmp = *original_size = safemalloc (64);
-					if (get_flags (flags, WidthValue) && width > 0) {
-						sprintf (tmp, "%d", width);
-						while (*tmp)
-							++tmp;
+					if (original_size && get_flags (flags, WidthValue | HeightValue)) {
+						char *tmp = *original_size = safemalloc (64);
+						tmp[0] = '\0';
+						if (get_flags (flags, WidthValue) && width > 0) {
+							sprintf (tmp, "%d", width);
+							while (*tmp)
+								++tmp;
 					}
 					if (get_flags (flags, HeightValue) && height > 0)
 						sprintf (tmp, "x%d", height);
@@ -557,6 +558,7 @@ void destroy_aswindow_list (ASWindowList ** list, Bool restore_root)
 			destroy_ashash (&((*list)->aswindow_xref));
 			destroy_ashash (&((*list)->layers));
 			destroy_ashash (&((*list)->bookmarks));
+			destroy_ashash (&((*list)->window_groups));
 			destroy_asvector (&((*list)->sticky_list));
 			destroy_asvector (&((*list)->circulate_list));
 			destroy_asvector (&((*list)->stacking_order));

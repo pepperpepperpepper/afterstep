@@ -155,6 +155,7 @@ typedef struct ScreenInfo
 
 	/* supported X extentions : */
 	int XineEventBase, XineErrorBase;
+	int RandREventBase, RandRErrorBase;
 	int	ShmCompletionEventType ;
 	int	ShapeEventBase ;
 	int	ShapeErrorBase ;
@@ -184,9 +185,7 @@ struct ASVisual *get_screen_visual(ScreenInfo *scr);
 
 
 
-#ifdef HAVE_XINERAMA
 void get_Xinerama_rectangles (ScreenInfo * scr);
-#endif
 Bool set_synchronous_mode (Bool enable);
 
 void setupScreenSize(ScreenInfo *scr);

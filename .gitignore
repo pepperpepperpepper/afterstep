@@ -92,3 +92,10 @@ src/tools/ASWallpaper/ASWallpaper
 tools/installastheme.pl
 tools/makeastheme.pl
 tools/postcard.sh
+
+# Local install + smoke-test artifacts
+/_install*/
+/afterstep-xvfb-*.log
+/afterstep-xephyr-*.log
+/afterstep-xorg-*.log
+/afterstep-screenshots*/

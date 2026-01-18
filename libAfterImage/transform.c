@@ -83,7 +83,7 @@ ASVisual __transform_fake_asv = {0};
 /* or better :				 					  */
 /* C = (-C1+5*C2+5*C3-C4)/8 					  */
 #define INTERPOLATE_COLOR1(c) 			   	((c)<<QUANT_ERR_BITS)  /* nothing really to interpolate here */
-#define INTERPOLATE_COLOR2(c1,c2,c3,c4)    	((((c2)<<2)+(c2)+((c3)<<2)+(c3)-(c1)-(c4))<<(QUANT_ERR_BITS-3))
+#define INTERPOLATE_COLOR2(c1,c2,c3,c4)    	((((c2)<<2)+(c2)+((c3)<<2)+(c3)-(c1)-(c4))*(1<<(QUANT_ERR_BITS-3)))
 #define INTERPOLATE_COLOR2_V(c1,c2,c3,c4)    	((((c2)<<2)+(c2)+((c3)<<2)+(c3)-(c1)-(c4))>>3)
 /* for scale factor of 3 we use these formulas :  */
 /* Ca = (-2C1+8*C2+5*C3-2C4)/9 		  			  */
@@ -91,8 +91,8 @@ ASVisual __transform_fake_asv = {0};
 /* or better : 									  */
 /* Ca = (-C1+5*C2+3*C3-C4)/6 		  			  */
 /* Cb = (-C1+3*C2+5*C3-C4)/6 		  			  */
-#define INTERPOLATE_A_COLOR3(c1,c2,c3,c4)  	(((((c2)<<2)+(c2)+((c3)<<1)+(c3)-(c1)-(c4))<<QUANT_ERR_BITS)/6)
-#define INTERPOLATE_B_COLOR3(c1,c2,c3,c4)  	(((((c2)<<1)+(c2)+((c3)<<2)+(c3)-(c1)-(c4))<<QUANT_ERR_BITS)/6)
+#define INTERPOLATE_A_COLOR3(c1,c2,c3,c4)  	(((((c2)<<2)+(c2)+((c3)<<1)+(c3)-(c1)-(c4))*(1<<QUANT_ERR_BITS))/6)
+#define INTERPOLATE_B_COLOR3(c1,c2,c3,c4)  	(((((c2)<<1)+(c2)+((c3)<<2)+(c3)-(c1)-(c4))*(1<<QUANT_ERR_BITS))/6)
 #define INTERPOLATE_A_COLOR3_V(c1,c2,c3,c4)  	((((c2)<<2)+(c2)+((c3)<<1)+(c3)-(c1)-(c4))/6)
 #define INTERPOLATE_B_COLOR3_V(c1,c2,c3,c4)  	((((c2)<<1)+(c2)+((c3)<<2)+(c3)-(c1)-(c4))/6)
 /* just a hypotesus, but it looks good for scale factors S > 3: */
@@ -104,7 +104,7 @@ ASVisual __transform_fake_asv = {0};
 /*#define INTERPOLATION_TOTAL_START(c1,c2,c3,c4,S) 	(((S)<<1)*(c2)+((c3)<<1)+(c3)-c2-c1-c4)*/
 #define INTERPOLATION_TOTAL_START(c1,c2,c3,c4,S) 	((((S)<<1)+1)*(c2)+(c3)-(c1)-(c4))
 #define INTERPOLATION_TOTAL_STEP(c2,c3)  	((c3<<1)-(c2<<1))
-#define INTERPOLATE_N_COLOR(T,S)		  	(((T)<<(QUANT_ERR_BITS-1))/(S))
+#define INTERPOLATE_N_COLOR(T,S)		  	(((T)*(1<<(QUANT_ERR_BITS-1)))/(S))
 
 #define AVERAGE_COLOR1(c) 					((c)<<QUANT_ERR_BITS)
 #define AVERAGE_COLOR2(c1,c2)				(((c1)+(c2))<<(QUANT_ERR_BITS-1))
@@ -1334,7 +1334,7 @@ LOCAL_DEBUG_CALLER_OUT( "width = %d, height = %d, filetr = 0x%lX, dither_count =
 	for ( i = 0 ; i < bigger ; i++ )
 	{
 		eps += smaller;
-		if( (eps << 1) >= bigger )
+			if( (eps * 2) >= bigger )
 		{
 			/* put scanline with the same x offset */
 			dither_lines[line].offset_x = i ;
@@ -1368,7 +1368,7 @@ make_gradient_diag_height( ASImageOutput *imout, ASScanline *dither_lines, int d
 	{
 		++offsets[k];
 		eps += smaller;
-		if( (eps << 1) >= bigger )
+			if( (eps * 2) >= bigger )
 		{
 			if( ++k >= width )
 				break;
@@ -3360,4 +3360,3 @@ fprintf (stderr, "result: %8.8X %8.8X %8.8X %8.8X.\n", src->alpha[x], src->red[x
 /* ********************************************************************************/
 /* The end !!!! 																 */
 /* ********************************************************************************/
-

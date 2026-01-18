@@ -30,6 +30,7 @@
 #include <X11/Xproto.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <X11/XKBlib.h>
 #ifdef I18N
 #include <X11/Xlocale.h>
 #endif
@@ -39,6 +40,9 @@
 #ifdef HAVE_XINERAMA
 #include <X11/extensions/Xinerama.h>
 #endif /* HAVE_XINERAMA */
+#ifdef HAVE_XRANDR
+#include <X11/extensions/Xrandr.h>
+#endif /* HAVE_XRANDR */
 
 
 #ifdef AFTERSTEP_INTERNALS

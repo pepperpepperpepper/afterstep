@@ -2,6 +2,105 @@
 ///	This is the README file for the AfterStep 2.* series
 ///
 
+ MODERN STATUS (2026)
++-------------------+
+
+This source tree has been updated and validated to build and run on modern
+Xorg/X11 toolchains (tested on Arch Linux using Xvfb/Xephyr/headless Xorg).
+
+What was updated (high level)
+-----------------------------
+
+ o  Modern toolchains: fixes for newer GCC/binutils and stricter C rules:
+      - GCC: old-style qsort() comparator casts corrected.
+      - binutils: legacy "ar clq" replaced with "ar rc".
+      - configure: FreeType detection now works without freetype-config
+        (pkg-config freetype2 fallback).
+      - X11 headers: XKB usage now includes the correct XKBlib.h header.
+ o  Modern X11 servers: repeatable headless regression harnesses:
+      - tools/xvfb-smoke.sh
+      - tools/xvfb-full-smoke.sh
+      - tools/xvfb-soak.sh
+    Optional (more realistic) harnesses:
+      - tools/xephyr-randr-smoke.sh
+      - tools/xorg-dummy-smoke.sh
+ o  Stability hardening: multiple crash/UB/leak fixes found via the harnesses
+    and ASan/UBSan runs (startup/shutdown and module messaging paths).
+ o  Wharf/MonitorWharf “dock” behavior: configs are more resilient when
+    classic dockapps are not installed, and include a “Wharf extras” button
+    pointing to doc/extras.html (Arch-friendly install hints and mappings).
+ o  Power actions: prefer systemd/logind tooling (loginctl/systemctl) when
+    present on modern distros.
+
+Screenshots
+-----------
+
+Local (in-repo) gallery:
+  screenshots/2026-01-18-xvfb/index.html
+
+Temporary external gallery link (same set):
+  https://tmp.uh-oh.wtf/2026/01/18/3ac0f445-index.html
+
+Build + install (quick start)
+-----------------------------
+
+Arch Linux dependencies (example)
+---------------------------------
+
+Build deps (typical):
+
+  sudo pacman -S --needed base-devel git pkgconf \
+    freetype2 libpng libjpeg-turbo zlib \
+    libx11 libxext libxrandr libxinerama libsm libice \
+    glib2 cairo gdk-pixbuf2 librsvg dbus
+
+Test deps (for the included harness scripts):
+
+  sudo pacman -S --needed xorg-server-xvfb xorg-xeyes xorg-xprop xorg-xdpyinfo xorg-xrandr xterm
+
+Optional:
+ o  Xephyr RandR test: sudo pacman -S --needed xorg-server-xephyr
+ o  Headless Xorg dummy test: sudo pacman -S --needed xorg-server xf86-video-dummy
+ o  If xterm starts but shows missing-font errors: sudo pacman -S --needed xorg-fonts-misc
+
+Generic autotools build to a local prefix:
+
+  make distclean
+  ./configure --prefix="$PWD/_install"
+  make -j"$(nproc)"
+  make install install.data
+
+Smoke test under Xvfb (headless):
+
+  tools/xvfb-smoke.sh
+  tools/xvfb-full-smoke.sh
+
+Notes:
+ o  Wharf/MonitorWharf buttons may be disabled if referenced applications are
+    not installed. Use the “Wharf extras” button (doc/extras.html) for a
+    short “what maps to what” list and Arch package suggestions.
+ o  Terminal launching is configured via ExecInTerm so AfterStep can use any
+    available terminal emulator (you can override with $TERMINAL).
+
+Running AfterStep (Xorg/X11)
+----------------------------
+
+Minimal startx example (xinit):
+
+  echo 'exec /path/to/_install/bin/afterstep' > ~/.xinitrc
+  startx
+
+For display managers, see AfterStep.desktop / AfterStep.session (you may need
+to install/copy them into your system’s xsessions directory depending on your
+prefix).
+
+ LEGACY README (kept for historical context)
++------------------------------------------+
+
+The remainder of this file is the original AfterStep README (circa 2004-2012)
+from the project maintainers. It is preserved largely as-is; some links,
+distribution references, and IRC network names may be outdated today.
+
 You can find translated versions of this README in doc/languages.  If there's
 no version corresponding to your language please write it and send it to us!
 If your README is too different from this one please send us patches to
@@ -100,6 +199,10 @@ Bugs			:	https://github.com/afterstep/afterstep/issues
 Chat			:	#afterstep on FreeNode
 Accessing FreeNode can be done by connecting to a random FreeNode irc server:
 	irc.freenode.net or pick one from http://freenode.net/irc_servers.shtml
+
+(Note: the FreeNode references above are historical; the IRC network landscape
+has changed since this README was written. Please check www.afterstep.org and
+https://github.com/afterstep/afterstep for current community links.)
 
 
  TODO

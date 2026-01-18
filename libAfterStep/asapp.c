@@ -744,12 +744,25 @@ void free_func_hash ()
 
 /*********** end command line parsing **************************/
 static char *_as_known_terms[] = {
+	"$TERMINAL",
 	"x-terminal-emulator",
+	"xterm",
+	"uxterm",
+	"alacritty",
+	"kitty",
+	"foot",
+	"st",
+	"konsole",
+	"xfce4-terminal",
+	"lxterminal",
+	"terminator",
+	"mate-terminal",
+	"tilix",
+	"gnome-terminal",
 	"urxvt",
 	"aterm",
-	"rxvt  -tr -fg yellow -bg black",
-	"Eterm -tr -tint blue -fg yellow -bg black",
-	"xterm -fg yellow -bg blue",
+	"rxvt",
+	"Eterm",
 	NULL
 };
 
@@ -1449,9 +1462,9 @@ spawn_child (const char *cmd, int singleton_id, int screen,
 			if (context != C_NO_CONTEXT)
 				context_str = string_from_int (context);
 
-			len += 1 + 2 + 1 + strlen (orig_display ? orig_display : display);
-			if (screen_str)
-				len += strlen (screen_str);
+				len += 1 + 2 + 1 + strlen (orig_display ? orig_display : display);
+				if (screen_str)
+					len += strlen (screen_str) + (orig_display ? 0 : 1);
 			len += 3;									/* for "-s " */
 			if (get_flags (as_app_args.flags, ASS_Debugging))
 				len += 8;
@@ -1638,6 +1651,8 @@ Bool
 check_download_complete (int pid, const char *cachedFileName,
 												 int *sizeDownloaded, int *size)
 {
+	Bool complete = False;
+
 	if (pid != 0) {
 		/* TODO : possibly check if process exited ? */
 
@@ -1661,11 +1676,14 @@ check_download_complete (int pid, const char *cachedFileName,
 				*sizeDownloaded = s1;
 			if (size)
 				*size = s2;
-			free (log);
-			return True;
+			complete = True;
 		}
+		if (log)
+			free (log);
+		if (logName)
+			free (logName);
 	}
-	return False;
+	return complete;
 }
 
 

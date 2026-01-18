@@ -549,19 +549,33 @@ AFTERIMAGE_LIBS="$AFTERIMAGE_LIBS -lm"
 dnl# check for libfreetype
 
 TTF_INCLUDES=
+TTF_LIBS=
 
 if test "x$with_ttf" = "xno"; then
   have_ttf=disabled
 else
   if test "x$ttf_includes" = "xno"; then
     AC_MSG_CHECKING(headers required by TTF support)
-    if freetype-config --cflags >/dev/null  ;then
+	ttf_cflags=
+	if freetype-config --cflags >/dev/null 2>&1 ; then
+	  ttf_cflags="`freetype-config --cflags`"
+	  TTF_LIBS="`freetype-config --libs`"
+	else
+	  if test -z "$PKG_CONFIG"; then
+	    AC_PATH_PROG(PKG_CONFIG, pkg-config,no)
+	  fi
+	  if test "$PKG_CONFIG" != "no" && $PKG_CONFIG --exists freetype2 ; then
+	    ttf_cflags="`$PKG_CONFIG --cflags freetype2`"
+	    TTF_LIBS="`$PKG_CONFIG --libs freetype2`"
+	  fi
+	fi
+    if test "x$ttf_cflags" != "x" ; then
 	  present_incs="$CCFLAGS $x_includes";
-	  for l in `freetype-config --cflags` ;	do
+	  for l in $ttf_cflags ;	do
 	    inc_found=no
 	    for p in `echo "$present_incs"` ; do
 		if test "x$l" = "x$p" ; then
-    		    inc_found=yes;
+	    		    inc_found=yes;
 		fi;
 		if test "x$l" = "x-I$p" ; then
     		    inc_found=yes;
@@ -619,18 +633,28 @@ else
 	  CPPFLAGS=$saved_CPPFLAGS
 	  CFLAGS=$saved_CFLAGS
     else
-		enable_ttf=no ;
-		AC_MSG_RESULT(none found, ttf disabled)
-		echo "You have to install FreeType libary in order to be able to use TTF fonts."
-        have_ttf=no
+			enable_ttf=no ;
+			AC_MSG_RESULT(none found, ttf disabled)
+			echo "You have to install FreeType libary in order to be able to use TTF fonts."
+	        have_ttf=no
     fi;
   else
-	TTF_INCLUDES=$ttf_includes
-	AC_DEFINE(HAVE_FREETYPE,1,[Define if libFreeType is available])
-    have_ttf=yes
+		TTF_INCLUDES=$ttf_includes
+		AC_DEFINE(HAVE_FREETYPE,1,[Define if libFreeType is available])
+	    have_ttf=yes
+		if freetype-config --libs >/dev/null 2>&1 ; then
+		  TTF_LIBS="`freetype-config --libs`"
+		else
+		  if test -z "$PKG_CONFIG"; then
+		    AC_PATH_PROG(PKG_CONFIG, pkg-config,no)
+		  fi
+		  if test "$PKG_CONFIG" != "no" && $PKG_CONFIG --exists freetype2 ; then
+		    TTF_LIBS="`$PKG_CONFIG --libs freetype2`"
+		  fi
+		fi
   fi
   if test "$have_ttf" = yes; then
-	  AFTERIMAGE_LIBS="`freetype-config --libs` $AFTERIMAGE_LIBS"
+		  AFTERIMAGE_LIBS="$TTF_LIBS $AFTERIMAGE_LIBS"
   fi
 fi;
 AC_SUBST(TTF_INCLUDES)

@@ -202,7 +202,7 @@ void sync_event_queue (Bool forget)
 /****************************************************************************
  * Records the time of the last processed event. Used in XSetInputFocus
  ****************************************************************************/
-inline Time stash_event_time (XEvent * xevent)
+static inline Time stash_event_time (XEvent * xevent)
 {
 	if (xevent->type < LASTEvent) {
 		register Time *ptime =

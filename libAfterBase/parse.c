@@ -400,11 +400,11 @@ const char *parse_argb_color( const char *color, CARD32 *pargb )
 				if( (len&0x3) == 0 && len != 12 )
 				{  /* we do have alpha channel !!! */
 					len = len>>2 ;
-					argb = (hextoi((int)ptr[0])<<28)&0xF0000000 ;
-					if( len > 1 )
-						argb |= (hextoi((int)ptr[1])<<24)&0x0F000000 ;
-					else
-						argb |= 0x0F000000;
+						argb = (((CARD32)hextoi((int)ptr[0]))<<28)&0xF0000000U ;
+						if( len > 1 )
+							argb |= (((CARD32)hextoi((int)ptr[1]))<<24)&0x0F000000U ;
+						else
+							argb |= 0x0F000000U;
 					ptr += len ;
 				}else
 				{

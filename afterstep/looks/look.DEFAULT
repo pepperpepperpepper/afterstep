@@ -119,6 +119,7 @@ MenuHiTitleStyle  "focused_menu_title_style"
 # <recall srcid="menu.folder_minipixmap"/>
 
 MyStyle "menu_folder_pixmap"
+	BackPixmap   128   mini/FolderAquaBlue
 #	BackPixmap   128   mini/FolderAquaYellow
 #	BackPixmap   128   mini/FolderOpenBlueAqua
 #	BackPixmap   128   mini/FolderOpenRedAqua
@@ -497,4 +498,3 @@ MArrowPixmap		arrow-dots.xpm
 #DeskBack  0  "back2"
 
 KillBackgroundThreshold 10000000
-

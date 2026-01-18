@@ -72,7 +72,7 @@ Main
     Else
     Begin
      Do {Exec "sync" sync}
-     Do {Exec "X terminal" x-terminal-emulator -e pauseme /sbin/shutdown -h -f now}
+     Do {ExecInTerm "X terminal" if(xterm){-fa Monospace -fs 12} -e pauseme /sbin/shutdown -h -f now}
      Quit
     End
    End
@@ -141,4 +141,3 @@ Main
    Set $ToDo = Logout
   End
 End
-

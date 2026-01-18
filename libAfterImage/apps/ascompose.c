@@ -737,10 +737,20 @@ int main(int argc, char** argv) {
 	}		 
 #endif
 	if (doc_file && doc_str && doc_str != default_doc_str) free(doc_str);
+	if (ascompose_locale)
+		free(ascompose_locale);
 
 #if !defined(X_DISPLAY_MISSING)    
+	if (main_window_props.last_root_im)
+		safe_asimage_destroy(main_window_props.last_root_im);
+	main_window_props.last_root_im = NULL;
 	if (main_window_props.canvas)
 		XFreePixmap(dpy, main_window_props.canvas); 
+	if (asv)
+	{
+		destroy_asvisual( asv, False );
+		asv = NULL ;
+	}
 	if( dpy )
 	{
         XCloseDisplay (dpy);
@@ -749,8 +759,6 @@ int main(int argc, char** argv) {
 #endif
 	LOCAL_DEBUG_OUT( "display Closed%s","");
 #ifdef DEBUG_ALLOCS
-	if (main_window_props.last_root_im)
-		safe_asimage_destroy(main_window_props.last_root_im);
 	asxml_var_cleanup();
 	LOCAL_DEBUG_OUT( "display Closed%s","");
 	custom_color_cleanup();
@@ -1205,4 +1213,3 @@ char *load_stdin()
 	}		 
 	return complete;
 }	 
-

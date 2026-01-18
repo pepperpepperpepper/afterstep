@@ -26,7 +26,7 @@ int socket_listen (const char *socket_name);
 #define as_ntohl(ui32)		((((ui32)&0x000000FF)<<24)|(((ui32)&0x0000FF00)<<8)|(((ui32)&0x00FF0000)>>8)|(((ui32)&0xFF000000)>>24))
 #define as_hlton(ui32)		as_ntohl(ui32)     /* conversion is symmetrical */
 #define as_ntohl16(ui16)		((((ui16)&0x00FF)<<8)|(((ui16)&0xFF00)>>8))
-#define as_hlton16(ui16)		as_ntohl(ui16)     /* conversion is symmetrical */
+#define as_hlton16(ui16)		as_ntohl16(ui16)     /* conversion is symmetrical */
 #endif
 
 /* simple buffered write operations : 	*/
@@ -137,4 +137,3 @@ void *socket_read_steal_buffer( ASProtocolState *ps );
 
 
 #endif                                         /* AS_SOCKET_H_HEADER_INCLUDED */
-

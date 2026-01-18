@@ -40,7 +40,7 @@
 *FTPFormInput           CustomTarget    20      ""
 *FTPFormLine            expand
 *FTPFormButton          quit            "Go"    ^M
-*FTPFormCommand         Exec "-" x-terminal-emulator -T FTP -e ftp $(CommonTarget) $(CustomTarget)
+*FTPFormCommand         ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T FTP} -e ftp $(CommonTarget) $(CustomTarget)
 *FTPFormButton          restart         "Clear"
 *FTPFormButton          quit            "Cancel" ^[
 *FTPFormCommand         Nop	""
@@ -178,7 +178,7 @@
 *RUNFormInput           CustomTarget    50      ""
 *RUNFormLine            expand
 *RUNFormButton          quit            "Go"    ^M
-*RUNFormCommand         Exec "-" x-terminal-emulator -T Run -e $(CustomTarget)
+*RUNFormCommand         ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Run} -e $(CustomTarget)
 *RUNFormButton          restart         "Clear"
 *RUNFormButton          quit            "Cancel" ^[
 *RUNFormCommand         Nop	""
@@ -197,7 +197,7 @@
 *HELPFormInput           CustomTarget    50      ""
 *HELPFormLine            expand
 *HELPFormButton          quit            "Go"    ^M
-*HELPFormCommand         Exec "-" x-terminal-emulator -T Help -e man $(CustomTarget)
+*HELPFormCommand         ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Help} -e man $(CustomTarget)
 *HELPFormButton          restart         "Clear"
 *HELPFormButton          quit            "Cancel" ^[
 *HELPFormCommand         Nop	""
@@ -216,7 +216,7 @@
 *FINDFormInput           CustomTarget    50      ""
 *FINDFormLine            expand
 *FINDFormButton          quit            "Go"    ^M
-*FINDFormCommand         Exec "-" x-terminal-emulator -T Find -e sh -c "locate $(CustomTarget) | less"
+*FINDFormCommand         ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Find} -e sh -c "locate $(CustomTarget) | less"
 *FINDFormButton          restart         "Clear"
 *FINDFormButton          quit            "Cancel" ^[
 *FINDFormCommand         Nop	""

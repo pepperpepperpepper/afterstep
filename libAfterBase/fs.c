@@ -716,6 +716,20 @@ direntry_compar_size (const struct direntry ** d1, const struct direntry ** d2)
 	return (**d1).d_size - (**d2).d_size;
 }
 
+static my_sort_f my_scandir_dcomp = NULL;
+
+static int
+my_scandir_qsort_dcomp (const void *a, const void *b)
+{
+	const struct direntry **d1 = (const struct direntry **)a;
+	const struct direntry **d2 = (const struct direntry **)b;
+
+	if (my_scandir_dcomp == NULL)
+		return 0;
+
+	return my_scandir_dcomp (d1, d2);
+}
+
 
 int
 my_scandir (char *dirname, struct direntry *(*namelist[]),
@@ -818,7 +832,11 @@ my_scandir (char *dirname, struct direntry *(*namelist[]),
 	}
 	/* Optionally sort the list */
 	if (dcomp)
-		qsort (*namelist, n, sizeof (struct direntry *), (int (*)())dcomp);
+	{
+		my_scandir_dcomp = dcomp;
+		qsort (*namelist, n, sizeof (struct direntry *), my_scandir_qsort_dcomp);
+		my_scandir_dcomp = NULL;
+	}
 
 	/* Return the count of the entries */
 	return n;
@@ -857,5 +875,4 @@ no_dots_except_directory (const char *d_name)
 	}
 	return False;
 }
-
 

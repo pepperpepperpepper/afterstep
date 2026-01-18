@@ -1,2 +1,2 @@
-Exec "XTerminal" exec x-terminal-emulator -T "XTerminal@`hostname --long`" &
+ExecInTerm "XTerminal" if(xterm){-fa Monospace -fs 12 -T "XTerminal@`hostname --long`"} -e bash &
 MiniPixmap "mini-app.xpm"

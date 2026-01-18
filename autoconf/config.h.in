@@ -98,6 +98,12 @@
 /* Support for Xinerama multiscreen */
 #undef HAVE_XINERAMA
 
+/* Support for XRandR monitor/screen configuration */
+#undef HAVE_XRANDR
+
+/* Support for XRandR monitor API (XRRGetMonitors) */
+#undef HAVE_XRANDR_MONITORS
+
 /* Internationalized text support */
 #undef I18N
 

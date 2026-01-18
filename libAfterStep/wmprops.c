@@ -1186,7 +1186,7 @@ Bool set_desktop_geometry_prop (ASWMProps * wmprops, CARD32 width,
 	if (wmprops) {
 		CARD32 size[2];
 		if (wmprops->desktop_width == width
-				&& wmprops->desktop_width == height)
+				&& wmprops->desktop_height == height)
 			return True;
 		wmprops->desktop_width = size[0] = width;
 		wmprops->desktop_height = size[1] = height;

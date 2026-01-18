@@ -634,6 +634,15 @@ sort_terms_by_alpha( const TermDef **t1, const TermDef **t2 )
 	return strcmp((**t1).keyword, (**t2).keyword);
 }
 
+static int
+sort_terms_by_alpha_qsort (const void *a, const void *b)
+{
+	const TermDef **t1 = (const TermDef **)a;
+	const TermDef **t2 = (const TermDef **)b;
+
+	return sort_terms_by_alpha (t1, t2);
+}
+
 void 
 write_options_keywords(const char *source_dir, const char *syntax_dir, SyntaxDef *syntax, ASXMLInterpreterState *state )
 {
@@ -661,7 +670,7 @@ write_options_keywords(const char *source_dir, const char *syntax_dir, SyntaxDef
 	sorted_list = safecalloc( max_i, sizeof(TermDef*));
 	for (i = 0; i < max_i; i++)
 		sorted_list[i] = &(syntax->terms[i]) ; 
-	qsort(sorted_list, max_i, sizeof(TermDef*), (int (*)())sort_terms_by_alpha );
+	qsort(sorted_list, max_i, sizeof(TermDef*), sort_terms_by_alpha_qsort );
 	for (i = 0; i < max_i; i++)
 	{	
 		SyntaxDef *sub_syntax = sorted_list[i]->sub_syntax ; 
@@ -1039,4 +1048,3 @@ gen_index( const char *dest_dir, const char *file, ASDocType doc_type, Bool user
 		end_doc_file( &state );	 	  
 	}
 }
-

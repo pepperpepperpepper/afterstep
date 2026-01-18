@@ -866,7 +866,7 @@ do_maximized_placement (ASWindow * asw, ASWindowBox * aswbox,
 	int selected = -1;
 	unsigned int w = asw->status->width;
 	unsigned int h = asw->status->height;
-#ifdef HAVE_XINERAMA
+#if defined(HAVE_XINERAMA) || defined(HAVE_XRANDR)
 	unsigned int x = asw->status->x;
 	unsigned int y = asw->status->y;
 #endif
@@ -915,7 +915,7 @@ do_maximized_placement (ASWindow * asw, ASWindowBox * aswbox,
 		int max_width = rects[selected].width;
 		int max_height = rects[selected].height;
 
-#ifdef HAVE_XINERAMA
+#if defined(HAVE_XINERAMA) || defined(HAVE_XRANDR)
 		/* the following block makes sure windows
 		   are not maximized over multiply heads. */
 
@@ -980,7 +980,7 @@ do_maximized_placement (ASWindow * asw, ASWindowBox * aswbox,
 			if (max_height > s[dest_rect].height)
 				max_height = s[dest_rect].height;
 		}
-#endif													/* XINERAMA */
+#endif													/* XINERAMA || XRANDR */
 
 
 		save_aswindow_anchor (asw, ASWIN_GET_FLAGS (asw, AS_MaximizedX),
@@ -1777,7 +1777,7 @@ Bool PlaceWindow (ASWindow * tmp_win, unsigned long tflag, int Desk)
 	width = tmp_win->frame_width;
 	height = tmp_win->frame_height;
 
-#ifdef HAVE_XINERAMA
+#if defined(HAVE_XINERAMA) || defined(HAVE_XRANDR)
 	if (Scr.xinerama_screens_num > 1) {
 		register int i;
 		XRectangle *s = Scr.xinerama_screens;
@@ -1791,7 +1791,7 @@ Bool PlaceWindow (ASWindow * tmp_win, unsigned long tflag, int Desk)
 			}
 		}
 	}
-#endif													/* XINERAMA */
+#endif													/* XINERAMA || XRANDR */
 
 
 	tmp_win->Desk = InvestigateWindowDesk (tmp_win);

@@ -57,7 +57,7 @@
 #-------------------------------------------------------------------------------
 # Buttons
 #
-*WharfFullPush
+#*WharfFullPush
 #*WharfNoPush
 #*WharfNoBorder
 
@@ -81,118 +81,157 @@
 #-------------------------------------------------------------------------------
 # Applications/Icons :
 #-------------------------------------------------------------------------------
+# Quick help: explains why Wharf/MonitorWharf may look “sparse”, and how to
+# populate it with modern apps or classic dockapps:
+*Wharf extras normal/Info Exec "Wharf extras" afterstepdoc extras.html &
+
 #
-# X Terms. Note that only one of these will be displayed on Wharf, as they all
-# have the same button name. Change the button name (first column after *Wharf) 
-# to make them into separate buttons:
+# Terminal launcher.
 #
-*Wharf term normal/Terminal Exec "-" x-terminal-emulator &
-*Wharf term normal/Terminal urxvt Exec "-" urxvt &
-*Wharf term normal/Terminal rxvt  Exec "-" rxvt  -tr -fg yellow -bg black &
-*Wharf term normal/Terminal eterm Exec "-" Eterm -O --tint blue -fg yellow -bg black &
-*Wharf term normal/Terminal xterm Exec "-" xterm -fg yellow -bg blue &
+# Use ExecInTerm so AfterStep can pick any available terminal emulator, rather
+# than hard-coding one here. (On some distros `x-terminal-emulator` exists; on
+# others it doesn't.)
+#
+*Wharf term normal/Terminal ExecInTerm "-" if(xterm){-fa Monospace -fs 12} -e bash &
 
 #
 # Midnight commander file manager in the term of choice :
 #
-*Wharf MidnightCommander normal/MCInMonitorShadow ExecInTerm "-" if(urxvt){-g 130x35 -T mc-VerticalTitle -tr -tint blue -fg white -bg black} if(aterm){-g 130x35 -T mc-VerticalTitle -tr -tint blue -fg white -bg black} if(Eterm){-g 130x35 -O --tint blue -f white -b black) if(rxvt){-g 130x35 -tr -fg white -bg black} -e mc &
+*Wharf MidnightCommander normal/MCInMonitorShadow ExecInTerm "-" if(urxvt){-g 130x35 -T mc-VerticalTitle -tr -tint blue -fg white -bg black} if(aterm){-g 130x35 -T mc-VerticalTitle -tr -tint blue -fg white -bg black} if(Eterm){-g 130x35 -O --tint blue -f white -b black) if(rxvt){-g 130x35 -tr -fg white -bg black} if(xterm){-fa Monospace -fs 12} -e mc &
+*Wharf MidnightCommander normal/MCInMonitorShadow Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # First available GUI file manager :
 #
-*Wharf GUIFileManager normal/Filecabinet2 Exec "Krusader" krusader &
-*Wharf GUIFileManager normal/Filecabinet2 Exec "Gentoo File Manager" gentoo &
-*Wharf GUIFileManager normal/Filecabinet2 Exec "Rox" rox &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "Thunar" thunar &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "Dolphin" dolphin &
 *Wharf GUIFileManager normal/Filecabinet2 Exec "Nautilus" nautilus --no-desktop &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "Nemo" nemo &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "PCManFM" pcmanfm &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "Rox" rox &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "Krusader" krusader &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "XDG Open" xdg-open "$HOME" &
+*Wharf GUIFileManager normal/Filecabinet2 Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # Konqueror is very nice web browser/filemanager and deserves an icon of its own : :
 #
 *Wharf Konqueror logos/konqueror Exec "Konqueror" konqueror &
+*Wharf Konqueror logos/konqueror Exec "Wharf extras" afterstepdoc extras.html &
 
 
 #
 # First available GUI Web Browser :
 #
-*Wharf WebBrowser normal/WWW    Exec x-www-browser &
-*Wharf WebBrowser logos/Firefox Exec "Iceweasel" iceweasel &
 *Wharf WebBrowser logos/Firefox Exec "Firefox" firefox &
-*Wharf WebBrowser logos/Firefox Exec "Firefox2" mozilla-firefox &
-*Wharf WebBrowser logos/mozilla Exec "Iceape" iceape &
-*Wharf WebBrowser logos/mozilla Exec "Mozilla" mozilla &
-*Wharf WebBrowser logos/Opera   Exec "Opera Web Browser" opera &
+*Wharf WebBrowser normal/WWW    Exec "Chromium" chromium &
+*Wharf WebBrowser normal/WWW    Exec "Brave" brave &
+*Wharf WebBrowser normal/WWW    Exec "Vivaldi" vivaldi &
+*Wharf WebBrowser normal/WWW    Exec "Google Chrome" google-chrome-stable &
+*Wharf WebBrowser normal/WWW    Exec "Google Chrome" google-chrome &
+*Wharf WebBrowser normal/WWW    Exec "XDG Open" xdg-open https://www.afterstep.org/ &
 *Wharf WebBrowser normal/WWW    Exec sensible-browser &
+*Wharf WebBrowser normal/WWW    Exec x-www-browser &
+*Wharf WebBrowser normal/WWW    Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # First available GUI e-mail client :
 #
-*Wharf Mail	logos/Thunderbird Exec "Icedove" icedove &
 *Wharf Mail	logos/Thunderbird Exec "Thunderbird" thunderbird &
-*Wharf Mail	logos/Thunderbird Exec "Thunderbird2" mozilla-thunderbird &
-*Wharf Mail	normal/MailBox2 Exec "mozilla-mail" mozilla --mail &
-*Wharf Mail	normal/MailBox2 Exec "kmail" kmail &
-*Wharf Mail	normal/MailBox2 Exec "balsa" balsa &
-*Wharf Mail	normal/MailBox2 ExecInTerm "Mutt" -e mutt &
-*Wharf Mail	normal/MailBox2 ExecInTerm "Pine" -title "Pine e-mail and news reader" -e pine &
+*Wharf Mail	normal/MailBox2 Exec "Evolution" evolution &
+*Wharf Mail	normal/MailBox2 Exec "Geary" geary &
+*Wharf Mail	normal/MailBox2 Exec "KMail" kmail &
+*Wharf Mail	normal/MailBox2 Exec "Mailspring" mailspring &
+*Wharf Mail	normal/MailBox2 Exec "XDG Email" xdg-email mailto: &
+*Wharf Mail	normal/MailBox2 ExecInTerm "Mutt" if(xterm){-fa Monospace -fs 12} -e mutt &
+*Wharf Mail	normal/MailBox2 ExecInTerm "Pine" if(xterm){-fa Monospace -fs 12} -title "Pine e-mail and news reader" -e pine &
+*Wharf Mail	normal/MailBox2 Exec "Wharf extras" afterstepdoc extras.html &
 
 
 #
 # First available GUI image editor :
 #
 *Wharf ImageEditor logos/gimp Exec "GIMP" gimp &
+*Wharf ImageEditor logos/gimp Exec "Krita" krita &
+*Wharf ImageEditor logos/gimp Exec "Inkscape" inkscape &
 *Wharf ImageEditor normal/XV Exec "XV" xv &
+*Wharf ImageEditor logos/gimp Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # First available GUI text editor :
 #
+*Wharf TextEditor Text.xpm Exec "VS Code" code &
+*Wharf TextEditor Text.xpm Exec "VSCodium" codium &
+*Wharf TextEditor Text.xpm Exec "Kate" kate &
+*Wharf TextEditor Text.xpm Exec "GEdit" gedit &
+*Wharf TextEditor Text.xpm Exec "Mousepad" mousepad &
 *Wharf TextEditor medit.png Exec "medit" medit &
 *Wharf TextEditor Text.xpm Exec "NEdit" nedit &
 *Wharf TextEditor Text.xpm Exec "cooledit" cooledit &
 *Wharf TextEditor logos/GNU Exec "Emacs" emacs &
 *Wharf TextEditor Text.xpm Exec "VIM" gvim &
+*Wharf TextEditor Text.xpm Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # First available Word processor :
 #
 *Wharf WordProcessor normal/Document Exec "AbiWord" abiword &
+*Wharf WordProcessor normal/Document Exec "LibreOffice Writer" libreoffice --writer &
 *Wharf WordProcessor normal/Document Exec "KWord" kword &
 *Wharf WordProcessor normal/Document Exec "Pathetic Writer" pw &
 *Wharf WordProcessor normal/Document Exec "KWrite" kwrite &
+*Wharf WordProcessor normal/Document Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # First available Spreadsheet processor :
 #
 *Wharf Spreadsheet normal/Table Exec "KSpread" kspread &
+*Wharf Spreadsheet normal/Table Exec "LibreOffice Calc" libreoffice --calc &
 *Wharf Spreadsheet normal/Table Exec "GNUMERIC" gnumeric &
 *Wharf Spreadsheet normal/Table Exec "Siag" siag &
+*Wharf Spreadsheet normal/Table Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # First available IRC client :
 #
-*Wharf IRC  normal/IRCTransparent Exec "XCHAT" xchat &
-*Wharf IRC	normal/IRCTransparent ExecInTerm "BitchX" -title "BitchX IRC" if(urxvt){-tr -fg white -bg black} if(aterm){-tr -sh 50 -fg white -bg black} if(Eterm){-O --shade 50 -f white -b black) if(rxvt){-tr -fg white -bg black} if(xterm){-fg white -bg black} -e BitchX irc.freenode.net &
+*Wharf IRC  normal/IRCTransparent Exec "HexChat" hexchat &
+*Wharf IRC  normal/IRCTransparent ExecInTerm "WeeChat" if(xterm){-fa Monospace -fs 12 -fg white -bg black} -e weechat &
+*Wharf IRC  normal/IRCTransparent ExecInTerm "irssi" if(xterm){-fa Monospace -fs 12 -fg white -bg black} -e irssi &
+*Wharf IRC	normal/IRCTransparent ExecInTerm "BitchX" -title "BitchX IRC" if(urxvt){-tr -fg white -bg black} if(aterm){-tr -sh 50 -fg white -bg black} if(Eterm){-O --shade 50 -f white -b black) if(rxvt){-tr -fg white -bg black} if(xterm){-fa Monospace -fs 12 -fg white -bg black} -e BitchX irc.libera.chat &
+*Wharf IRC  normal/IRCTransparent Exec "Wharf extras" afterstepdoc extras.html &
 
 
 # subfolder full of games :
 *Wharf Games - Category "Games"
+*Wharf Games normal/GameController Exec "Wharf extras" afterstepdoc extras.html &
 
 
 #
 # First available Audio player :
 #
+*Wharf AudioPlayer normal/MusicalNote Exec "mpv" mpv &
+*Wharf AudioPlayer normal/MusicalNote Exec "VLC" vlc &
+*Wharf AudioPlayer normal/MusicalNote Exec "Audacious" audacious &
+*Wharf AudioPlayer normal/MusicalNote Exec "Rhythmbox" rhythmbox &
+*Wharf AudioPlayer normal/MusicalNote Exec "Spotify" spotify &
 *Wharf AudioPlayer logos/Xmms Exec "X Multi Media System" xmms &
 *Wharf AudioPlayer - Swallow "wmxmms2" wmxmms2 -c blue &
 *Wharf AudioPlayer - Swallow "wmxmms" wmxmms --single &
 *Wharf AudioPlayer - Swallow "ascd" ascd &
 *MonitorWharf AudioPlayer - Swallow "wmusic" wmusic -w &
+*MonitorWharf AudioPlayer normal/MusicalNote Exec "Music player" sh -lc 'for p in rhythmbox vlc mpv audacious spotify; do command -v "$p" >/dev/null 2>&1 && exec "$p"; done; afterstepdoc extras.html' &
+*Wharf AudioPlayer normal/MusicalNote Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # Mixer
 #
+*Wharf mixer normal/Speaker Exec "PulseAudio Volume Control" pavucontrol &
 *Wharf mixer - Swallow "AlsaMixer.app" AlsaMixer.app -1 Master -2 Master -3 Master &
 *Wharf mixer - Swallow "wmmixer" wmmixer &
 *Wharf mixer - Swallow "asmixer" asmixer -g -1-1 &
 *Wharf mixer - Swallow "asMix" asmix -shape &
+*Wharf mixer normal/Speaker ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Mixer} -e sh -lc 'command -v alsamixer >/dev/null 2>&1 && exec alsamixer; command -v pulsemixer >/dev/null 2>&1 && exec pulsemixer; afterstepdoc extras.html' &
+*Wharf mixer normal/Speaker Exec "Wharf extras" afterstepdoc extras.html &
 
 #
 # First available Video player :
@@ -227,7 +266,7 @@
 #-------------------------------------------------------------------------------
 # Buttons
 #
-*MonitorWharfFullPush
+#*MonitorWharfFullPush
 #*MonitorWharfNoPush
 *MonitorWharfBevel		Right,NoOutline
 
@@ -252,10 +291,13 @@
 # left click opens docs, while right click opens StartMenu :
 *MonitorWharf afterstepdoc large/AfterStep3 Exec  "l" afterstepdoc &
 *MonitorWharf afterstepdoc -                PopUp "r" 0
+*MonitorWharf WharfExtras normal/Info Exec "Wharf extras" afterstepdoc extras.html &
 
 *MonitorWharf ToolsFolder normal/Desktop,normal/HammerBrown,normal/HammerRed,dots/3_dots Folder
-*MonitorWharf 	ASWallpaper normal/Desktop 		Exec "" ASWallpaper &
-*MonitorWharf 	GWCommand   normal/RemoteControl 	Exec "" GWCommand &
+*MonitorWharf 	ASRun       normal/RemoteControl 	Exec "Run" ASRun &
+*MonitorWharf 	ascolor     normal/ColorScheme 		Exec "Color Scheme" ascolor &
+*MonitorWharf 	ASMount     normal/Harddrive 		Exec "Mount" ASMount &
+*MonitorWharf 	afterstepdoc normal/Library		Exec "Docs" afterstepdoc &
 *MonitorWharf ~Folder
 
 
@@ -273,16 +315,24 @@
 *MonitorWharf ~Folder
 
 *MonitorWharf asfsm - Swallow "asfsm_lite" asfsm_lite -bg Grey30 -fg Grey70 -bp None -pbg Grey40 -pfg Grey70 -pbp None -i 30 &
-*MonitorWharf loadmonitor - Swallow "asload" asload -shape -exe "x-terminal-emulator -e top" &
-*MonitorWharf loadmonitor - Swallow "wmavgload" wmavgload -shape -led red &
+*MonitorWharf asfsm normal/Harddrive ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Filesystems} -e watch -n 2 df -h &
+
 *MonitorWharf loadmonitor - Swallow "wmcpuload" wmcpuload -bl -w &
-*MonitorWharf loadmonitor - Swallow "wmload" wmload -shape -led red &
+*MonitorWharf loadmonitor - Swallow "wmtop" wmtop &
+*MonitorWharf loadmonitor - Swallow "wmfire" wmfire -f 2 &
+*MonitorWharf loadmonitor normal/Monitor1 ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T SystemMonitor} -e top &
 *MonitorWharf loadinstantmonitor - Swallow "wmfire" wmfire -f 2 &
+*MonitorWharf loadinstantmonitor normal/Monitor1 ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Load} -e watch -n 1 uptime &
 *MonitorWharf asmon  - Swallow "asmon" asmon &
+*MonitorWharf asmon normal/Monitor1 ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Memory} -e watch -n 1 free -h &
 *MonitorWharf wmtop  - Swallow "wmtop" wmtop &
+*MonitorWharf wmtop normal/Monitor1 ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Processes} -e sh -lc 'exec top' &
 *MonitorWharf netmonitor - Swallow "wmnet" wmnet --driver=devstats &
 *MonitorWharf netmonitor - Swallow "wmnd" wmnd -i eth0 &
+*MonitorWharf netmonitor normal/Ethernet ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Network} -e watch -n 1 ip -s link &
+
 *MonitorWharf asmail - Swallow "asmail" asmail -geometry +0+0 &
+*MonitorWharf asmail normal/MailBox2 Exec "Mail" xdg-email mailto: &
 
 # One of the clocks - first available :
 *MonitorWharf clock - Swallow "asclock" asclock -shape -24 -theme penguin -position +1+1 &
@@ -291,6 +341,7 @@
 *MonitorWharf clock - Swallow "xclock" xclock -bg gray10 -fg cyan -digital -brief &
 *MonitorWharf clock - Exec "r" evolution &
 *MonitorWharf clock - Exec "r" korganizer &
+*MonitorWharf clock normal/Clock ExecInTerm "-" if(xterm){-fa Monospace -fs 12 -T Clock} -e watch -n 1 date &
 
 
 #
