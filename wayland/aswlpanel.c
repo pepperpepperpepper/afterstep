@@ -444,11 +444,29 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
 	as_buffer_paint_solid(buf, 0xFF202020u);
 
+	static const uint8_t digit_segments[10] = {
+		/* a b c d e f g */
+		[0] = 0b1111110,
+		[1] = 0b0110000,
+		[2] = 0b1101101,
+		[3] = 0b1111001,
+		[4] = 0b0110011,
+		[5] = 0b1011011,
+		[6] = 0b1011111,
+		[7] = 0b1110000,
+		[8] = 0b1111111,
+		[9] = 0b1111011,
+	};
+
 	int pad = 6;
 	int spacing = 6;
 	int btn = state->height - 2 * pad;
 	if (btn <= 0)
 		return;
+
+	int thickness = btn / 10;
+	if (thickness < 2)
+		thickness = 2;
 
 	int rx = pad;
 	int ry = pad;
@@ -468,6 +486,40 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		as_buffer_fill_rect(buf, rx, ry + btn - 1, btn, 1, 0xFF101010u);
 		as_buffer_fill_rect(buf, rx, ry, 1, btn, 0xFF101010u);
 		as_buffer_fill_rect(buf, rx + btn - 1, ry, 1, btn, 0xFF101010u);
+
+		/* Simple per-button index badge (1..n) as a 7-segment digit. */
+		uint32_t badge = 0xFFD0D0D0u;
+		int number = (int)i + 1;
+		int digit = number % 10;
+
+		int margin = btn / 4;
+		int dw = btn - 2 * margin;
+		int dh = btn - 2 * margin;
+		if (dw > 0 && dh > 0) {
+			int dx = rx + margin;
+			int dy = ry + margin;
+
+			uint8_t segs = digit_segments[digit];
+			int half = dh / 2;
+
+			/* a (top), d (bottom), g (middle) */
+			if (segs & 0b1000000)
+				as_buffer_fill_rect(buf, dx, dy, dw, thickness, badge);
+			if (segs & 0b0001000)
+				as_buffer_fill_rect(buf, dx, dy + dh - thickness, dw, thickness, badge);
+			if (segs & 0b0000001)
+				as_buffer_fill_rect(buf, dx, dy + half - thickness / 2, dw, thickness, badge);
+
+			/* f (upper-left), b (upper-right), e (lower-left), c (lower-right) */
+			if (segs & 0b0000010)
+				as_buffer_fill_rect(buf, dx, dy, thickness, half, badge);
+			if (segs & 0b0100000)
+				as_buffer_fill_rect(buf, dx + dw - thickness, dy, thickness, half, badge);
+			if (segs & 0b0000100)
+				as_buffer_fill_rect(buf, dx, dy + half, thickness, dh - half, badge);
+			if (segs & 0b0010000)
+				as_buffer_fill_rect(buf, dx + dw - thickness, dy + half, thickness, dh - half, badge);
+		}
 
 		rx += btn + spacing;
 	}
@@ -598,6 +650,7 @@ static void layer_surface_configure(void *data,
 	if ((int)height > 0)
 		state->height = (int)height;
 
+	zwlr_layer_surface_v1_set_exclusive_zone(surface, state->height);
 	schedule_redraw(state);
 }
 
