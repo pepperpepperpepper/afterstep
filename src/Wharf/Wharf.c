@@ -314,41 +314,6 @@ int main (int argc, char **argv)
 	return 0;
 }
 
-void HandleEvents ()
-{
-	ASEvent event;
-	Bool has_x_events = False;
-	while (True) {
-		while ((has_x_events = XPending (dpy))) {
-			if (ASNextEvent (&(event.x), True)) {
-				event.client = NULL;
-				setup_asevent_from_xevent (&event);
-				DispatchEvent (&event);
-				timer_handle ();
-			}
-		}
-		module_wait_pipes_input (process_message);
-	}
-}
-
-void MapConfigureNotifyLoop ()
-{
-	ASEvent event;
-
-	do {
-		if (!ASCheckTypedEvent (MapNotify, &(event.x)))
-			if (!ASCheckTypedEvent (ConfigureNotify, &(event.x)))
-				return;
-
-		event.client = NULL;
-		setup_asevent_from_xevent (&event);
-		DispatchEvent (&event);
-		ASSync (False);
-	} while (1);
-}
-
-
-
 void DeadPipe (int nonsense)
 {
 	static int already_dead = False;
@@ -374,9 +339,7 @@ void DeadPipe (int nonsense)
 
 
 /*****************************************************************************
- *
- * This routine is responsible for reading and parsing the config file
- *
+ * Style helpers
  ****************************************************************************/
 Bool check_style_shaped (MyStyle * style)
 {
@@ -395,29 +358,6 @@ Bool check_style_shaped (MyStyle * style)
 		}
 	}
 	return False;
-}
-
-void CheckConfigSanity ()
-{
-	if (Config == NULL)
-		Config = CreateWharfConfig ();
-
-	if (MyArgs.geometry.flags != 0)
-		Config->geometry = MyArgs.geometry;
-
-	if (Rows_override >= 0)
-		Config->rows = Rows_override;
-	if (Columns_override >= 0)
-		Config->columns = Columns_override;
-
-	if (Config->rows <= 0 && Config->columns <= 0)
-		Config->rows = 1;
-
-#if defined(LOCAL_DEBUG) && !defined(NO_DEBUG_OUTPUT)
-	show_progress ("printing wharf config : ");
-	PrintWharfConfig (Config);
-#endif
-
 }
 
 void SetWharfLook ()
@@ -498,122 +438,6 @@ void SetWharfLook ()
 	set_balloon_look (Scr.Look.balloon_look);
 
 
-}
-
-void merge_wharf_folders (WharfButton ** pf1, WharfButton ** pf2)
-{
-	while (*pf1)
-		pf1 = &((*pf1)->next);
-	*pf1 = *pf2;
-	*pf2 = NULL;
-}
-
-void RemapFunctions()
-{
-	char *fname = make_session_data_file (Session, False, 0, AFTER_FUNC_REMAP, NULL);
-	FeelConfig *feel_config = ParseFeelOptions (fname, MyName);
-
-	free (fname);
-
-	if (feel_config != NULL) {
-		ComplexFunction *remap_func = find_complex_func (feel_config->feel->ComplexFunctions, "RemapFunctions");
-		if (remap_func){
-			int i;
-			for (i = 0 ; i < remap_func->items_num ; ++i)
-				if (remap_func->items[i].func == F_Remap
-				    && remap_func->items[i].name != NULL
-				    && remap_func->items[i].text != NULL)
-					change_func_code (remap_func->items[i].name, txt2func_code (remap_func->items[i].text));
-		}
-		DestroyFeelConfig (feel_config);
-	}
-}
-
-void GetOptions (const char *filename)
-{
-	WharfConfig *config;
-	WharfConfig *to = Config, *from;
-	START_TIME (option_time);
-	SHOW_CHECKPOINT;
-	LOCAL_DEBUG_OUT ("loading wharf config from \"%s\": ", filename);
-	from = config = ParseWharfOptions (filename, MyName);
-	SHOW_TIME ("Config parsing", option_time);
-
-	/* Need to merge new config with what we have already : */
-	/* now lets check the config sanity : */
-	/* mixing set and default flags : */
-	Config->flags =
-			(config->flags & config->set_flags) | (Config->
-																						 flags & (~config->set_flags));
-	Config->set_flags |= config->set_flags;
-
-	if (get_flags (config->set_flags, WHARF_ROWS))
-		Config->rows = config->rows;
-
-	if (get_flags (config->set_flags, WHARF_COLUMNS))
-		Config->columns = config->columns;
-
-	if (get_flags (config->set_flags, WHARF_GEOMETRY))
-		merge_geometry (&(config->geometry), &(Config->geometry));
-
-	if (get_flags (config->set_flags, WHARF_WITHDRAW_STYLE))
-		Config->withdraw_style = config->withdraw_style;
-
-	if (get_flags (config->set_flags, WHARF_FORCE_SIZE))
-		merge_geometry (&(config->force_size), &(Config->force_size));
-
-	if (get_flags (config->set_flags, WHARF_ANIMATE_STEPS))
-		Config->animate_steps = config->animate_steps;
-	if (get_flags (config->set_flags, WHARF_ANIMATE_STEPS_MAIN))
-		Config->animate_steps_main = config->animate_steps_main;
-	if (get_flags (config->set_flags, WHARF_ANIMATE_DELAY))
-		Config->animate_delay = config->animate_delay;
-	ASCF_MERGE_SCALAR_KEYWORD (WHARF, to, from, LabelLocation);
-	ASCF_MERGE_SCALAR_KEYWORD (WHARF, to, from, AlignContents);
-	ASCF_MERGE_SCALAR_KEYWORD (WHARF, to, from, Bevel);
-	ASCF_MERGE_SCALAR_KEYWORD (WHARF, to, from, ShowHints);
-	ASCF_MERGE_SCALAR_KEYWORD (WHARF, to, from, CompositionMethod);
-	ASCF_MERGE_SCALAR_KEYWORD (WHARF, to, from, FolderOffset);
-	ASCF_MERGE_SCALAR_KEYWORD (WHARF, to, from, OrthogonalFolderOffset);
-
-/*LOCAL_DEBUG_OUT( "align_contents = %d", Config->align_contents ); */
-	if (get_flags (config->set_flags, WHARF_SOUND)) {
-		int i;
-		for (i = 0; i < WHEV_MAX_EVENTS; ++i) {
-			set_string (&(Config->sounds[i]), mystrdup (config->sounds[i]));
-			config->sounds[i] = NULL;
-		}
-	}
-	/* merging folders : */
-
-	if (config->root_folder)
-		merge_wharf_folders (&(Config->root_folder), &(config->root_folder));
-
-	if (Config->balloon_conf)
-		Destroy_balloonConfig (Config->balloon_conf);
-	Config->balloon_conf = config->balloon_conf;
-	config->balloon_conf = NULL;
-
-	if (config->style_defs)
-		ProcessMyStyleDefinitions (&(config->style_defs));
-
-	DestroyWharfConfig (config);
-	FreeSyntaxHash (&WharfFolderSyntax);
-	SHOW_TIME ("Config parsing", option_time);
-}
-
-/*****************************************************************************
- *
- * This routine is responsible for reading and parsing the base file
- *
- ****************************************************************************/
-void GetBaseOptions (const char *filename)
-{
-	START_TIME (started);
-
-	ReloadASEnvironment (NULL, NULL, NULL, False, True);
-
-	SHOW_TIME ("BaseConfigParsingTime", started);
 }
 
 /****************************************************************************/

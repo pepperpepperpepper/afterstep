@@ -2,7 +2,7 @@ EXTRA_INCLUDES	= -I.
 
 EXTRA_DEFINES	= -DENABLE_DND -DENABLE_SOUND
 
-OBJS            = Wharf.o
+OBJS            = Wharf.o wharf_config.o wharf_loop.o
 
 PROG		= Wharf
 

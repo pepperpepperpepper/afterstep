@@ -6,7 +6,20 @@ prefix="${1:-"$root_dir/_install"}"
 
 afterstep_bin="$prefix/bin/afterstep"
 config_dir="$prefix/share/afterstep"
-log_file="$root_dir/afterstep-xvfb-full-smoke.log"
+
+if [[ -n "${AS_SMOKE_LOG:-}" ]]; then
+  log_file="$AS_SMOKE_LOG"
+elif [[ -w "$root_dir" ]]; then
+  log_file="$root_dir/afterstep-xvfb-full-smoke.log"
+else
+  log_file="$(mktemp "${TMPDIR:-/tmp}/afterstep-xvfb-full-smoke.XXXXXX.log")"
+fi
+
+if [[ ! -w "$(dirname "$log_file")" ]]; then
+  echo "Log directory not writable: $(dirname "$log_file")" >&2
+  echo "Set AS_SMOKE_LOG to a writable path to override." >&2
+  exit 2
+fi
 
 if [[ ! -x "$afterstep_bin" ]]; then
   echo "afterstep binary not found: $afterstep_bin" >&2
@@ -129,6 +142,12 @@ EOF
 
 chmod +x "$inner_script"
 
+# AfterStep's session integration expects a DBus session in many environments.
+run_cmd=("$inner_script")
+if command -v dbus-run-session >/dev/null 2>&1; then
+  run_cmd=(dbus-run-session -- "$inner_script")
+fi
+
 # Some environments have NVIDIA EGL installed but no usable EGL/GBM backend,
 # which can make Xvfb crash at startup when GLX is enabled. If we detect that
 # setup, force Mesa's EGL vendor to keep Xvfb usable.
@@ -144,6 +163,6 @@ timeout 30s xvfb-run -a -s "-screen 0 1024x768x24" env \
   AFTERSTEP_BIN="$afterstep_bin" \
   AFTERSTEP_CONFIG_DIR="$config_dir" \
   AS_SMOKE_LOG="$log_file" \
-  "$inner_script"
+  "${run_cmd[@]}"
 
 echo "OK (log: $log_file)"

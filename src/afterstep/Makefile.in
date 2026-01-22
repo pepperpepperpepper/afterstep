@@ -1,7 +1,8 @@
 OBJS            = add_window.o afterstep.o aswindow.o \
                                 colormaps.o configure.o cover.o dbus.o decorations.o dirtree.o \
-				events.o functions.o housekeeping.o icons.o \
-				menuitem.o menus.o misc.o module.o \
+					events.o event_loop.o event_dispatch.o event_handlers_input.o event_handlers_property.o event_handlers_window.o event_handlers_misc.o functions.o housekeeping.o icons.o \
+					function_handlers_config.o \
+					menuitem.o menus.o misc.o module.o window_focus.o window_frame.o window_lifecycle.o window_list.o window_lookup.o window_menus.o window_session.o window_stacking.o window_state.o \
                                 pager.o placement.o theme.o winstatus.o
 
 # move.o clientwin.o
@@ -30,8 +31,8 @@ AfterStepConfig.o:	configure.c
 AfterStepConfig:	AfterStepConfig.o
 		$(CC) AfterStepConfig.o $(USER_LD_FLAGS) $(LIBS_ALL) -o AfterStepConfig
 
-test_name_change.o:	events.c
-		$(CC) $(CCFLAGS) $(EXTRA_DEFINES) -DNAME_CHANGE_TEST $(INCLUDES) $(EXTRA_INCLUDES) -c events.c -o test_name_change.o
+test_name_change.o:	test_name_change.c
+			$(CC) $(CCFLAGS) $(EXTRA_DEFINES) $(INCLUDES) $(EXTRA_INCLUDES) -c test_name_change.c -o test_name_change.o
 
 test_name_change:	test_name_change.o
 		$(CC) test_name_change.o $(USER_LD_FLAGS) $(LIBS_ALL) -o test_name_change

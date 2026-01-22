@@ -21,7 +21,7 @@ LIB_INCS= 	afterstep.h asapp.h ascommand.h asdatabase.h asfeel.h aswindata.h \
 LIB_OBJS= asapp.o ascommand.o asdatabase.o asfeel.o aswindata.o \
 				balloon.o canvas.o clientprops.o colorscheme.o \
 				decor.o desktop_category.o event.o \
-				freestor.o functions.o font.o hints.o kde.o module.o \
+				freestor.o functions.o font.o hints.o hints_common.o hints_icccm.o hints_motif.o hints_gnome.o hints_kde.o hints_extwm.o hints_xresources.o hints_asdb.o kde.o module.o \
 				moveresize.o myicon.o mylook.o mystyle.o mystyle_property.o \
 				outline.o operations.o parser.o parser_fs.o parser_xml.o \
 				screen.o session.o shape.o wmprops.o
@@ -29,7 +29,7 @@ LIB_OBJS= asapp.o ascommand.o asdatabase.o asfeel.o aswindata.o \
 LIB_SOURCES= asapp.c ascommand.c asdatabase.c asfeel.c aswindata.c \
 				balloon.c canvas.c clientprops.c colorscheme.c \
 				decor.c desktop_category.c event.c \
-				freestor.c functions.c font.c hints.c kde.c module.c \
+				freestor.c functions.c font.c hints.c hints_common.c hints_icccm.c hints_motif.c hints_gnome.c hints_kde.c hints_extwm.c hints_xresources.c hints_asdb.c kde.c module.c \
 				moveresize.c myicon.c mylook.c mystyle.c mystyle_property.c \
 				outline.c operations.c parser.c parser_fs.c parser_xml.c \
 				screen.c session.c shape.c wmprops.c
@@ -61,5 +61,3 @@ test_parser_fs.o: parser_fs.c
 
 test_parser_fs:	test_parser_fs.o ../libAfterConf/libAfterConf.a ../libAfterStep/libAfterStep.a ../libAfterBase/libAfterBase.a
 		$(CC) test_parser_fs.o ../libAfterConf/libAfterConf.a ../libAfterStep/libAfterStep.a $(USER_LD_FLAGS) $(LIBS_ALL) $(LIBS_AFTERIMAGE) -o test_parser_fs
-
-

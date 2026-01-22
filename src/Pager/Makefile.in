@@ -1,4 +1,4 @@
-OBJS            = Pager.o
+OBJS            = Pager.o pager_config.o pager_events.o pager_moveresize.o pager_clients.o pager_pressure.o pager_viewport.o pager_grab.o pager_desks.o pager_window.o
 
 # x_pager.o
 

@@ -436,6 +436,7 @@ void destroy_aswindow_list( ASWindowList **list, Bool restore_root );
 void publish_aswindow_list( ASWindowList *list, Bool stacking_only );
 
 ASWindow *window2ASWindow( Window w );
+ASWindowGroup *window2ASWindowGroup (Window w);
 Bool register_aswindow( Window w, ASWindow *asw );
 Bool unregister_aswindow( Window w );
 Bool destroy_registered_window( Window w );
@@ -660,15 +661,18 @@ ComplexFunction *get_complex_function( char *name );
 void ExecuteFunction (struct FunctionData *data, struct ASEvent *event, int Module);
 void ExecuteFunctionForClient(struct FunctionData *data, Window client);
 void ExecuteFunctionExt (struct FunctionData *data, struct ASEvent *event, int module, Bool defered);
-/* execute all the scheduled functions from the queue */
-Bool FunctionsPending ();
-void ExecutePendingFunctions();
-void DestroyPendingFunctionsQueue();
-/* non-window specific, non-defferrable functions are run : */
-void ExecuteBatch ( ComplexFunction *batch );
+	/* execute all the scheduled functions from the queue */
+	Bool FunctionsPending ();
+	void ExecutePendingFunctions();
+	void DestroyPendingFunctionsQueue();
+	/* non-window specific, non-defferrable functions are run : */
+	void ExecuteBatch ( ComplexFunction *batch );
 
-int  DeferExecution (struct ASEvent *event, int cursor, int FinishEvent);
-void QuickRestart (char *what);
+	void signal_reload_gtkrc_file ();
+	void signal_kde_palette_changed ();
+
+	int  DeferExecution (struct ASEvent *event, int cursor, int FinishEvent);
+	void QuickRestart (char *what);
 
 /************************* housekeeping.c ********************************/
 Bool GrabEm   ( struct ScreenInfo *scr, Cursor cursor );

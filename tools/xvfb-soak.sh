@@ -7,7 +7,20 @@ duration_sec="${2:-${AS_SOAK_DURATION_SEC:-60}}"
 
 afterstep_bin="$prefix/bin/afterstep"
 config_dir="$prefix/share/afterstep"
-log_file="$root_dir/afterstep-xvfb-soak.log"
+
+if [[ -n "${AS_SOAK_LOG:-}" ]]; then
+  log_file="$AS_SOAK_LOG"
+elif [[ -w "$root_dir" ]]; then
+  log_file="$root_dir/afterstep-xvfb-soak.log"
+else
+  log_file="$(mktemp "${TMPDIR:-/tmp}/afterstep-xvfb-soak.XXXXXX.log")"
+fi
+
+if [[ ! -w "$(dirname "$log_file")" ]]; then
+  echo "Log directory not writable: $(dirname "$log_file")" >&2
+  echo "Set AS_SOAK_LOG to a writable path to override." >&2
+  exit 2
+fi
 
 if [[ ! -x "$afterstep_bin" ]]; then
   echo "afterstep binary not found: $afterstep_bin" >&2
@@ -157,6 +170,12 @@ EOF
 chmod +x "$inner_script"
 
 timeout_sec=$((duration_sec + 45))
+# AfterStep's session integration expects a DBus session in many environments.
+run_cmd=("$inner_script")
+if command -v dbus-run-session >/dev/null 2>&1; then
+  run_cmd=(dbus-run-session -- "$inner_script")
+fi
+
 # Some environments have NVIDIA EGL installed but no usable EGL/GBM backend,
 # which can make Xvfb crash at startup when GLX is enabled. If we detect that
 # setup, force Mesa's EGL vendor to keep Xvfb usable.
@@ -173,6 +192,6 @@ timeout "${timeout_sec}s" xvfb-run -a -s "-screen 0 1024x768x24" env \
   AFTERSTEP_CONFIG_DIR="$config_dir" \
   AS_SOAK_LOG="$log_file" \
   AS_SOAK_DURATION_SEC="$duration_sec" \
-  "$inner_script"
+  "${run_cmd[@]}"
 
 echo "OK (log: $log_file)"

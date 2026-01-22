@@ -1,4 +1,4 @@
-OBJS            = WinTabs.o
+OBJS            = WinTabs.o wintabs_config.o wintabs_events.o wintabs_ui.o wintabs_layout.o wintabs_grouping.o wintabs_swallow.o
 
 PROG		= WinTabs
 
@@ -17,4 +17,3 @@ module.clean:
 install:	install.bin
 
 uninstall:	uninstall.bin
-

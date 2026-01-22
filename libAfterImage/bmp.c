@@ -35,11 +35,10 @@
 #include "asimage.h"
 #include "imencdec.h"
 #include "import.h"
+#include "import_internal.h"
 #include "export.h"
 #include "bmp.h"
 
-/* from import.c : */
-FILE* open_image_file( const char *path );
 /* from export.c : */
 FILE* open_writeable_image_file( const char *path );
 
@@ -671,4 +670,3 @@ ico2ASImage( const char * path, ASImageImportParams *params )
 	SHOW_TIME("image loading",started);
 	return im ;
 }
-

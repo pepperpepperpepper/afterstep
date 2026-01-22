@@ -1709,16 +1709,6 @@ void LoadASConfig (int thisdesktop, ASFlagType what)
 	char *tline = NULL;
 	ASImageManager *old_image_manager = NULL;
 	ASFontManager *old_font_manager = NULL;
-	FunctionData gtkrc_signal_func;
-	FunctionData kde_signal_func;
-	ASEvent dummy_event = { 0 };
-
-	init_func_data (&gtkrc_signal_func);
-	gtkrc_signal_func.func = F_SIGNAL_RELOAD_GTK_RCFILE;
-	init_func_data (&kde_signal_func);
-	kde_signal_func.func = F_KIPC_SEND_MESSAGE_ALL;
-	kde_signal_func.func_val[0] = KIPC_PaletteChanged;
-	kde_signal_func.func_val[1] = 0;
 
 	cover_desktop ();
 
@@ -1802,10 +1792,10 @@ void LoadASConfig (int thisdesktop, ASFlagType what)
 				clear_flags (what, PARSE_LOOK_CONFIG);
 			}
 			if (UpdateGtkRC (Environment))
-				ExecuteFunction (&gtkrc_signal_func, &dummy_event, -1);
+				signal_reload_gtkrc_file ();
 			if (!get_flags (Environment->flags, ASE_NoKDEGlobalsTheming))
 				if (UpdateKCSRC ())
-					ExecuteFunction (&kde_signal_func, &dummy_event, -1);
+					signal_kde_palette_changed ();
 		}
 		if (get_flags (what, PARSE_FEEL_CONFIG)) {
 			if ((const_configfile =
@@ -1900,12 +1890,12 @@ void LoadASConfig (int thisdesktop, ASFlagType what)
 									 Session->overriding_file);
 		display_progress (True, "AfterStep configuration loaded from \"%s\".",
 											Session->overriding_file);
-		what = PARSE_EVERYTHING;
-		if (UpdateGtkRC (Environment))
-			ExecuteFunction (&gtkrc_signal_func, &dummy_event, -1);
-		if (!get_flags (Environment->flags, ASE_NoKDEGlobalsTheming))
-			UpdateKCSRC ();
-	}
+			what = PARSE_EVERYTHING;
+			if (UpdateGtkRC (Environment))
+				signal_reload_gtkrc_file ();
+			if (!get_flags (Environment->flags, ASE_NoKDEGlobalsTheming))
+				UpdateKCSRC ();
+		}
 
 	/* let's free the memory used for parsing */
 	if (tline)
@@ -2039,6 +2029,43 @@ void LoadASConfig (int thisdesktop, ASFlagType what)
 
 	LOCAL_DEBUG_OUT ("TmpFeel.flags = 0x%lX, Scr.Feel.flags = 0x%lX",
 									 TmpFeel.flags, Scr.Feel.flags);
+}
+
+void QuickRestart (char *what)
+{
+	unsigned long what_flags = 0;
+	Bool update_background = False;
+
+	if (what == NULL)
+		return;
+
+	if (strcasecmp (what, "all") == 0 || strcasecmp (what, "theme") == 0)
+		what_flags = PARSE_EVERYTHING;
+	else if (strcasecmp (what, "look&feel") == 0)
+		what_flags = PARSE_LOOK_CONFIG | PARSE_FEEL_CONFIG;
+	else if (strcasecmp (what, "startmenu") == 0
+					 || strcasecmp (what, "feel") == 0)
+		what_flags = PARSE_FEEL_CONFIG;
+	else if (strcasecmp (what, "look") == 0)
+		what_flags = PARSE_LOOK_CONFIG;
+	else if (strcasecmp (what, "base") == 0)
+		what_flags = PARSE_BASE_CONFIG;
+	else if (strcasecmp (what, "database") == 0)
+		what_flags = PARSE_DATABASE_CONFIG;
+	else if (strcasecmp (what, "background") == 0)
+		update_background = True;
+
+	/* Force reinstall */
+	if (what) {
+		InstallRootColormap ();
+		GrabEm (ASDefaultScr, Scr.Feel.cursors[ASCUR_Wait]);
+		LoadASConfig (Scr.CurrentDesk, what_flags);
+		UngrabEm ();
+	}
+
+	if (update_background)
+		SendPacket (-1, M_NEW_BACKGROUND, 1, 1);
+	SendPacket (-1, M_NEW_CONFIG, 1, what_flags);
 }
 
 /*****************************************************************************
