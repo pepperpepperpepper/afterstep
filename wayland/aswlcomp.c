@@ -10,6 +10,8 @@
 
 #include <wayland-server-core.h>
 
+#include <linux/input-event-codes.h>
+
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
 #include <wlr/render/wlr_renderer.h>
@@ -26,11 +28,14 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/log.h>
 
+#include <wlr/util/edges.h>
+
 #include <xkbcommon/xkbcommon.h>
 
 enum aswl_cursor_mode {
 	ASWL_CURSOR_PASSTHROUGH = 0,
 	ASWL_CURSOR_MOVE,
+	ASWL_CURSOR_RESIZE,
 };
 
 struct aswl_server;
@@ -40,12 +45,15 @@ struct aswl_view {
 	struct aswl_server *server;
 	struct wlr_xdg_surface *xdg_surface;
 	struct wlr_scene_tree *scene_tree;
+	bool mapped;
+	bool placed;
 
 	struct wl_listener map;
 	struct wl_listener unmap;
 	struct wl_listener destroy;
 
 	struct wl_listener request_move;
+	struct wl_listener request_resize;
 };
 
 struct aswl_keyboard {
@@ -74,6 +82,8 @@ struct aswl_output {
 	struct wl_list link; /* aswl_server.outputs */
 	struct aswl_server *server;
 	struct wlr_output *wlr_output;
+	struct wlr_box full_box;
+	struct wlr_box usable_box;
 
 	struct wl_listener destroy;
 };
@@ -89,6 +99,8 @@ struct aswl_server {
 	struct wlr_scene_output_layout *scene_layout;
 	struct wl_list outputs;
 	struct wl_list views;
+	struct aswl_view *focused_view;
+	int cascade_offset;
 
 	struct wlr_scene_tree *layer_trees[4];
 	struct wlr_scene_tree *xdg_tree;
@@ -123,9 +135,17 @@ struct aswl_server {
 	double grab_ly;
 	int grab_view_lx;
 	int grab_view_ly;
+	int grab_view_width;
+	int grab_view_height;
+	uint32_t grab_edges;
+	uint32_t grab_button;
 };
 
 static void arrange_layers(struct aswl_server *server);
+static void focus_topmost_view(struct aswl_server *server);
+static void place_view(struct aswl_view *view);
+static void begin_interactive(struct aswl_view *view, enum aswl_cursor_mode mode, uint32_t edges, uint32_t button);
+static void end_interactive(struct aswl_server *server);
 
 static void usage(const char *prog)
 {
@@ -169,9 +189,11 @@ static struct wlr_surface *surface_at(struct aswl_server *server, double lx, dou
 static struct aswl_view *view_from_wlr_surface(struct wlr_surface *surface)
 {
 	struct wlr_xdg_surface *xdg_surface = wlr_xdg_surface_try_from_wlr_surface(surface);
-	if (xdg_surface == NULL)
-		return NULL;
-	if (xdg_surface->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL)
+	while (xdg_surface != NULL && xdg_surface->role == WLR_XDG_SURFACE_ROLE_POPUP) {
+		struct wlr_surface *parent = xdg_surface->popup->parent;
+		xdg_surface = parent != NULL ? wlr_xdg_surface_try_from_wlr_surface(parent) : NULL;
+	}
+	if (xdg_surface == NULL || xdg_surface->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL)
 		return NULL;
 	return xdg_surface->data;
 }
@@ -184,6 +206,18 @@ static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 	struct aswl_server *server = view->server;
 
 	wlr_scene_node_raise_to_top(&view->scene_tree->node);
+	wl_list_remove(&view->link);
+	wl_list_insert(server->views.prev, &view->link);
+
+	if (server->focused_view != view) {
+		if (server->focused_view != NULL && server->focused_view->xdg_surface != NULL &&
+		    server->focused_view->xdg_surface->toplevel != NULL) {
+			(void)wlr_xdg_toplevel_set_activated(server->focused_view->xdg_surface->toplevel, false);
+		}
+		server->focused_view = view;
+		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL)
+			(void)wlr_xdg_toplevel_set_activated(view->xdg_surface->toplevel, true);
+	}
 
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
 	if (keyboard == NULL)
@@ -201,52 +235,148 @@ static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 	                              &keyboard->modifiers);
 }
 
-static void handle_view_map(struct wl_listener *listener, void *data)
+static void focus_topmost_view(struct aswl_server *server)
 {
-	(void)data;
-	struct aswl_view *view = wl_container_of(listener, view, map);
-	wlr_scene_node_set_enabled(&view->scene_tree->node, true);
-	focus_view(view, NULL);
-}
+	if (server == NULL)
+		return;
 
-static void handle_view_unmap(struct wl_listener *listener, void *data)
-{
-	(void)data;
-	struct aswl_view *view = wl_container_of(listener, view, unmap);
-	wlr_scene_node_set_enabled(&view->scene_tree->node, false);
-
-	if (view->server != NULL && view->server->grabbed_view == view) {
-		view->server->cursor_mode = ASWL_CURSOR_PASSTHROUGH;
-		view->server->grabbed_view = NULL;
+	struct aswl_view *view;
+	wl_list_for_each_reverse(view, &server->views, link) {
+		if (!view->mapped)
+			continue;
+		focus_view(view, NULL);
+		return;
 	}
 }
 
-static void handle_view_destroy(struct wl_listener *listener, void *data)
+static struct aswl_output *output_from_wlr_output(struct aswl_server *server, struct wlr_output *output)
 {
-	(void)data;
-	struct aswl_view *view = wl_container_of(listener, view, destroy);
+	if (server == NULL || output == NULL)
+		return NULL;
 
-	wl_list_remove(&view->map.link);
-	wl_list_remove(&view->unmap.link);
-	wl_list_remove(&view->destroy.link);
-	wl_list_remove(&view->request_move.link);
-	wl_list_remove(&view->link);
-	free(view);
+	struct aswl_output *out;
+	wl_list_for_each(out, &server->outputs, link) {
+		if (out->wlr_output == output)
+			return out;
+	}
+	return NULL;
 }
 
-static void handle_request_move(struct wl_listener *listener, void *data)
+static void view_get_current_size(struct aswl_view *view, int *width, int *height)
 {
-	(void)data;
-	struct aswl_view *view = wl_container_of(listener, view, request_move);
+	int w = 0;
+	int h = 0;
+
+	if (view != NULL && view->xdg_surface != NULL && view->xdg_surface->surface != NULL) {
+		w = view->xdg_surface->surface->current.width;
+		h = view->xdg_surface->surface->current.height;
+	}
+	if (view != NULL && view->xdg_surface != NULL) {
+		if (w <= 0)
+			w = view->xdg_surface->geometry.width;
+		if (h <= 0)
+			h = view->xdg_surface->geometry.height;
+	}
+
+	if (width != NULL)
+		*width = w;
+	if (height != NULL)
+		*height = h;
+}
+
+static const char *xcursor_for_resize_edges(uint32_t edges)
+{
+	if ((edges & (WLR_EDGE_TOP | WLR_EDGE_LEFT)) == (WLR_EDGE_TOP | WLR_EDGE_LEFT))
+		return "top_left_corner";
+	if ((edges & (WLR_EDGE_TOP | WLR_EDGE_RIGHT)) == (WLR_EDGE_TOP | WLR_EDGE_RIGHT))
+		return "top_right_corner";
+	if ((edges & (WLR_EDGE_BOTTOM | WLR_EDGE_LEFT)) == (WLR_EDGE_BOTTOM | WLR_EDGE_LEFT))
+		return "bottom_left_corner";
+	if ((edges & (WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT)) == (WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT))
+		return "bottom_right_corner";
+	if ((edges & WLR_EDGE_TOP) != 0)
+		return "top_side";
+	if ((edges & WLR_EDGE_BOTTOM) != 0)
+		return "bottom_side";
+	if ((edges & WLR_EDGE_LEFT) != 0)
+		return "left_side";
+	if ((edges & WLR_EDGE_RIGHT) != 0)
+		return "right_side";
+	return "left_ptr";
+}
+
+static void place_view(struct aswl_view *view)
+{
+	if (view == NULL || view->server == NULL)
+		return;
 	struct aswl_server *server = view->server;
 
-	if (server == NULL || server->cursor == NULL)
+	if (view->placed || server->output_layout == NULL)
 		return;
 
-	server->cursor_mode = ASWL_CURSOR_MOVE;
+	struct wlr_output *output = NULL;
+	if (server->cursor != NULL)
+		output = wlr_output_layout_output_at(server->output_layout, server->cursor->x, server->cursor->y);
+	if (output == NULL)
+		output = wlr_output_layout_get_center_output(server->output_layout);
+
+	struct wlr_box full = { 0 };
+	if (output != NULL)
+		wlr_output_layout_get_box(server->output_layout, output, &full);
+	struct wlr_box usable = full;
+
+	struct aswl_output *out = output_from_wlr_output(server, output);
+	if (out != NULL && out->usable_box.width > 0 && out->usable_box.height > 0)
+		usable = out->usable_box;
+
+	int width = 0;
+	int height = 0;
+	view_get_current_size(view, &width, &height);
+
+	int x = usable.x + 40 + server->cascade_offset;
+	int y = usable.y + 40 + server->cascade_offset;
+	if (width > 0 && height > 0 && usable.width > 0 && usable.height > 0) {
+		int max_x = usable.x + usable.width - width;
+		int max_y = usable.y + usable.height - height;
+		if (x > max_x)
+			x = usable.x + 40;
+		if (y > max_y)
+			y = usable.y + 40;
+		if (x < usable.x)
+			x = usable.x;
+		if (y < usable.y)
+			y = usable.y;
+		if (x > max_x)
+			x = max_x;
+		if (y > max_y)
+			y = max_y;
+	}
+
+	wlr_scene_node_set_position(&view->scene_tree->node, x, y);
+	view->placed = true;
+
+	server->cascade_offset += 32;
+	if (server->cascade_offset >= 256)
+		server->cascade_offset = 0;
+}
+
+static void begin_interactive(struct aswl_view *view, enum aswl_cursor_mode mode, uint32_t edges, uint32_t button)
+{
+	if (view == NULL || view->server == NULL)
+		return;
+	struct aswl_server *server = view->server;
+
+	if (server->cursor == NULL || server->cursor_mgr == NULL)
+		return;
+
+	focus_view(view, NULL);
+
+	server->cursor_mode = mode;
 	server->grabbed_view = view;
 	server->grab_lx = server->cursor->x;
 	server->grab_ly = server->cursor->y;
+	server->grab_edges = edges;
+	server->grab_button = button;
 
 	int lx = 0;
 	int ly = 0;
@@ -254,7 +384,133 @@ static void handle_request_move(struct wl_listener *listener, void *data)
 	server->grab_view_lx = lx;
 	server->grab_view_ly = ly;
 
-	wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "grabbing");
+	view_get_current_size(view, &server->grab_view_width, &server->grab_view_height);
+	if (server->grab_view_width <= 0)
+		server->grab_view_width = 1;
+	if (server->grab_view_height <= 0)
+		server->grab_view_height = 1;
+
+	switch (mode) {
+	case ASWL_CURSOR_MOVE:
+		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "grabbing");
+		break;
+	case ASWL_CURSOR_RESIZE:
+		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL)
+			(void)wlr_xdg_toplevel_set_resizing(view->xdg_surface->toplevel, true);
+		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, xcursor_for_resize_edges(edges));
+		break;
+	case ASWL_CURSOR_PASSTHROUGH:
+	default:
+		break;
+	}
+}
+
+static void end_interactive(struct aswl_server *server)
+{
+	if (server == NULL)
+		return;
+
+	if (server->cursor_mode == ASWL_CURSOR_RESIZE) {
+		struct aswl_view *view = server->grabbed_view;
+		if (view != NULL && view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL)
+			(void)wlr_xdg_toplevel_set_resizing(view->xdg_surface->toplevel, false);
+	}
+
+	server->cursor_mode = ASWL_CURSOR_PASSTHROUGH;
+	server->grabbed_view = NULL;
+	server->grab_button = 0;
+	if (server->cursor != NULL && server->cursor_mgr != NULL)
+		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "left_ptr");
+}
+
+static void handle_view_map(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, map);
+	view->mapped = true;
+	wlr_scene_node_set_enabled(&view->scene_tree->node, true);
+	place_view(view);
+	focus_view(view, NULL);
+}
+
+static void handle_view_unmap(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, unmap);
+	struct aswl_server *server = view->server;
+
+	view->mapped = false;
+	wlr_scene_node_set_enabled(&view->scene_tree->node, false);
+
+	if (server != NULL && server->grabbed_view == view) {
+		end_interactive(server);
+	}
+
+	if (server != NULL && server->focused_view == view) {
+		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL)
+			(void)wlr_xdg_toplevel_set_activated(view->xdg_surface->toplevel, false);
+		server->focused_view = NULL;
+		wlr_seat_keyboard_notify_clear_focus(server->seat);
+		focus_topmost_view(server);
+	}
+}
+
+static void handle_view_destroy(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, destroy);
+	struct aswl_server *server = view->server;
+
+	wl_list_remove(&view->map.link);
+	wl_list_remove(&view->unmap.link);
+	wl_list_remove(&view->destroy.link);
+	wl_list_remove(&view->request_move.link);
+	wl_list_remove(&view->request_resize.link);
+	wl_list_remove(&view->link);
+
+	if (server != NULL && server->grabbed_view == view) {
+		end_interactive(server);
+	}
+
+	if (server != NULL && server->focused_view == view) {
+		server->focused_view = NULL;
+		wlr_seat_keyboard_notify_clear_focus(server->seat);
+		focus_topmost_view(server);
+	}
+
+	free(view);
+}
+
+static void handle_request_move(struct wl_listener *listener, void *data)
+{
+	struct aswl_view *view = wl_container_of(listener, view, request_move);
+	struct aswl_server *server = view->server;
+	struct wlr_xdg_toplevel_move_event *event = data;
+
+	if (server == NULL || server->cursor == NULL)
+		return;
+
+	if (event != NULL && !wlr_seat_validate_pointer_grab_serial(server->seat, view->xdg_surface->surface, event->serial))
+		return;
+
+	begin_interactive(view, ASWL_CURSOR_MOVE, 0, 0);
+}
+
+static void handle_request_resize(struct wl_listener *listener, void *data)
+{
+	struct aswl_view *view = wl_container_of(listener, view, request_resize);
+	struct aswl_server *server = view->server;
+	struct wlr_xdg_toplevel_resize_event *event = data;
+
+	if (server == NULL || server->cursor == NULL)
+		return;
+
+	if (event == NULL)
+		return;
+	if (!wlr_seat_validate_pointer_grab_serial(server->seat, view->xdg_surface->surface, event->serial))
+		return;
+
+	begin_interactive(view, ASWL_CURSOR_RESIZE, event->edges, 0);
 }
 
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
@@ -277,7 +533,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 		return;
 	}
 	xdg_surface->data = view;
-	wl_list_insert(&server->views, &view->link);
+	wl_list_insert(server->views.prev, &view->link);
 
 	/* Start hidden until the client maps. */
 	wlr_scene_node_set_enabled(&view->scene_tree->node, false);
@@ -293,6 +549,9 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 
 	view->request_move.notify = handle_request_move;
 	wl_signal_add(&xdg_surface->toplevel->events.request_move, &view->request_move);
+
+	view->request_resize.notify = handle_request_resize;
+	wl_signal_add(&xdg_surface->toplevel->events.request_resize, &view->request_resize);
 
 	/* Initial placement (very naive for now). */
 	wlr_scene_node_set_position(&view->scene_tree->node, 80, 120);
@@ -430,6 +689,63 @@ static void process_cursor_motion(struct aswl_server *server, uint32_t time_msec
 		return;
 	}
 
+	if (server->cursor_mode == ASWL_CURSOR_RESIZE) {
+		struct aswl_view *view = server->grabbed_view;
+		if (view == NULL || view->xdg_surface == NULL || view->xdg_surface->toplevel == NULL)
+			return;
+
+		double dx = server->cursor->x - server->grab_lx;
+		double dy = server->cursor->y - server->grab_ly;
+
+		int dx_i = (int)dx;
+		int dy_i = (int)dy;
+
+		int right_edge = server->grab_view_lx + server->grab_view_width;
+		int bottom_edge = server->grab_view_ly + server->grab_view_height;
+
+		int nx = server->grab_view_lx;
+		int ny = server->grab_view_ly;
+		int nw = server->grab_view_width;
+		int nh = server->grab_view_height;
+
+		if ((server->grab_edges & WLR_EDGE_LEFT) != 0) {
+			nx = server->grab_view_lx + dx_i;
+			nw = server->grab_view_width - dx_i;
+		} else if ((server->grab_edges & WLR_EDGE_RIGHT) != 0) {
+			nw = server->grab_view_width + dx_i;
+		}
+
+		if ((server->grab_edges & WLR_EDGE_TOP) != 0) {
+			ny = server->grab_view_ly + dy_i;
+			nh = server->grab_view_height - dy_i;
+		} else if ((server->grab_edges & WLR_EDGE_BOTTOM) != 0) {
+			nh = server->grab_view_height + dy_i;
+		}
+
+		int min_w = view->xdg_surface->toplevel->current.min_width;
+		int min_h = view->xdg_surface->toplevel->current.min_height;
+		if (min_w <= 0)
+			min_w = 1;
+		if (min_h <= 0)
+			min_h = 1;
+
+		if (nw < min_w) {
+			nw = min_w;
+			if ((server->grab_edges & WLR_EDGE_LEFT) != 0)
+				nx = right_edge - nw;
+		}
+		if (nh < min_h) {
+			nh = min_h;
+			if ((server->grab_edges & WLR_EDGE_TOP) != 0)
+				ny = bottom_edge - nh;
+		}
+
+		if ((server->grab_edges & WLR_EDGE_LEFT) != 0 || (server->grab_edges & WLR_EDGE_TOP) != 0)
+			wlr_scene_node_set_position(&view->scene_tree->node, nx, ny);
+		(void)wlr_xdg_toplevel_set_size(view->xdg_surface->toplevel, nw, nh);
+		return;
+	}
+
 	double sx = 0;
 	double sy = 0;
 	struct wlr_surface *surface = surface_at(server, server->cursor->x, server->cursor->y, &sx, &sy);
@@ -470,10 +786,10 @@ static void handle_cursor_button(struct wl_listener *listener, void *data)
 	                                                event->button,
 	                                                event->state);
 
-	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED && server->cursor_mode == ASWL_CURSOR_MOVE) {
-		server->cursor_mode = ASWL_CURSOR_PASSTHROUGH;
-		server->grabbed_view = NULL;
-		wlr_cursor_set_xcursor(server->cursor, server->cursor_mgr, "left_ptr");
+	if (event->state == WL_POINTER_BUTTON_STATE_RELEASED && server->cursor_mode != ASWL_CURSOR_PASSTHROUGH) {
+		if (server->grab_button == 0 || server->grab_button == event->button)
+			end_interactive(server);
+		return;
 	}
 
 	if (event->state != WL_POINTER_BUTTON_STATE_PRESSED || serial == 0)
@@ -483,8 +799,47 @@ static void handle_cursor_button(struct wl_listener *listener, void *data)
 	double sy = 0;
 	struct wlr_surface *surface = surface_at(server, server->cursor->x, server->cursor->y, &sx, &sy);
 	struct aswl_view *view = surface != NULL ? view_from_wlr_surface(surface) : NULL;
-	if (view != NULL)
+	if (view != NULL) {
 		focus_view(view, surface);
+	}
+
+	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
+	uint32_t mods = keyboard != NULL ? wlr_keyboard_get_modifiers(keyboard) : 0;
+	if ((mods & WLR_MODIFIER_ALT) == 0 || view == NULL)
+		return;
+
+	if (event->button == BTN_LEFT) {
+		begin_interactive(view, ASWL_CURSOR_MOVE, 0, event->button);
+		return;
+	}
+
+	if (event->button == BTN_RIGHT) {
+		int vx = 0;
+		int vy = 0;
+		(void)wlr_scene_node_coords(&view->scene_tree->node, &vx, &vy);
+
+		int width = 0;
+		int height = 0;
+		view_get_current_size(view, &width, &height);
+
+		uint32_t edges = 0;
+		if (width > 0) {
+			int local_x = (int)server->cursor->x - vx;
+			edges |= local_x < width / 2 ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT;
+		} else {
+			edges |= WLR_EDGE_RIGHT;
+		}
+
+		if (height > 0) {
+			int local_y = (int)server->cursor->y - vy;
+			edges |= local_y < height / 2 ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM;
+		} else {
+			edges |= WLR_EDGE_BOTTOM;
+		}
+
+		begin_interactive(view, ASWL_CURSOR_RESIZE, edges, event->button);
+		return;
+	}
 }
 
 static void handle_cursor_axis(struct wl_listener *listener, void *data)
@@ -650,10 +1005,13 @@ static void handle_new_output(struct wl_listener *listener, void *data)
 	arrange_layers(server);
 }
 
-static void arrange_layers_for_output(struct aswl_server *server, struct wlr_output *output)
+static void arrange_layers_for_output(struct aswl_output *out)
 {
-	if (output == NULL)
+	if (out == NULL || out->server == NULL || out->wlr_output == NULL)
 		return;
+
+	struct aswl_server *server = out->server;
+	struct wlr_output *output = out->wlr_output;
 
 	struct wlr_box full = { 0 };
 	wlr_output_layout_get_box(server->output_layout, output, &full);
@@ -691,13 +1049,16 @@ static void arrange_layers_for_output(struct aswl_server *server, struct wlr_out
 			wlr_scene_layer_surface_v1_configure(ls->scene, &full, &usable);
 		}
 	}
+
+	out->full_box = full;
+	out->usable_box = usable;
 }
 
 static void arrange_layers(struct aswl_server *server)
 {
 	struct aswl_output *out;
 	wl_list_for_each(out, &server->outputs, link)
-		arrange_layers_for_output(server, out->wlr_output);
+		arrange_layers_for_output(out);
 }
 
 int main(int argc, char **argv)
