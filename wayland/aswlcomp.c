@@ -79,6 +79,13 @@ struct aswl_layer_surface {
 	struct wl_listener commit;
 };
 
+struct aswl_binding {
+	struct wl_list link; /* aswl_server.bindings */
+	uint32_t mods;
+	xkb_keysym_t keysym;
+	char *command;
+};
+
 struct aswl_output {
 	struct wl_list link; /* aswl_server.outputs */
 	struct aswl_server *server;
@@ -102,6 +109,8 @@ struct aswl_server {
 	struct wl_list views;
 	struct aswl_view *focused_view;
 	int cascade_offset;
+
+	struct wl_list bindings;
 
 	struct wlr_scene_tree *layer_trees[4];
 	struct wlr_scene_tree *xdg_tree;
@@ -153,7 +162,8 @@ static void usage(const char *prog)
 	fprintf(stderr, "Usage: %s [--socket NAME] [--autostart PATH] [--spawn CMD]...\n", prog);
 	fprintf(stderr, "  --socket NAME  Use a fixed WAYLAND_DISPLAY socket name\n");
 	fprintf(stderr, "  --autostart PATH\n");
-	fprintf(stderr, "                Spawn commands from a file (one per line, optional 'exec ' prefix)\n");
+	fprintf(stderr, "                Spawn commands from a file.\n");
+	fprintf(stderr, "                Lines are either: 'exec CMD' / 'CMD' / 'bind MODS+KEY exec CMD'\n");
 	fprintf(stderr, "                Default: $XDG_CONFIG_HOME/afterstep/aswlcomp.autostart\n");
 	fprintf(stderr, "                         or ~/.config/afterstep/aswlcomp.autostart\n");
 	fprintf(stderr, "  --spawn CMD    Spawn a client command after startup (may be repeated)\n");
@@ -174,6 +184,19 @@ static void spawn_command(const char *command)
 	}
 }
 
+static bool str_ieq(const char *a, const char *b)
+{
+	if (a == NULL || b == NULL)
+		return false;
+	while (*a != '\0' && *b != '\0') {
+		if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
+			return false;
+		a++;
+		b++;
+	}
+	return *a == '\0' && *b == '\0';
+}
+
 static char *lstrip(char *s)
 {
 	if (s == NULL)
@@ -190,6 +213,66 @@ static void rstrip_inplace(char *s)
 	size_t len = strlen(s);
 	while (len > 0 && isspace((unsigned char)s[len - 1]))
 		s[--len] = '\0';
+}
+
+static bool parse_modifiers(char *mods_str, uint32_t *mods_out)
+{
+	if (mods_out == NULL)
+		return false;
+	*mods_out = 0;
+
+	if (mods_str == NULL || mods_str[0] == '\0')
+		return true;
+
+	char *saveptr = NULL;
+	for (char *tok = strtok_r(mods_str, "+", &saveptr); tok != NULL; tok = strtok_r(NULL, "+", &saveptr)) {
+		tok = lstrip(tok);
+		rstrip_inplace(tok);
+		if (tok[0] == '\0')
+			continue;
+
+		if (str_ieq(tok, "alt") || str_ieq(tok, "mod1")) {
+			*mods_out |= WLR_MODIFIER_ALT;
+			continue;
+		}
+		if (str_ieq(tok, "ctrl") || str_ieq(tok, "control")) {
+			*mods_out |= WLR_MODIFIER_CTRL;
+			continue;
+		}
+		if (str_ieq(tok, "shift")) {
+			*mods_out |= WLR_MODIFIER_SHIFT;
+			continue;
+		}
+		if (str_ieq(tok, "logo") || str_ieq(tok, "super") || str_ieq(tok, "mod4")) {
+			*mods_out |= WLR_MODIFIER_LOGO;
+			continue;
+		}
+
+		fprintf(stderr, "aswlcomp: bind: unknown modifier: %s\n", tok);
+		return false;
+	}
+
+	return true;
+}
+
+static void add_binding(struct aswl_server *server, uint32_t mods, xkb_keysym_t keysym, const char *command)
+{
+	if (server == NULL || command == NULL || command[0] == '\0' || keysym == XKB_KEY_NoSymbol)
+		return;
+
+	struct aswl_binding *b = calloc(1, sizeof(*b));
+	if (b == NULL)
+		return;
+
+	b->mods = mods;
+	b->keysym = keysym;
+	b->command = strdup(command);
+	if (b->command == NULL) {
+		free(b);
+		return;
+	}
+
+	wl_list_insert(server->bindings.prev, &b->link);
 }
 
 static bool default_autostart_path(char *out, size_t out_size)
@@ -212,7 +295,7 @@ static bool default_autostart_path(char *out, size_t out_size)
 	return true;
 }
 
-static void spawn_autostart_file(const char *path, bool log_missing)
+static void load_config_file(struct aswl_server *server, const char *path, bool log_missing)
 {
 	if (path == NULL || path[0] == '\0')
 		return;
@@ -231,6 +314,68 @@ static void spawn_autostart_file(const char *path, bool log_missing)
 		char *cmd = lstrip(line);
 		if (cmd == NULL || cmd[0] == '\0' || cmd[0] == '#')
 			continue;
+
+		if (strncmp(cmd, "bind", 4) == 0 && isspace((unsigned char)cmd[4])) {
+			char *rest = lstrip(cmd + 4);
+			if (rest == NULL || rest[0] == '\0') {
+				fprintf(stderr, "aswlcomp: bind: missing binding\n");
+				continue;
+			}
+
+			char *combo = rest;
+			while (*rest != '\0' && !isspace((unsigned char)*rest))
+				rest++;
+			if (*rest == '\0') {
+				fprintf(stderr, "aswlcomp: bind: missing command\n");
+				continue;
+			}
+			*rest++ = '\0';
+			char *bind_cmd = lstrip(rest);
+			rstrip_inplace(bind_cmd);
+			if (bind_cmd[0] == '\0') {
+				fprintf(stderr, "aswlcomp: bind: missing command\n");
+				continue;
+			}
+
+			char *key_str = combo;
+			char *mods_str = NULL;
+			char *plus = strrchr(combo, '+');
+			if (plus != NULL) {
+				*plus = '\0';
+				mods_str = combo;
+				key_str = plus + 1;
+			}
+
+			key_str = lstrip(key_str);
+			rstrip_inplace(key_str);
+			if (key_str[0] == '\0') {
+				fprintf(stderr, "aswlcomp: bind: missing key\n");
+				continue;
+			}
+
+			xkb_keysym_t keysym = xkb_keysym_from_name(key_str, XKB_KEYSYM_CASE_INSENSITIVE);
+			if (keysym == XKB_KEY_NoSymbol) {
+				fprintf(stderr, "aswlcomp: bind: unknown keysym: %s\n", key_str);
+				continue;
+			}
+
+			uint32_t mods = 0;
+			if (mods_str != NULL && mods_str[0] != '\0') {
+				if (!parse_modifiers(mods_str, &mods))
+					continue;
+			}
+
+			if (strncmp(bind_cmd, "exec", 4) == 0 && isspace((unsigned char)bind_cmd[4]))
+				bind_cmd = lstrip(bind_cmd + 4);
+			if (bind_cmd[0] == '\0') {
+				fprintf(stderr, "aswlcomp: bind: missing command\n");
+				continue;
+			}
+
+			fprintf(stderr, "aswlcomp: bind: mods=0x%x key=%s cmd=%s\n", mods, key_str, bind_cmd);
+			add_binding(server, mods, keysym, bind_cmd);
+			continue;
+		}
 
 		if (strncmp(cmd, "exec", 4) == 0 && isspace((unsigned char)cmd[4]))
 			cmd = lstrip(cmd + 4);
@@ -644,14 +789,28 @@ static void handle_keyboard_key(struct wl_listener *listener, void *data)
 
 	if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		uint32_t mods = wlr_keyboard_get_modifiers(keyboard->wlr_keyboard);
+		uint32_t mods_masked = mods & (WLR_MODIFIER_ALT | WLR_MODIFIER_CTRL | WLR_MODIFIER_SHIFT | WLR_MODIFIER_LOGO);
 		uint32_t keycode = event->keycode + 8;
 
 		const xkb_keysym_t *syms = NULL;
 		int nsyms = xkb_state_key_get_syms(keyboard->wlr_keyboard->xkb_state, keycode, &syms);
-		if (nsyms == 1 && syms[0] == XKB_KEY_Escape && (mods & WLR_MODIFIER_ALT) != 0) {
-			fprintf(stderr, "aswlcomp: Alt+Escape: exit\n");
-			wl_display_terminate(server->display);
-			return;
+		if (nsyms == 1) {
+			xkb_keysym_t sym = syms[0];
+
+			if (sym == XKB_KEY_Escape && (mods_masked & WLR_MODIFIER_ALT) != 0) {
+				fprintf(stderr, "aswlcomp: Alt+Escape: exit\n");
+				wl_display_terminate(server->display);
+				return;
+			}
+
+			struct aswl_binding *b;
+			wl_list_for_each(b, &server->bindings, link) {
+				if (b->mods == mods_masked && b->keysym == sym) {
+					fprintf(stderr, "aswlcomp: exec: %s\n", b->command);
+					spawn_command(b->command);
+					return;
+				}
+			}
 		}
 	}
 
@@ -1282,6 +1441,7 @@ int main(int argc, char **argv)
 	wl_list_init(&server.views);
 	wl_list_init(&server.keyboards);
 	wl_list_init(&server.layer_surfaces);
+	wl_list_init(&server.bindings);
 
 	server.layer_trees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_trees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&server.scene->tree);
@@ -1336,11 +1496,11 @@ int main(int argc, char **argv)
 
 	if (autostart_path != NULL) {
 		fprintf(stderr, "aswlcomp: autostart file: %s\n", autostart_path);
-		spawn_autostart_file(autostart_path, true);
+		load_config_file(&server, autostart_path, true);
 	} else {
 		char default_path[4096];
 		if (default_autostart_path(default_path, sizeof(default_path)))
-			spawn_autostart_file(default_path, false);
+			load_config_file(&server, default_path, false);
 	}
 
 	for (size_t i = 0; i < spawn_count; i++) {

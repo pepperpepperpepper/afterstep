@@ -77,7 +77,7 @@ Tips:
 - `Alt+Escape` exits `aswlcomp`
 - `Alt+LMB` moves windows, `Alt+RMB` resizes windows
 - `--spawn` may be repeated to launch multiple clients
-- Optional autostart file: `~/.config/afterstep/aswlcomp.autostart` (one command per line, optional `exec ` prefix)
+- Optional autostart file: `~/.config/afterstep/aswlcomp.autostart` (one command per line, optional `exec ` prefix; also supports `bind MODS+KEY exec CMD`)
 
 ## Notes
 
