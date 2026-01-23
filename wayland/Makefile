@@ -73,7 +73,7 @@ CFLAGS += $(PNG_CFLAGS) -DHAVE_LIBPNG=1
 EXTRA_LIBS += $(PNG_LIBS)
 endif
 
-.PHONY: all clean
+.PHONY: all clean run-nested
 
 all: aswlpanel
 
@@ -120,3 +120,6 @@ $(LAYER_SRC): $(LAYER_SHELL_XML) | $(GEN_DIR)
 
 clean:
 	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlcomp aswlcomp.o
+
+run-nested: aswlcomp aswlpanel
+	./run-nested.sh

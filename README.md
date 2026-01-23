@@ -72,6 +72,12 @@ Nested Wayland dev run (from an existing Wayland session):
 WLR_BACKENDS=wayland ./wayland/aswlcomp --socket aswlcomp-0 --spawn "./wayland/aswlpanel"
 ```
 
+Convenience target (auto-selects `WLR_BACKENDS=wayland` or `x11` and uses a temporary autostart file):
+
+```sh
+make -C wayland run-nested
+```
+
 Tips:
 
 - `Alt+Escape` exits `aswlcomp`
