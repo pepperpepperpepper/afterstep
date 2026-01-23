@@ -20,6 +20,7 @@
 #include <wayland-client.h>
 
 #include "xdg-shell-client-protocol.h"
+#include "afterstep-control-v1-client-protocol.h"
 #if HAVE_WLR_LAYER_SHELL
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #endif
@@ -58,6 +59,7 @@ struct as_state {
 	struct wl_pointer *pointer;
 
 	struct xdg_wm_base *xdg_wm_base;
+	struct afterstep_control_v1 *control;
 
 #if HAVE_WLR_LAYER_SHELL
 	struct zwlr_layer_shell_v1 *layer_shell;
@@ -1492,6 +1494,21 @@ static void spawn_command(const char *command)
 	}
 }
 
+static void as_state_launch_command(struct as_state *state, const char *command)
+{
+	if (command == NULL || command[0] == '\0')
+		return;
+
+	if (state != NULL && state->control != NULL) {
+		fprintf(stderr, "aswlpanel: compositor exec %s\n", command);
+		afterstep_control_v1_exec(state->control, command);
+		(void)wl_display_flush(state->display);
+		return;
+	}
+
+	spawn_command(command);
+}
+
 static void pointer_button(void *data,
                            struct wl_pointer *pointer,
                            uint32_t serial,
@@ -1529,7 +1546,7 @@ static void pointer_button(void *data,
 	fprintf(stderr, "aswlpanel: launch %s: %s\n",
 	        state->buttons[clicked].label,
 	        state->buttons[clicked].command);
-	spawn_command(state->buttons[clicked].command);
+	as_state_launch_command(state, state->buttons[clicked].command);
 }
 
 static void pointer_axis(void *data,
@@ -1633,6 +1650,12 @@ static void registry_global(void *data,
 
 	if (strcmp(interface, wl_shm_interface.name) == 0) {
 		state->shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+		return;
+	}
+
+	if (strcmp(interface, afterstep_control_v1_interface.name) == 0) {
+		(void)version;
+		state->control = wl_registry_bind(registry, name, &afterstep_control_v1_interface, 1);
 		return;
 	}
 
@@ -1745,6 +1768,9 @@ static void cleanup(struct as_state *state)
 		xdg_surface_destroy(state->xdg_surface);
 	if (state->xdg_wm_base != NULL)
 		xdg_wm_base_destroy(state->xdg_wm_base);
+
+	if (state->control != NULL)
+		afterstep_control_v1_destroy(state->control);
 
 	if (state->surface != NULL)
 		wl_surface_destroy(state->surface);

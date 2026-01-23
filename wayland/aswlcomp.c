@@ -33,6 +33,8 @@
 
 #include <xkbcommon/xkbcommon.h>
 
+#include "afterstep-control-v1-protocol.h"
+
 enum aswl_cursor_mode {
 	ASWL_CURSOR_PASSTHROUGH = 0,
 	ASWL_CURSOR_MOVE,
@@ -149,6 +151,8 @@ struct aswl_server {
 	int grab_view_height;
 	uint32_t grab_edges;
 	uint32_t grab_button;
+
+	struct wl_global *control_global;
 };
 
 static void arrange_layers(struct aswl_server *server);
@@ -182,6 +186,47 @@ static void spawn_command(const char *command)
 		execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		_exit(127);
 	}
+}
+
+static void aswl_control_destroy(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	wl_resource_destroy(resource);
+}
+
+static void aswl_control_exec(struct wl_client *client, struct wl_resource *resource, const char *command)
+{
+	(void)client;
+	(void)resource;
+
+	if (command == NULL || command[0] == '\0')
+		return;
+
+	if (strlen(command) > 4096) {
+		fprintf(stderr, "aswlcomp: control exec: command too long\n");
+		return;
+	}
+
+	fprintf(stderr, "aswlcomp: control exec: %s\n", command);
+	spawn_command(command);
+}
+
+static const struct afterstep_control_v1_interface aswl_control_impl = {
+	.destroy = aswl_control_destroy,
+	.exec = aswl_control_exec,
+};
+
+static void aswl_control_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id)
+{
+	struct aswl_server *server = data;
+	uint32_t v = version > 1 ? 1 : version;
+	struct wl_resource *res = wl_resource_create(client, &afterstep_control_v1_interface, v, id);
+	if (res == NULL) {
+		wl_client_post_no_memory(client);
+		return;
+	}
+
+	wl_resource_set_implementation(res, &aswl_control_impl, server, NULL);
 }
 
 static bool str_ieq(const char *a, const char *b)
@@ -1378,6 +1423,12 @@ int main(int argc, char **argv)
 	(void)wlr_compositor_create(server.display, 6, server.renderer);
 	(void)wlr_subcompositor_create(server.display);
 	(void)wlr_data_device_manager_create(server.display);
+
+	server.control_global = wl_global_create(server.display, &afterstep_control_v1_interface, 1, &server, aswl_control_bind);
+	if (server.control_global == NULL) {
+		fprintf(stderr, "aswlcomp: wl_global_create(afterstep_control_v1) failed\n");
+		return 1;
+	}
 
 	server.output_layout = wlr_output_layout_create(server.display);
 	if (server.output_layout == NULL) {

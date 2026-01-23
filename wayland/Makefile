@@ -41,6 +41,7 @@ XDG_PKGDATADIR := $(shell $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols 
 XDG_SHELL_XML := $(XDG_PKGDATADIR)/stable/xdg-shell/xdg-shell.xml
 
 LAYER_SHELL_XML := protocols/wlr-layer-shell-unstable-v1.xml
+CONTROL_XML := protocols/afterstep-control-v1.xml
 
 GEN_DIR := gen
 
@@ -52,6 +53,10 @@ LAYER_HDR := $(GEN_DIR)/wlr-layer-shell-unstable-v1-client-protocol.h
 LAYER_SRC := $(GEN_DIR)/wlr-layer-shell-unstable-v1-protocol.c
 LAYER_SERVER_HDR := $(GEN_DIR)/wlr-layer-shell-unstable-v1-protocol.h
 
+CONTROL_HDR := $(GEN_DIR)/afterstep-control-v1-client-protocol.h
+CONTROL_SRC := $(GEN_DIR)/afterstep-control-v1-protocol.c
+CONTROL_SERVER_HDR := $(GEN_DIR)/afterstep-control-v1-protocol.h
+
 ifeq ($(wildcard $(XDG_SHELL_XML)),)
 $(error Missing xdg-shell XML. Install wayland-protocols (and make sure pkg-config can find it).)
 endif
@@ -60,12 +65,19 @@ ifeq ($(wildcard $(LAYER_SHELL_XML)),)
 $(error Missing layer-shell XML. Expected $(LAYER_SHELL_XML).)
 endif
 
+ifeq ($(wildcard $(CONTROL_XML)),)
+$(error Missing afterstep-control XML. Expected $(CONTROL_XML).)
+endif
+
 PROTOCOL_SRCS := $(XDG_SRC)
 PROTOCOL_HDRS := $(XDG_HDR)
 
 PROTOCOL_SRCS += $(LAYER_SRC)
 PROTOCOL_HDRS += $(LAYER_HDR)
 CFLAGS += -DHAVE_WLR_LAYER_SHELL=1
+
+PROTOCOL_SRCS += $(CONTROL_SRC)
+PROTOCOL_HDRS += $(CONTROL_HDR)
 
 EXTRA_LIBS :=
 ifneq ($(strip $(PNG_LIBS)),)
@@ -88,10 +100,10 @@ aswlcomp:
 	@echo "Missing wlroots (pkg-config 'wlroots'). Install wlroots development files." 1>&2
 	@exit 1
 else
-aswlcomp: aswlcomp.o
-	$(CC) $(CFLAGS) -o $@ aswlcomp.o $(WLROOTS_LIBS) $(WAYLAND_SERVER_LIBS) $(XKBCOMMON_LIBS)
+aswlcomp: aswlcomp.o $(CONTROL_SRC)
+	$(CC) $(CFLAGS) -o $@ aswlcomp.o $(CONTROL_SRC) $(WLROOTS_LIBS) $(WAYLAND_SERVER_LIBS) $(XKBCOMMON_LIBS)
 
-ASWLCOMP_PROTOCOL_HDRS := $(XDG_SERVER_HDR) $(LAYER_SERVER_HDR)
+ASWLCOMP_PROTOCOL_HDRS := $(XDG_SERVER_HDR) $(LAYER_SERVER_HDR) $(CONTROL_SERVER_HDR)
 
 aswlcomp.o: aswlcomp.c $(ASWLCOMP_PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WLROOTS_CFLAGS) -I$(GEN_DIR) -DWLR_USE_UNSTABLE -DHAVE_WLROOTS=1 -c -o $@ $<
@@ -116,6 +128,15 @@ $(LAYER_SERVER_HDR): $(LAYER_SHELL_XML) | $(GEN_DIR)
 	$(WAYLAND_SCANNER) server-header $< $@
 
 $(LAYER_SRC): $(LAYER_SHELL_XML) | $(GEN_DIR)
+	$(WAYLAND_SCANNER) private-code $< $@
+
+$(CONTROL_HDR): $(CONTROL_XML) | $(GEN_DIR)
+	$(WAYLAND_SCANNER) client-header $< $@
+
+$(CONTROL_SERVER_HDR): $(CONTROL_XML) | $(GEN_DIR)
+	$(WAYLAND_SCANNER) server-header $< $@
+
+$(CONTROL_SRC): $(CONTROL_XML) | $(GEN_DIR)
 	$(WAYLAND_SCANNER) private-code $< $@
 
 clean:

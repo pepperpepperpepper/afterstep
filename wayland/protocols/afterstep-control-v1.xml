@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="afterstep_control_v1">
+  <interface name="afterstep_control_v1" version="1">
+    <description summary="AfterStep compositor control">
+      Minimal control interface for the AfterStep wlroots compositor scaffold.
+      Used by Wayland clients in the AfterStep "suite" (panel, launchers, etc.)
+      to request actions from the compositor process.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="Destroy the control object"/>
+    </request>
+
+    <request name="exec">
+      <description summary="Execute a shell command">
+        Spawns COMMAND via /bin/sh -c in the compositor process.
+      </description>
+      <arg name="command" type="string" summary="Command to execute"/>
+    </request>
+  </interface>
+</protocol>
+
