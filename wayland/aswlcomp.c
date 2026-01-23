@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -149,9 +150,13 @@ static void end_interactive(struct aswl_server *server);
 
 static void usage(const char *prog)
 {
-	fprintf(stderr, "Usage: %s [--socket NAME] [--spawn CMD]\n", prog);
+	fprintf(stderr, "Usage: %s [--socket NAME] [--autostart PATH] [--spawn CMD]...\n", prog);
 	fprintf(stderr, "  --socket NAME  Use a fixed WAYLAND_DISPLAY socket name\n");
-	fprintf(stderr, "  --spawn CMD    Spawn a client command after startup\n");
+	fprintf(stderr, "  --autostart PATH\n");
+	fprintf(stderr, "                Spawn commands from a file (one per line, optional 'exec ' prefix)\n");
+	fprintf(stderr, "                Default: $XDG_CONFIG_HOME/afterstep/aswlcomp.autostart\n");
+	fprintf(stderr, "                         or ~/.config/afterstep/aswlcomp.autostart\n");
+	fprintf(stderr, "  --spawn CMD    Spawn a client command after startup (may be repeated)\n");
 	fprintf(stderr, "                (CMD runs via /bin/sh -c with WAYLAND_DISPLAY set)\n");
 }
 
@@ -167,6 +172,78 @@ static void spawn_command(const char *command)
 		execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		_exit(127);
 	}
+}
+
+static char *lstrip(char *s)
+{
+	if (s == NULL)
+		return NULL;
+	while (*s != '\0' && isspace((unsigned char)*s))
+		s++;
+	return s;
+}
+
+static void rstrip_inplace(char *s)
+{
+	if (s == NULL)
+		return;
+	size_t len = strlen(s);
+	while (len > 0 && isspace((unsigned char)s[len - 1]))
+		s[--len] = '\0';
+}
+
+static bool default_autostart_path(char *out, size_t out_size)
+{
+	if (out == NULL || out_size == 0)
+		return false;
+
+	const char *xdg_config_home = getenv("XDG_CONFIG_HOME");
+	const char *home = getenv("HOME");
+
+	int n = -1;
+	if (xdg_config_home != NULL && xdg_config_home[0] != '\0') {
+		n = snprintf(out, out_size, "%s/afterstep/aswlcomp.autostart", xdg_config_home);
+	} else if (home != NULL && home[0] != '\0') {
+		n = snprintf(out, out_size, "%s/.config/afterstep/aswlcomp.autostart", home);
+	}
+
+	if (n < 0 || (size_t)n >= out_size)
+		return false;
+	return true;
+}
+
+static void spawn_autostart_file(const char *path, bool log_missing)
+{
+	if (path == NULL || path[0] == '\0')
+		return;
+
+	FILE *fp = fopen(path, "r");
+	if (fp == NULL) {
+		if (log_missing)
+			fprintf(stderr, "aswlcomp: autostart: %s: %s\n", path, strerror(errno));
+		return;
+	}
+
+	char *line = NULL;
+	size_t cap = 0;
+	while (getline(&line, &cap, fp) >= 0) {
+		rstrip_inplace(line);
+		char *cmd = lstrip(line);
+		if (cmd == NULL || cmd[0] == '\0' || cmd[0] == '#')
+			continue;
+
+		if (strncmp(cmd, "exec", 4) == 0 && isspace((unsigned char)cmd[4]))
+			cmd = lstrip(cmd + 4);
+
+		if (cmd[0] == '\0')
+			continue;
+
+		fprintf(stderr, "aswlcomp: autostart: %s\n", cmd);
+		spawn_command(cmd);
+	}
+
+	free(line);
+	fclose(fp);
 }
 
 static struct wlr_surface *surface_at(struct aswl_server *server, double lx, double ly, double *sx, double *sy)
@@ -1064,7 +1141,9 @@ static void arrange_layers(struct aswl_server *server)
 int main(int argc, char **argv)
 {
 	const char *socket_name = NULL;
-	const char *spawn_cmd = NULL;
+	const char *autostart_path = NULL;
+	const char **spawn_cmds = NULL;
+	size_t spawn_count = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0)) {
@@ -1076,20 +1155,34 @@ int main(int argc, char **argv)
 				usage(argv[0]);
 				return 2;
 			}
-			socket_name = argv[++i];
-			continue;
-		}
-		if (strcmp(argv[i], "--spawn") == 0) {
-			if (i + 1 >= argc) {
-				usage(argv[0]);
-				return 2;
+				socket_name = argv[++i];
+				continue;
 			}
-			spawn_cmd = argv[++i];
-			continue;
-		}
+			if (strcmp(argv[i], "--autostart") == 0) {
+				if (i + 1 >= argc) {
+					usage(argv[0]);
+					return 2;
+				}
+				autostart_path = argv[++i];
+				continue;
+			}
+			if (strcmp(argv[i], "--spawn") == 0) {
+				if (i + 1 >= argc) {
+					usage(argv[0]);
+					return 2;
+				}
+				const char **new_spawn = realloc(spawn_cmds, (spawn_count + 1) * sizeof(*new_spawn));
+				if (new_spawn == NULL) {
+					fprintf(stderr, "aswlcomp: realloc failed\n");
+					return 1;
+				}
+				spawn_cmds = new_spawn;
+				spawn_cmds[spawn_count++] = argv[++i];
+				continue;
+			}
 
-		fprintf(stderr, "aswlcomp: unknown argument: %s\n", argv[i]);
-		usage(argv[0]);
+			fprintf(stderr, "aswlcomp: unknown argument: %s\n", argv[i]);
+			usage(argv[0]);
 		return 2;
 	}
 
@@ -1241,11 +1334,21 @@ int main(int argc, char **argv)
 	setenv("WAYLAND_DISPLAY", socket, 1);
 	fprintf(stderr, "aswlcomp: running on WAYLAND_DISPLAY=%s\n", socket);
 
-	if (spawn_cmd != NULL) {
-		fprintf(stderr, "aswlcomp: spawn: %s\n", spawn_cmd);
-		spawn_command(spawn_cmd);
+	if (autostart_path != NULL) {
+		fprintf(stderr, "aswlcomp: autostart file: %s\n", autostart_path);
+		spawn_autostart_file(autostart_path, true);
+	} else {
+		char default_path[4096];
+		if (default_autostart_path(default_path, sizeof(default_path)))
+			spawn_autostart_file(default_path, false);
 	}
 
+	for (size_t i = 0; i < spawn_count; i++) {
+		fprintf(stderr, "aswlcomp: spawn: %s\n", spawn_cmds[i]);
+		spawn_command(spawn_cmds[i]);
+	}
+
+	free(spawn_cmds);
 	wl_display_run(server.display);
 
 	wl_display_destroy(server.display);

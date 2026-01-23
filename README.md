@@ -72,7 +72,12 @@ Nested Wayland dev run (from an existing Wayland session):
 WLR_BACKENDS=wayland ./wayland/aswlcomp --socket aswlcomp-0 --spawn "./wayland/aswlpanel"
 ```
 
-Tip: `Alt+Escape` exits `aswlcomp`.
+Tips:
+
+- `Alt+Escape` exits `aswlcomp`
+- `Alt+LMB` moves windows, `Alt+RMB` resizes windows
+- `--spawn` may be repeated to launch multiple clients
+- Optional autostart file: `~/.config/afterstep/aswlcomp.autostart` (one command per line, optional `exec ` prefix)
 
 ## Notes
 
