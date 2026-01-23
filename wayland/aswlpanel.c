@@ -13,6 +13,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef HAVE_LIBPNG
+#include <png.h>
+#endif
+
 #include <wayland-client.h>
 
 #include "xdg-shell-client-protocol.h"
@@ -28,6 +32,10 @@
 struct as_button {
 	char *label;
 	char *command;
+	char *icon_path;
+	uint32_t *icon_argb;
+	int icon_w;
+	int icon_h;
 };
 
 struct as_buffer {
@@ -234,14 +242,656 @@ static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int 
 	}
 }
 
+static void as_buffer_blend_pixel(struct as_buffer *buf, int x, int y, uint32_t src_argb)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+
+	if (x < 0 || y < 0 || x >= buf->width || y >= buf->height)
+		return;
+
+	uint8_t sa = (uint8_t)(src_argb >> 24);
+	if (sa == 0)
+		return;
+
+	uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)y * (size_t)buf->stride);
+
+	if (sa == 255) {
+		row[x] = 0xFF000000u | (src_argb & 0x00FFFFFFu);
+		return;
+	}
+
+	uint32_t dst = row[x];
+	uint8_t dr = (uint8_t)(dst >> 16);
+	uint8_t dg = (uint8_t)(dst >> 8);
+	uint8_t db = (uint8_t)dst;
+
+	uint8_t sr = (uint8_t)(src_argb >> 16);
+	uint8_t sg = (uint8_t)(src_argb >> 8);
+	uint8_t sb = (uint8_t)src_argb;
+
+	uint16_t inv = (uint16_t)(255 - sa);
+	uint8_t or_ = (uint8_t)((sa * sr + inv * dr) / 255);
+	uint8_t og = (uint8_t)((sa * sg + inv * dg) / 255);
+	uint8_t ob = (uint8_t)((sa * sb + inv * db) / 255);
+
+	row[x] = 0xFF000000u | ((uint32_t)or_ << 16) | ((uint32_t)og << 8) | (uint32_t)ob;
+}
+
+static void as_buffer_draw_image_nearest(struct as_buffer *buf,
+                                         int dx,
+                                         int dy,
+                                         int dw,
+                                         int dh,
+                                         const uint32_t *src_argb,
+                                         int sw,
+                                         int sh)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (src_argb == NULL || sw <= 0 || sh <= 0)
+		return;
+	if (dw <= 0 || dh <= 0)
+		return;
+
+	for (int y = 0; y < dh; y++) {
+		int sy = (int)((int64_t)y * sh / dh);
+		if (sy < 0)
+			sy = 0;
+		if (sy >= sh)
+			sy = sh - 1;
+		for (int x = 0; x < dw; x++) {
+			int sx = (int)((int64_t)x * sw / dw);
+			if (sx < 0)
+				sx = 0;
+			if (sx >= sw)
+				sx = sw - 1;
+			as_buffer_blend_pixel(buf,
+			                      dx + x,
+			                      dy + y,
+			                      src_argb[(size_t)sy * (size_t)sw + (size_t)sx]);
+		}
+	}
+}
+
+static int clamp_int(int v, int lo, int hi)
+{
+	if (v < lo)
+		return lo;
+	if (v > hi)
+		return hi;
+	return v;
+}
+
+static void as_button_destroy_icon(struct as_button *button)
+{
+	if (button == NULL)
+		return;
+	free(button->icon_argb);
+	button->icon_argb = NULL;
+	button->icon_w = 0;
+	button->icon_h = 0;
+}
+
+static void as_button_destroy(struct as_button *button)
+{
+	if (button == NULL)
+		return;
+	free(button->label);
+	free(button->command);
+	free(button->icon_path);
+	as_button_destroy_icon(button);
+	memset(button, 0, sizeof(*button));
+}
+
+static char *as_expand_tilde(const char *path)
+{
+	if (path == NULL)
+		return NULL;
+	if (path[0] != '~' || path[1] != '/')
+		return strdup(path);
+
+	const char *home = getenv("HOME");
+	if (home == NULL || home[0] == '\0')
+		return strdup(path);
+
+	char *out = NULL;
+	if (asprintf(&out, "%s/%s", home, path + 2) < 0)
+		return NULL;
+	return out;
+}
+
+#ifdef HAVE_LIBPNG
+static bool as_load_png_argb(const char *path, uint32_t **out_argb, int *out_w, int *out_h)
+{
+	if (out_argb == NULL || out_w == NULL || out_h == NULL)
+		return false;
+
+	*out_argb = NULL;
+	*out_w = 0;
+	*out_h = 0;
+
+	if (path == NULL || path[0] == '\0')
+		return false;
+
+	FILE *fp = fopen(path, "rb");
+	if (fp == NULL)
+		return false;
+
+	uint8_t header[8];
+	if (fread(header, 1, sizeof(header), fp) != sizeof(header)) {
+		fclose(fp);
+		return false;
+	}
+	if (png_sig_cmp(header, 0, sizeof(header)) != 0) {
+		fclose(fp);
+		return false;
+	}
+
+	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png == NULL) {
+		fclose(fp);
+		return false;
+	}
+
+	png_infop info = png_create_info_struct(png);
+	if (info == NULL) {
+		png_destroy_read_struct(&png, NULL, NULL);
+		fclose(fp);
+		return false;
+	}
+
+	uint32_t *argb = NULL;
+	uint8_t *rgba = NULL;
+	png_bytep *rows = NULL;
+
+	if (setjmp(png_jmpbuf(png)) != 0)
+		goto fail;
+
+	png_init_io(png, fp);
+	png_set_sig_bytes(png, sizeof(header));
+	png_read_info(png, info);
+
+	png_uint_32 w = png_get_image_width(png, info);
+	png_uint_32 h = png_get_image_height(png, info);
+	int color_type = png_get_color_type(png, info);
+	int bit_depth = png_get_bit_depth(png, info);
+
+	if (w == 0 || h == 0)
+		goto fail;
+	if (w > 4096 || h > 4096)
+		goto fail;
+
+	if (bit_depth == 16)
+		png_set_strip_16(png);
+	if (color_type == PNG_COLOR_TYPE_PALETTE)
+		png_set_palette_to_rgb(png);
+	if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
+		png_set_expand_gray_1_2_4_to_8(png);
+	if (png_get_valid(png, info, PNG_INFO_tRNS))
+		png_set_tRNS_to_alpha(png);
+	if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+		png_set_gray_to_rgb(png);
+	if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_PALETTE)
+		png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
+
+	png_read_update_info(png, info);
+
+	png_size_t rowbytes = png_get_rowbytes(png, info);
+	if (rowbytes == 0)
+		goto fail;
+	if (rowbytes / 4 != w)
+		goto fail;
+
+	rgba = malloc((size_t)rowbytes * (size_t)h);
+	rows = malloc(sizeof(*rows) * (size_t)h);
+	if (rgba == NULL || rows == NULL)
+		goto fail;
+
+	for (png_uint_32 y = 0; y < h; y++)
+		rows[y] = (png_bytep)(rgba + (size_t)y * (size_t)rowbytes);
+
+	png_read_image(png, rows);
+	png_read_end(png, NULL);
+
+	argb = malloc((size_t)w * (size_t)h * sizeof(*argb));
+	if (argb == NULL)
+		goto fail;
+
+	for (png_uint_32 y = 0; y < h; y++) {
+		const uint8_t *src = rgba + (size_t)y * (size_t)rowbytes;
+		for (png_uint_32 x = 0; x < w; x++) {
+			uint8_t r = src[x * 4 + 0];
+			uint8_t g = src[x * 4 + 1];
+			uint8_t b = src[x * 4 + 2];
+			uint8_t a = src[x * 4 + 3];
+			argb[y * (size_t)w + x] = ((uint32_t)a << 24) |
+			                         ((uint32_t)r << 16) |
+			                         ((uint32_t)g << 8) |
+			                         (uint32_t)b;
+		}
+	}
+
+	free(rgba);
+	free(rows);
+	png_destroy_read_struct(&png, &info, NULL);
+	fclose(fp);
+
+	*out_argb = argb;
+	*out_w = (int)w;
+	*out_h = (int)h;
+	return true;
+
+fail:
+	free(argb);
+	free(rgba);
+	free(rows);
+	png_destroy_read_struct(&png, &info, NULL);
+	fclose(fp);
+	return false;
+}
+#endif
+
+static void as_button_try_load_icon(struct as_button *button)
+{
+	if (button == NULL)
+		return;
+
+	as_button_destroy_icon(button);
+
+	if (button->icon_path == NULL || button->icon_path[0] == '\0')
+		return;
+
+#ifdef HAVE_LIBPNG
+	char *path = as_expand_tilde(button->icon_path);
+	if (path == NULL)
+		return;
+
+	uint32_t *pixels = NULL;
+	int w = 0;
+	int h = 0;
+	if (as_load_png_argb(path, &pixels, &w, &h)) {
+		button->icon_argb = pixels;
+		button->icon_w = w;
+		button->icon_h = h;
+	} else {
+		free(pixels);
+	}
+	free(path);
+#endif
+}
+
+static const uint8_t *as_font5x7_rows(char c)
+{
+	if (c >= 'a' && c <= 'z')
+		c = (char)('A' + (c - 'a'));
+
+	switch (c) {
+	case ' ':
+	{
+		static const uint8_t rows[7] = { 0, 0, 0, 0, 0, 0, 0 };
+		return rows;
+	}
+	case '-':
+	{
+		static const uint8_t rows[7] = { 0, 0, 0, 0x1F, 0, 0, 0 };
+		return rows;
+	}
+	case '_':
+	{
+		static const uint8_t rows[7] = { 0, 0, 0, 0, 0, 0, 0x1F };
+		return rows;
+	}
+	case '.':
+	{
+		static const uint8_t rows[7] = { 0, 0, 0, 0, 0, 0, 0x04 };
+		return rows;
+	}
+	case ':':
+	{
+		static const uint8_t rows[7] = { 0, 0x04, 0, 0, 0x04, 0, 0 };
+		return rows;
+	}
+	case '+':
+	{
+		static const uint8_t rows[7] = { 0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0 };
+		return rows;
+	}
+	case '/':
+	{
+		static const uint8_t rows[7] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0, 0 };
+		return rows;
+	}
+	case '?':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x01, 0x02, 0x04, 0, 0x04 };
+		return rows;
+	}
+	case '0':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E };
+		return rows;
+	}
+	case '1':
+	{
+		static const uint8_t rows[7] = { 0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E };
+		return rows;
+	}
+	case '2':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F };
+		return rows;
+	}
+	case '3':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x01, 0x06, 0x01, 0x11, 0x0E };
+		return rows;
+	}
+	case '4':
+	{
+		static const uint8_t rows[7] = { 0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02 };
+		return rows;
+	}
+	case '5':
+	{
+		static const uint8_t rows[7] = { 0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E };
+		return rows;
+	}
+	case '6':
+	{
+		static const uint8_t rows[7] = { 0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E };
+		return rows;
+	}
+	case '7':
+	{
+		static const uint8_t rows[7] = { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08 };
+		return rows;
+	}
+	case '8':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E };
+		return rows;
+	}
+	case '9':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C };
+		return rows;
+	}
+	case 'A':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 };
+		return rows;
+	}
+	case 'B':
+	{
+		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E };
+		return rows;
+	}
+	case 'C':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E };
+		return rows;
+	}
+	case 'D':
+	{
+		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E };
+		return rows;
+	}
+	case 'E':
+	{
+		static const uint8_t rows[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F };
+		return rows;
+	}
+	case 'F':
+	{
+		static const uint8_t rows[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10 };
+		return rows;
+	}
+	case 'G':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x10, 0x10, 0x13, 0x11, 0x0E };
+		return rows;
+	}
+	case 'H':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 };
+		return rows;
+	}
+	case 'I':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E };
+		return rows;
+	}
+	case 'J':
+	{
+		static const uint8_t rows[7] = { 0x01, 0x01, 0x01, 0x01, 0x11, 0x11, 0x0E };
+		return rows;
+	}
+	case 'K':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11 };
+		return rows;
+	}
+	case 'L':
+	{
+		static const uint8_t rows[7] = { 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F };
+		return rows;
+	}
+	case 'M':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11 };
+		return rows;
+	}
+	case 'N':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11 };
+		return rows;
+	}
+	case 'O':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E };
+		return rows;
+	}
+	case 'P':
+	{
+		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10 };
+		return rows;
+	}
+	case 'Q':
+	{
+		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D };
+		return rows;
+	}
+	case 'R':
+	{
+		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11 };
+		return rows;
+	}
+	case 'S':
+	{
+		static const uint8_t rows[7] = { 0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E };
+		return rows;
+	}
+	case 'T':
+	{
+		static const uint8_t rows[7] = { 0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 };
+		return rows;
+	}
+	case 'U':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E };
+		return rows;
+	}
+	case 'V':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04 };
+		return rows;
+	}
+	case 'W':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11 };
+		return rows;
+	}
+	case 'X':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11 };
+		return rows;
+	}
+	case 'Y':
+	{
+		static const uint8_t rows[7] = { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 };
+		return rows;
+	}
+	case 'Z':
+	{
+		static const uint8_t rows[7] = { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F };
+		return rows;
+	}
+	default:
+		return as_font5x7_rows('?');
+	}
+}
+
+static int as_font5x7_glyph_w(int scale)
+{
+	return 5 * scale;
+}
+
+static int as_font5x7_glyph_h(int scale)
+{
+	return 7 * scale;
+}
+
+static int as_font5x7_spacing(int scale)
+{
+	return scale;
+}
+
+static int as_font5x7_text_width_n(const char *s, size_t n, int scale)
+{
+	if (s == NULL || n == 0)
+		return 0;
+
+	int w = 0;
+	int glyph_w = as_font5x7_glyph_w(scale);
+	int spacing = as_font5x7_spacing(scale);
+	for (size_t i = 0; i < n; i++) {
+		if (s[i] == '\0')
+			break;
+		if (w > 0)
+			w += spacing;
+		w += glyph_w;
+	}
+	return w;
+}
+
+static int as_font5x7_text_width(const char *s, int scale)
+{
+	if (s == NULL)
+		return 0;
+	return as_font5x7_text_width_n(s, strlen(s), scale);
+}
+
+static void as_buffer_draw_glyph5x7(struct as_buffer *buf, int x, int y, char c, int scale, uint32_t argb)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (scale <= 0)
+		return;
+
+	const uint8_t *rows = as_font5x7_rows(c);
+	int gw = as_font5x7_glyph_w(scale);
+	int gh = as_font5x7_glyph_h(scale);
+
+	for (int row = 0; row < 7; row++) {
+		uint8_t bits = rows[row] & 0x1F;
+		for (int col = 0; col < 5; col++) {
+			bool on = ((bits >> (4 - col)) & 0x1) != 0;
+			if (!on)
+				continue;
+			as_buffer_fill_rect(buf,
+			                    x + col * scale,
+			                    y + row * scale,
+			                    scale,
+			                    scale,
+			                    argb);
+		}
+	}
+
+	(void)gw;
+	(void)gh;
+}
+
+static size_t as_font5x7_fit_chars(const char *s, int scale, int max_w)
+{
+	if (s == NULL || max_w <= 0)
+		return 0;
+
+	int glyph_w = as_font5x7_glyph_w(scale);
+	int spacing = as_font5x7_spacing(scale);
+
+	size_t count = 0;
+	int w = 0;
+	for (; s[count] != '\0'; count++) {
+		int add = glyph_w;
+		if (w > 0)
+			add += spacing;
+		if (w + add > max_w)
+			break;
+		w += add;
+	}
+	return count;
+}
+
+static void as_buffer_draw_text5x7(struct as_buffer *buf, int x, int y, const char *s, int max_w, int scale, uint32_t argb)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (s == NULL || s[0] == '\0')
+		return;
+	if (scale <= 0)
+		return;
+
+	size_t n = strlen(s);
+
+	size_t draw_n = n;
+	bool need_ellipsis = false;
+	int full_w = as_font5x7_text_width_n(s, n, scale);
+	if (max_w > 0 && full_w > max_w) {
+		int ell_w = as_font5x7_text_width_n("...", 3, scale);
+		if (ell_w < max_w) {
+			draw_n = as_font5x7_fit_chars(s, scale, max_w - ell_w);
+			need_ellipsis = true;
+		} else {
+			draw_n = as_font5x7_fit_chars(s, scale, max_w);
+		}
+	}
+
+	int cx = x;
+	int glyph_w = as_font5x7_glyph_w(scale);
+	int spacing = as_font5x7_spacing(scale);
+
+	for (size_t i = 0; i < draw_n; i++) {
+		if (i > 0)
+			cx += spacing;
+		as_buffer_draw_glyph5x7(buf, cx, y, s[i], scale, argb);
+		cx += glyph_w;
+	}
+
+	if (need_ellipsis) {
+		if (draw_n > 0)
+			cx += spacing;
+		as_buffer_draw_text5x7(buf, cx, y, "...", max_w > 0 ? max_w - (cx - x) : 0, scale, argb);
+	}
+}
+
 static void as_state_free_buttons(struct as_state *state)
 {
 	if (!state->buttons_owned)
 		return;
 
 	for (size_t i = 0; i < state->button_count; i++) {
-		free(state->buttons[i].label);
-		free(state->buttons[i].command);
+		as_button_destroy(&state->buttons[i]);
 	}
 	free(state->buttons);
 	state->buttons = NULL;
@@ -284,6 +934,7 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 
 		char *label = s;
 		char *command = eq + 1;
+		char *icon_path = NULL;
 
 		while (*label == ' ' || *label == '\t')
 			label++;
@@ -294,6 +945,24 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 			end[-1] = '\0';
 		for (char *end = command + strlen(command); end > command && (end[-1] == ' ' || end[-1] == '\t'); end--)
 			end[-1] = '\0';
+
+		char *bar = strchr(label, '|');
+		if (bar != NULL) {
+			*bar = '\0';
+			icon_path = bar + 1;
+			while (*icon_path == ' ' || *icon_path == '\t')
+				icon_path++;
+			for (char *end = icon_path + strlen(icon_path);
+			     end > icon_path && (end[-1] == ' ' || end[-1] == '\t');
+			     end--)
+				end[-1] = '\0';
+			for (char *end = label + strlen(label);
+			     end > label && (end[-1] == ' ' || end[-1] == '\t');
+			     end--)
+				end[-1] = '\0';
+			if (icon_path[0] == '\0')
+				icon_path = NULL;
+		}
 
 		if (label[0] == '\0' || command[0] == '\0')
 			continue;
@@ -307,13 +976,19 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 			cap = next;
 		}
 
+		buttons[count] = (struct as_button){ 0 };
 		buttons[count].label = strdup(label);
 		buttons[count].command = strdup(command);
-		if (buttons[count].label == NULL || buttons[count].command == NULL) {
-			free(buttons[count].label);
-			free(buttons[count].command);
+		if (icon_path != NULL)
+			buttons[count].icon_path = strdup(icon_path);
+
+		if (buttons[count].label == NULL || buttons[count].command == NULL ||
+		    (icon_path != NULL && buttons[count].icon_path == NULL)) {
+			as_button_destroy(&buttons[count]);
 			goto fail;
 		}
+
+		as_button_try_load_icon(&buttons[count]);
 		count++;
 	}
 
@@ -335,8 +1010,7 @@ fail:
 	free(line);
 	fclose(fp);
 	for (size_t i = 0; i < count; i++) {
-		free(buttons[i].label);
-		free(buttons[i].command);
+		as_button_destroy(&buttons[i]);
 	}
 	free(buttons);
 	return false;
@@ -413,28 +1087,84 @@ static struct as_buffer *as_state_acquire_buffer(struct as_state *state)
 	return NULL;
 }
 
+struct as_layout {
+	int pad;
+	int spacing;
+	int btn_h;
+	int icon_pad;
+	int icon_size;
+	int text_gap;
+	int text_scale;
+	int icon_scale;
+	int max_btn_w;
+};
+
+static bool as_state_get_layout(struct as_state *state, struct as_layout *layout)
+{
+	if (state == NULL || layout == NULL)
+		return false;
+
+	layout->pad = 6;
+	layout->spacing = 6;
+	layout->btn_h = state->height - 2 * layout->pad;
+	if (layout->btn_h <= 0)
+		return false;
+
+	layout->icon_pad = 4;
+	layout->icon_size = layout->btn_h - 2 * layout->icon_pad;
+	if (layout->icon_size < 0)
+		layout->icon_size = 0;
+
+	layout->text_gap = 8;
+	layout->text_scale = clamp_int((layout->btn_h - 12) / 7, 1, 4);
+	layout->icon_scale = clamp_int((layout->icon_size - 2) / 7, 1, 6);
+	layout->max_btn_w = 260;
+	return true;
+}
+
+static int as_state_button_width(struct as_state *state, const struct as_layout *layout, size_t idx)
+{
+	if (state == NULL || layout == NULL)
+		return 0;
+	if (idx >= state->button_count)
+		return 0;
+
+	int w = layout->btn_h;
+
+	int label_w = as_font5x7_text_width(state->buttons[idx].label, layout->text_scale);
+	if (label_w > 0)
+		w = layout->icon_pad + layout->icon_size + layout->text_gap + label_w + layout->icon_pad;
+	else
+		w = layout->icon_pad + layout->icon_size + layout->icon_pad;
+
+	if (w < layout->btn_h)
+		w = layout->btn_h;
+	if (w > layout->max_btn_w)
+		w = layout->max_btn_w;
+
+	return w;
+}
+
 static int as_state_hit_test(struct as_state *state, int x, int y)
 {
 	if (state->button_count == 0)
 		return -1;
 
-	int pad = 6;
-	int spacing = 6;
-	int btn = state->height - 2 * pad;
-	if (btn <= 0)
+	struct as_layout layout;
+	if (!as_state_get_layout(state, &layout))
 		return -1;
 
-	int rx = pad;
-	int ry = pad;
+	int rx = layout.pad;
+	int ry = layout.pad;
 
 	for (size_t i = 0; i < state->button_count; i++) {
-		int rw = btn;
-		int rh = btn;
+		int rw = as_state_button_width(state, &layout, i);
+		int rh = layout.btn_h;
 
 		if (x >= rx && x < rx + rw && y >= ry && y < ry + rh)
 			return (int)i;
 
-		rx += rw + spacing;
+		rx += rw + layout.spacing;
 	}
 
 	return -1;
@@ -444,84 +1174,104 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
 	as_buffer_paint_solid(buf, 0xFF202020u);
 
-	static const uint8_t digit_segments[10] = {
-		/* a b c d e f g */
-		[0] = 0b1111110,
-		[1] = 0b0110000,
-		[2] = 0b1101101,
-		[3] = 0b1111001,
-		[4] = 0b0110011,
-		[5] = 0b1011011,
-		[6] = 0b1011111,
-		[7] = 0b1110000,
-		[8] = 0b1111111,
-		[9] = 0b1111011,
-	};
-
-	int pad = 6;
-	int spacing = 6;
-	int btn = state->height - 2 * pad;
-	if (btn <= 0)
+	struct as_layout layout;
+	if (!as_state_get_layout(state, &layout))
 		return;
 
-	int thickness = btn / 10;
-	if (thickness < 2)
-		thickness = 2;
-
-	int rx = pad;
-	int ry = pad;
+	int rx = layout.pad;
+	int ry = layout.pad;
 
 	for (size_t i = 0; i < state->button_count; i++) {
 		int idx = (int)i;
-		uint32_t color = 0xFF3A3A3Au;
+		uint32_t btn_bg = 0xFF3A3A3Au;
 		if (idx == state->pressed_index)
-			color = 0xFF6A6A6Au;
+			btn_bg = 0xFF6A6A6Au;
 		else if (idx == state->hover_index)
-			color = 0xFF505050u;
+			btn_bg = 0xFF505050u;
 
-		as_buffer_fill_rect(buf, rx, ry, btn, btn, color);
+		int rw = as_state_button_width(state, &layout, i);
+		int rh = layout.btn_h;
+
+		as_buffer_fill_rect(buf, rx, ry, rw, rh, btn_bg);
 
 		/* Cheap border. */
-		as_buffer_fill_rect(buf, rx, ry, btn, 1, 0xFF101010u);
-		as_buffer_fill_rect(buf, rx, ry + btn - 1, btn, 1, 0xFF101010u);
-		as_buffer_fill_rect(buf, rx, ry, 1, btn, 0xFF101010u);
-		as_buffer_fill_rect(buf, rx + btn - 1, ry, 1, btn, 0xFF101010u);
+		as_buffer_fill_rect(buf, rx, ry, rw, 1, 0xFF101010u);
+		as_buffer_fill_rect(buf, rx, ry + rh - 1, rw, 1, 0xFF101010u);
+		as_buffer_fill_rect(buf, rx, ry, 1, rh, 0xFF101010u);
+		as_buffer_fill_rect(buf, rx + rw - 1, ry, 1, rh, 0xFF101010u);
 
-		/* Simple per-button index badge (1..n) as a 7-segment digit. */
-		uint32_t badge = 0xFFD0D0D0u;
-		int number = (int)i + 1;
-		int digit = number % 10;
+		/* Icon box (placeholder): big initial + small index digit. */
+		int ix = rx + layout.icon_pad;
+		int iy = ry + layout.icon_pad;
+		int is = layout.icon_size;
+		int max_is = rw - 2 * layout.icon_pad;
+		if (is > max_is)
+			is = max_is;
+		if (is > 0) {
+			uint32_t icon_bg = 0xFF2A2A2Au;
+			if (idx == state->pressed_index)
+				icon_bg = 0xFF3A3A3Au;
+			else if (idx == state->hover_index)
+				icon_bg = 0xFF333333u;
 
-		int margin = btn / 4;
-		int dw = btn - 2 * margin;
-		int dh = btn - 2 * margin;
-		if (dw > 0 && dh > 0) {
-			int dx = rx + margin;
-			int dy = ry + margin;
+			as_buffer_fill_rect(buf, ix, iy, is, is, icon_bg);
+			as_buffer_fill_rect(buf, ix, iy, is, 1, 0xFF101010u);
+			as_buffer_fill_rect(buf, ix, iy + is - 1, is, 1, 0xFF101010u);
+			as_buffer_fill_rect(buf, ix, iy, 1, is, 0xFF101010u);
+			as_buffer_fill_rect(buf, ix + is - 1, iy, 1, is, 0xFF101010u);
 
-			uint8_t segs = digit_segments[digit];
-			int half = dh / 2;
+			bool drew_image = false;
+			if (state->buttons[i].icon_argb != NULL && state->buttons[i].icon_w > 0 && state->buttons[i].icon_h > 0) {
+				int px = ix + 1;
+				int py = iy + 1;
+				int ps = is - 2;
+				if (ps > 0) {
+					as_buffer_draw_image_nearest(buf,
+					                             px,
+					                             py,
+					                             ps,
+					                             ps,
+					                             state->buttons[i].icon_argb,
+					                             state->buttons[i].icon_w,
+					                             state->buttons[i].icon_h);
+					drew_image = true;
+				}
+			}
 
-			/* a (top), d (bottom), g (middle) */
-			if (segs & 0b1000000)
-				as_buffer_fill_rect(buf, dx, dy, dw, thickness, badge);
-			if (segs & 0b0001000)
-				as_buffer_fill_rect(buf, dx, dy + dh - thickness, dw, thickness, badge);
-			if (segs & 0b0000001)
-				as_buffer_fill_rect(buf, dx, dy + half - thickness / 2, dw, thickness, badge);
+			if (!drew_image) {
+				char icon_c = '?';
+				const char *label = state->buttons[i].label;
+				if (label != NULL) {
+					while (*label == ' ' || *label == '\t')
+						label++;
+					if (*label != '\0')
+						icon_c = *label;
+				}
 
-			/* f (upper-left), b (upper-right), e (lower-left), c (lower-right) */
-			if (segs & 0b0000010)
-				as_buffer_fill_rect(buf, dx, dy, thickness, half, badge);
-			if (segs & 0b0100000)
-				as_buffer_fill_rect(buf, dx + dw - thickness, dy, thickness, half, badge);
-			if (segs & 0b0000100)
-				as_buffer_fill_rect(buf, dx, dy + half, thickness, dh - half, badge);
-			if (segs & 0b0010000)
-				as_buffer_fill_rect(buf, dx + dw - thickness, dy + half, thickness, dh - half, badge);
+				int icon_scale = clamp_int((is - 4) / 7, 1, layout.icon_scale);
+				int gw = as_font5x7_glyph_w(icon_scale);
+				int gh = as_font5x7_glyph_h(icon_scale);
+				int gx = ix + (is - gw) / 2;
+				int gy = iy + (is - gh) / 2;
+				as_buffer_draw_glyph5x7(buf, gx, gy, icon_c, icon_scale, 0xFFF0F0F0u);
+			}
+
+			int number = (int)i + 1;
+			int digit = number % 10;
+			char digit_c = (char)('0' + digit);
+			int badge_scale = clamp_int(is / 16, 1, 2);
+			as_buffer_draw_glyph5x7(buf, ix + 2, iy + 2, digit_c, badge_scale, 0xFFD0D0D0u);
 		}
 
-		rx += btn + spacing;
+		/* Text label to the right of the icon. */
+		int text_h = as_font5x7_glyph_h(layout.text_scale);
+		int tx = rx + layout.icon_pad + layout.icon_size + layout.text_gap;
+		int tw = rw - (layout.icon_pad + layout.icon_size + layout.text_gap + layout.icon_pad);
+		int ty = ry + (rh - text_h) / 2;
+		if (tw > 0)
+			as_buffer_draw_text5x7(buf, tx, ty, state->buttons[i].label, tw, layout.text_scale, 0xFFE0E0E0u);
+
+		rx += rw + layout.spacing;
 	}
 }
 

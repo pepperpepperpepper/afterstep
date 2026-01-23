@@ -1,3 +1,4 @@
 gen/
 *.o
 aswlpanel
+aswlcomp

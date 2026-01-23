@@ -46,6 +46,34 @@ Optional:
 - Display managers: install `AfterStep.desktop` / `AfterStep.session` into your system’s `xsessions`
   directory (location varies by distro/prefix)
 
+## Wayland status (experimental)
+
+AfterStep itself is still an **X11 window manager**. Native Wayland support is being approached in two tracks:
+
+- **Wayland clients (“B track”)** in `wayland/` (e.g. a panel/launcher that runs as a normal Wayland client).
+- **Compositor work (“C track”)** via a wlroots-based compositor scaffold.
+
+Quick start:
+
+```sh
+make -C wayland
+./wayland/aswlpanel
+```
+
+Optional compositor scaffold (requires `wlroots` development files on your system):
+
+```sh
+make -C wayland aswlcomp
+```
+
+Nested Wayland dev run (from an existing Wayland session):
+
+```sh
+WLR_BACKENDS=wayland ./wayland/aswlcomp --socket aswlcomp-0 --spawn "./wayland/aswlpanel"
+```
+
+Tip: `Alt+Escape` exits `aswlcomp`.
+
 ## Notes
 
 - Wharf/MonitorWharf buttons may be disabled if the configured applications aren’t installed.
