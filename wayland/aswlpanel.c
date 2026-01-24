@@ -62,6 +62,8 @@ struct as_state {
 	struct xdg_wm_base *xdg_wm_base;
 	struct afterstep_control_v1 *control;
 	uint32_t control_version;
+	uint32_t current_workspace;
+	uint32_t workspace_count;
 
 #if HAVE_WLR_LAYER_SHELL
 	struct zwlr_layer_shell_v1 *layer_shell;
@@ -94,6 +96,8 @@ struct as_state {
 	struct as_button *buttons;
 	size_t button_count;
 	bool buttons_owned;
+	char *buttons_config_path;
+	bool buttons_has_workspaces_directive;
 };
 
 static void schedule_redraw(struct as_state *state);
@@ -903,6 +907,101 @@ static void as_state_free_buttons(struct as_state *state)
 	state->buttons_owned = false;
 }
 
+static bool append_button(struct as_button **buttons,
+                          size_t *count,
+                          size_t *cap,
+                          const char *label,
+                          const char *command,
+                          const char *icon_path)
+{
+	if (buttons == NULL || count == NULL || cap == NULL)
+		return false;
+	if (label == NULL || label[0] == '\0')
+		return false;
+	if (command == NULL || command[0] == '\0')
+		return false;
+
+	if (*count == *cap) {
+		size_t next = *cap == 0 ? 8 : (*cap) * 2;
+		struct as_button *tmp = realloc(*buttons, next * sizeof(**buttons));
+		if (tmp == NULL)
+			return false;
+		*buttons = tmp;
+		*cap = next;
+	}
+
+	(*buttons)[*count] = (struct as_button){ 0 };
+	(*buttons)[*count].label = strdup(label);
+	(*buttons)[*count].command = strdup(command);
+	if (icon_path != NULL)
+		(*buttons)[*count].icon_path = strdup(icon_path);
+
+	if ((*buttons)[*count].label == NULL || (*buttons)[*count].command == NULL ||
+	    (icon_path != NULL && (*buttons)[*count].icon_path == NULL)) {
+		as_button_destroy(&(*buttons)[*count]);
+		return false;
+	}
+
+	as_button_try_load_icon(&(*buttons)[*count]);
+	(*count)++;
+	return true;
+}
+
+static bool handle_button_directive(struct as_state *state,
+                                   struct as_button **buttons,
+                                   size_t *count,
+                                   size_t *cap,
+                                   const char *line,
+                                   bool *handled_out)
+{
+	if (handled_out != NULL)
+		*handled_out = false;
+
+	if (state == NULL || buttons == NULL || count == NULL || cap == NULL || line == NULL)
+		return true;
+
+	const char *s = line;
+	if (s[0] != '@')
+		return true;
+	s++;
+
+	const char *arg = NULL;
+	if (strncmp(s, "workspaces", 10) == 0) {
+		arg = s + 10;
+	} else if (strncmp(s, "pager", 5) == 0) {
+		arg = s + 5;
+	} else {
+		return true;
+	}
+
+	if (handled_out != NULL)
+		*handled_out = true;
+
+	while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+		arg++;
+
+	uint32_t n = state->workspace_count > 0 ? state->workspace_count : 9;
+	if (*arg != '\0') {
+		char *end = NULL;
+		unsigned long tmp = strtoul(arg, &end, 10);
+		while (end != NULL && isspace((unsigned char)*end))
+			end++;
+		if (end != arg && end != NULL && *end == '\0' && tmp >= 1 && tmp <= 1000)
+			n = (uint32_t)tmp;
+	}
+
+	for (uint32_t i = 1; i <= n; i++) {
+		char label[16];
+		char command[64];
+		(void)snprintf(label, sizeof(label), "%u", i);
+		(void)snprintf(command, sizeof(command), "@workspace %u", i);
+		if (!append_button(buttons, count, cap, label, command, NULL))
+			return false;
+	}
+
+	return true;
+}
+
 static bool load_buttons_from_file(struct as_state *state, const char *path)
 {
 	if (path == NULL || path[0] == '\0')
@@ -915,6 +1014,7 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 	struct as_button *buttons = NULL;
 	size_t count = 0;
 	size_t cap = 0;
+	bool has_workspaces_directive = false;
 
 	char *line = NULL;
 	size_t line_cap = 0;
@@ -930,6 +1030,16 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 
 		if (*s == '\0' || *s == '#')
 			continue;
+
+		if (*s == '@') {
+			bool handled = false;
+			if (!handle_button_directive(state, &buttons, &count, &cap, s, &handled))
+				goto fail;
+			if (handled) {
+				has_workspaces_directive = true;
+				continue;
+			}
+		}
 
 		char *eq = strchr(s, '=');
 		if (eq == NULL)
@@ -971,29 +1081,8 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 		if (label[0] == '\0' || command[0] == '\0')
 			continue;
 
-		if (count == cap) {
-			size_t next = cap == 0 ? 8 : cap * 2;
-			struct as_button *tmp = realloc(buttons, next * sizeof(*buttons));
-			if (tmp == NULL)
-				goto fail;
-			buttons = tmp;
-			cap = next;
-		}
-
-		buttons[count] = (struct as_button){ 0 };
-		buttons[count].label = strdup(label);
-		buttons[count].command = strdup(command);
-		if (icon_path != NULL)
-			buttons[count].icon_path = strdup(icon_path);
-
-		if (buttons[count].label == NULL || buttons[count].command == NULL ||
-		    (icon_path != NULL && buttons[count].icon_path == NULL)) {
-			as_button_destroy(&buttons[count]);
+		if (!append_button(&buttons, &count, &cap, label, command, icon_path))
 			goto fail;
-		}
-
-		as_button_try_load_icon(&buttons[count]);
-		count++;
 	}
 
 	free(line);
@@ -1008,6 +1097,7 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 	state->buttons = buttons;
 	state->button_count = count;
 	state->buttons_owned = true;
+	state->buttons_has_workspaces_directive = has_workspaces_directive;
 	return true;
 
 fail:
@@ -1022,15 +1112,23 @@ fail:
 
 static void as_state_load_buttons(struct as_state *state)
 {
+	state->buttons_has_workspaces_directive = false;
+	free(state->buttons_config_path);
+	state->buttons_config_path = NULL;
+
 	const char *path = getenv("ASWLPANEL_CONFIG");
-	if (path != NULL && load_buttons_from_file(state, path))
+	if (path != NULL && load_buttons_from_file(state, path)) {
+		state->buttons_config_path = strdup(path);
 		return;
+	}
 
 	const char *home = getenv("HOME");
 	if (home != NULL && home[0] != '\0') {
 		char *xdg_path = NULL;
 		if (asprintf(&xdg_path, "%s/.config/afterstep/aswlpanel.conf", home) >= 0) {
 			bool ok = load_buttons_from_file(state, xdg_path);
+			if (ok)
+				state->buttons_config_path = strdup(xdg_path);
 			free(xdg_path);
 			if (ok)
 				return;
@@ -1126,6 +1224,45 @@ static bool as_state_get_layout(struct as_state *state, struct as_layout *layout
 	return true;
 }
 
+static bool as_command_parse_workspace_target(const char *command, uint32_t *workspace_out)
+{
+	if (workspace_out != NULL)
+		*workspace_out = 0;
+
+	if (command == NULL || command[0] == '\0')
+		return false;
+	if (command[0] != '@')
+		return false;
+
+	const char *action = command + 1;
+	const char *ws_arg = NULL;
+	if (strncmp(action, "workspace", 9) == 0) {
+		ws_arg = action + 9;
+	} else if (strncmp(action, "ws", 2) == 0) {
+		ws_arg = action + 2;
+	} else {
+		return false;
+	}
+
+	while (*ws_arg == ':' || *ws_arg == '=' || isspace((unsigned char)*ws_arg))
+		ws_arg++;
+
+	if (*ws_arg == '\0')
+		return false;
+
+	char *end = NULL;
+	unsigned long ws = strtoul(ws_arg, &end, 10);
+	while (end != NULL && isspace((unsigned char)*end))
+		end++;
+
+	if (end == ws_arg || end == NULL || *end != '\0' || ws < 1 || ws > 1000)
+		return false;
+
+	if (workspace_out != NULL)
+		*workspace_out = (uint32_t)ws;
+	return true;
+}
+
 static int as_state_button_width(struct as_state *state, const struct as_layout *layout, size_t idx)
 {
 	if (state == NULL || layout == NULL)
@@ -1187,11 +1324,15 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 
 	for (size_t i = 0; i < state->button_count; i++) {
 		int idx = (int)i;
-		uint32_t btn_bg = 0xFF3A3A3Au;
+		uint32_t ws_target = 0;
+		bool is_ws = as_command_parse_workspace_target(state->buttons[i].command, &ws_target);
+		bool active_ws = is_ws && ws_target == state->current_workspace;
+
+		uint32_t btn_bg = active_ws ? 0xFF2E4A7Au : 0xFF3A3A3Au;
 		if (idx == state->pressed_index)
-			btn_bg = 0xFF6A6A6Au;
+			btn_bg = active_ws ? 0xFF3E5A8Au : 0xFF6A6A6Au;
 		else if (idx == state->hover_index)
-			btn_bg = 0xFF505050u;
+			btn_bg = active_ws ? 0xFF3A5790u : 0xFF505050u;
 
 		int rw = as_state_button_width(state, &layout, i);
 		int rh = layout.btn_h;
@@ -1212,11 +1353,11 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		if (is > max_is)
 			is = max_is;
 		if (is > 0) {
-			uint32_t icon_bg = 0xFF2A2A2Au;
+			uint32_t icon_bg = active_ws ? 0xFF213452u : 0xFF2A2A2Au;
 			if (idx == state->pressed_index)
-				icon_bg = 0xFF3A3A3Au;
+				icon_bg = active_ws ? 0xFF2B4468u : 0xFF3A3A3Au;
 			else if (idx == state->hover_index)
-				icon_bg = 0xFF333333u;
+				icon_bg = active_ws ? 0xFF26405Eu : 0xFF333333u;
 
 			as_buffer_fill_rect(buf, ix, iy, is, is, icon_bg);
 			as_buffer_fill_rect(buf, ix, iy, is, 1, 0xFF101010u);
@@ -1704,6 +1845,35 @@ static const struct wl_seat_listener seat_listener = {
 	.name = seat_name,
 };
 
+static void control_workspace_state(void *data,
+                                   struct afterstep_control_v1 *control,
+                                   uint32_t current,
+                                   uint32_t count)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	if (count < 1)
+		count = 1;
+
+	bool count_changed = state->workspace_count != count;
+	state->workspace_count = count;
+	state->current_workspace = current;
+
+	if (count_changed && state->buttons_has_workspaces_directive && state->buttons_config_path != NULL) {
+		fprintf(stderr, "aswlpanel: workspace_count=%u, reloading %s\n", count, state->buttons_config_path);
+		(void)load_buttons_from_file(state, state->buttons_config_path);
+	}
+
+	schedule_redraw(state);
+}
+
+static const struct afterstep_control_v1_listener control_listener = {
+	.workspace_state = control_workspace_state,
+};
+
 static void registry_global(void *data,
                             struct wl_registry *registry,
                             uint32_t name,
@@ -1724,11 +1894,13 @@ static void registry_global(void *data,
 	}
 
 	if (strcmp(interface, afterstep_control_v1_interface.name) == 0) {
-		uint32_t bind_version = version < 2 ? version : 2;
+		uint32_t bind_version = version < 3 ? version : 3;
 		if (bind_version < 1)
 			bind_version = 1;
 		state->control_version = bind_version;
 		state->control = wl_registry_bind(registry, name, &afterstep_control_v1_interface, bind_version);
+		if (state->control != NULL && bind_version >= 3)
+			afterstep_control_v1_add_listener(state->control, &control_listener, state);
 		return;
 	}
 
@@ -1827,6 +1999,8 @@ static void cleanup(struct as_state *state)
 
 	as_state_destroy_buffers(state);
 	as_state_free_buttons(state);
+	free(state->buttons_config_path);
+	state->buttons_config_path = NULL;
 
 #if HAVE_WLR_LAYER_SHELL
 	if (state->layer_surface != NULL)
@@ -1869,6 +2043,8 @@ int main(void)
 		.running = true,
 		.hover_index = -1,
 		.pressed_index = -1,
+		.current_workspace = 1,
+		.workspace_count = 9,
 	};
 
 	as_state_load_buttons(&state);

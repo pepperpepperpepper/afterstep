@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="afterstep_control_v1">
-  <interface name="afterstep_control_v1" version="2">
+  <interface name="afterstep_control_v1" version="3">
     <description summary="AfterStep compositor control">
       Minimal control interface for the AfterStep wlroots compositor scaffold.
       Used by Wayland clients in the AfterStep "suite" (panel, launchers, etc.)
@@ -60,5 +60,14 @@
         Requests that the compositor switches to the previous workspace.
       </description>
     </request>
+
+    <event name="workspace_state">
+      <description summary="Workspace state notification">
+        Notifies clients of the current workspace (1-based) and total workspace count.
+        Sent on bind and whenever the workspace changes.
+      </description>
+      <arg name="current" type="uint" summary="Current workspace (1-based)"/>
+      <arg name="count" type="uint" summary="Workspace count"/>
+    </event>
   </interface>
 </protocol>

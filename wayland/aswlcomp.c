@@ -122,6 +122,12 @@ struct aswl_output {
 	struct wl_listener destroy;
 };
 
+struct aswl_control_client {
+	struct wl_list link; /* aswl_server.control_clients */
+	struct aswl_server *server;
+	struct wl_resource *resource;
+};
+
 struct aswl_server {
 	struct wl_display *display;
 	struct wlr_backend *backend;
@@ -182,6 +188,7 @@ struct aswl_server {
 	uint32_t grab_button;
 
 	struct wl_global *control_global;
+	struct wl_list control_clients;
 };
 
 static void arrange_layers(struct aswl_server *server);
@@ -195,6 +202,7 @@ static void focus_prev_view(struct aswl_server *server);
 static void set_workspace(struct aswl_server *server, uint32_t workspace);
 static void workspace_next(struct aswl_server *server);
 static void workspace_prev(struct aswl_server *server);
+static void broadcast_workspace_state(struct aswl_server *server);
 
 static void usage(const char *prog)
 {
@@ -223,6 +231,30 @@ static void spawn_command(const char *command)
 	}
 }
 
+static void broadcast_workspace_state(struct aswl_server *server)
+{
+	if (server == NULL)
+		return;
+
+	struct aswl_control_client *cc;
+	wl_list_for_each(cc, &server->control_clients, link) {
+		if (cc->resource == NULL)
+			continue;
+		if (wl_resource_get_version(cc->resource) < 3)
+			continue;
+		afterstep_control_v1_send_workspace_state(cc->resource, server->current_workspace, server->workspace_count);
+	}
+}
+
+static void aswl_control_resource_destroy(struct wl_resource *resource)
+{
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	if (cc == NULL)
+		return;
+	wl_list_remove(&cc->link);
+	free(cc);
+}
+
 static void aswl_control_destroy(struct wl_client *client, struct wl_resource *resource)
 {
 	(void)client;
@@ -232,7 +264,8 @@ static void aswl_control_destroy(struct wl_client *client, struct wl_resource *r
 static void aswl_control_exec(struct wl_client *client, struct wl_resource *resource, const char *command)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 
 	if (command == NULL || command[0] == '\0')
 		return;
@@ -252,7 +285,8 @@ static void aswl_control_exec(struct wl_client *client, struct wl_resource *reso
 static void aswl_control_quit(struct wl_client *client, struct wl_resource *resource)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 	if (server == NULL)
 		return;
 
@@ -263,7 +297,8 @@ static void aswl_control_quit(struct wl_client *client, struct wl_resource *reso
 static void aswl_control_close_focused(struct wl_client *client, struct wl_resource *resource)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 	if (server == NULL)
 		return;
 
@@ -275,7 +310,8 @@ static void aswl_control_close_focused(struct wl_client *client, struct wl_resou
 static void aswl_control_focus_next(struct wl_client *client, struct wl_resource *resource)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 	if (server == NULL)
 		return;
 
@@ -287,7 +323,8 @@ static void aswl_control_focus_next(struct wl_client *client, struct wl_resource
 static void aswl_control_focus_prev(struct wl_client *client, struct wl_resource *resource)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 	if (server == NULL)
 		return;
 
@@ -299,7 +336,8 @@ static void aswl_control_focus_prev(struct wl_client *client, struct wl_resource
 static void aswl_control_set_workspace(struct wl_client *client, struct wl_resource *resource, uint32_t workspace)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 	if (server == NULL)
 		return;
 
@@ -311,7 +349,8 @@ static void aswl_control_set_workspace(struct wl_client *client, struct wl_resou
 static void aswl_control_workspace_next(struct wl_client *client, struct wl_resource *resource)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 	if (server == NULL)
 		return;
 
@@ -323,7 +362,8 @@ static void aswl_control_workspace_next(struct wl_client *client, struct wl_reso
 static void aswl_control_workspace_prev(struct wl_client *client, struct wl_resource *resource)
 {
 	(void)client;
-	struct aswl_server *server = wl_resource_get_user_data(resource);
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
 	if (server == NULL)
 		return;
 
@@ -347,14 +387,27 @@ static const struct afterstep_control_v1_interface aswl_control_impl = {
 static void aswl_control_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
 	struct aswl_server *server = data;
-	uint32_t v = version > 2 ? 2 : version;
+	uint32_t v = version > 3 ? 3 : version;
 	struct wl_resource *res = wl_resource_create(client, &afterstep_control_v1_interface, v, id);
 	if (res == NULL) {
 		wl_client_post_no_memory(client);
 		return;
 	}
 
-	wl_resource_set_implementation(res, &aswl_control_impl, server, NULL);
+	struct aswl_control_client *cc = calloc(1, sizeof(*cc));
+	if (cc == NULL) {
+		wl_client_post_no_memory(client);
+		wl_resource_destroy(res);
+		return;
+	}
+
+	cc->server = server;
+	cc->resource = res;
+	wl_list_insert(server->control_clients.prev, &cc->link);
+
+	wl_resource_set_implementation(res, &aswl_control_impl, cc, aswl_control_resource_destroy);
+	if (v >= 3)
+		afterstep_control_v1_send_workspace_state(res, server->current_workspace, server->workspace_count);
 }
 
 static bool str_ieq(const char *a, const char *b)
@@ -869,6 +922,7 @@ static void set_workspace(struct aswl_server *server, uint32_t workspace)
 	}
 
 	focus_topmost_view(server);
+	broadcast_workspace_state(server);
 }
 
 static void workspace_next(struct aswl_server *server)
@@ -2041,7 +2095,7 @@ int main(int argc, char **argv)
 	(void)wlr_subcompositor_create(server.display);
 	(void)wlr_data_device_manager_create(server.display);
 
-	server.control_global = wl_global_create(server.display, &afterstep_control_v1_interface, 2, &server, aswl_control_bind);
+	server.control_global = wl_global_create(server.display, &afterstep_control_v1_interface, 3, &server, aswl_control_bind);
 	if (server.control_global == NULL) {
 		fprintf(stderr, "aswlcomp: wl_global_create(afterstep_control_v1) failed\n");
 		return 1;
@@ -2121,6 +2175,7 @@ int main(int argc, char **argv)
 	wl_list_init(&server.keyboards);
 	wl_list_init(&server.layer_surfaces);
 	wl_list_init(&server.bindings);
+	wl_list_init(&server.control_clients);
 
 	server.layer_trees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND] = wlr_scene_tree_create(&server.scene->tree);
 	server.layer_trees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM] = wlr_scene_tree_create(&server.scene->tree);

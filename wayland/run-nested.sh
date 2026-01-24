@@ -94,12 +94,28 @@ if [[ -z "${backend}" ]]; then
 fi
 
 autostart="$(mktemp -t afterstep-aswlcomp.autostart.XXXXXX)"
-cleanup() { rm -f -- "${autostart}"; }
+panel_cfg="$(mktemp -t afterstep-aswlpanel.conf.XXXXXX)"
+cleanup() { rm -f -- "${autostart}" "${panel_cfg}"; }
 trap cleanup EXIT
 
-cat >"${autostart}" <<'EOF'
-# Autostart file for nested development runs.
-exec ./wayland/aswlpanel
+cat >"${panel_cfg}" <<'EOF'
+# Panel config for nested development runs.
+# Lines are: LABEL[|/path/to/icon.png]=COMMAND
+# Special directives:
+#   @workspaces        (auto-generate workspace buttons)
+#   @workspaces N      (generate 1..N)
+@workspaces
+Prev=@workspace_prev
+Next=@workspace_next
+Terminal=${TERMINAL:-foot}
+Menu=fuzzel || bemenu-run || wofi --show drun
+Close=@close
+EOF
+
+{
+  echo "# Autostart file for nested development runs."
+  echo "exec ASWLPANEL_CONFIG=\"${panel_cfg}\" ./wayland/aswlpanel"
+  cat <<'EOF'
 
 # Common bindings (optional):
 bind Alt+Return exec "${TERMINAL:-foot}"
@@ -114,6 +130,7 @@ bind Alt+3 workspace 3
 bind Alt+4 workspace 4
 bind Alt+q close_focused
 EOF
+} >"${autostart}"
 
 echo "run-nested: socket=${socket} backend=${backend:-auto}" 1>&2
 echo "run-nested: autostart=${autostart}" 1>&2
