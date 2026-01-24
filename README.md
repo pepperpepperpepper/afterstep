@@ -58,6 +58,7 @@ Quick start:
 ```sh
 make -C wayland
 ./wayland/aswlpanel
+./wayland/aswlmenu
 ```
 
 Optional compositor scaffold (requires `wlroots` development files on your system):
@@ -84,6 +85,7 @@ Tips:
 - `Alt+LMB` moves windows, `Alt+RMB` resizes windows
 - Workspace switching (configurable): `bind Alt+1 workspace 1`, `bind Alt+Right workspace_next`, etc.
 - Panel config: `~/.config/afterstep/aswlpanel.conf` (or `ASWLPANEL_CONFIG`); supports `@workspaces` (auto workspace buttons) and `@workspace N` actions.
+- Menu/launcher: `aswlmenu` (config: `~/.config/afterstep/aswlmenu.conf` or `ASWLMENU_CONFIG`; scans `.desktop` apps by default)
 - `--spawn` may be repeated to launch multiple clients
 - Optional autostart file: `~/.config/afterstep/aswlcomp.autostart` (one command per line, optional `exec ` prefix; also supports `bind MODS+KEY exec CMD`)
 - If Xwayland is available, `aswlcomp` sets `DISPLAY` (printed at startup) so it can run legacy X11 apps under Wayland.

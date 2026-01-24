@@ -2,3 +2,4 @@ gen/
 *.o
 aswlpanel
 aswlcomp
+aswlmenu

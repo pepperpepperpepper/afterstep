@@ -26,6 +26,7 @@ WAYLAND_LIBS := $(shell $(PKG_CONFIG) --libs wayland-client 2>/dev/null)
 
 WAYLAND_SERVER_LIBS := $(shell $(PKG_CONFIG) --libs wayland-server 2>/dev/null)
 XKBCOMMON_LIBS := $(shell $(PKG_CONFIG) --libs xkbcommon 2>/dev/null)
+XKBCOMMON_CFLAGS := $(shell $(PKG_CONFIG) --cflags xkbcommon 2>/dev/null)
 
 PNG_CFLAGS := $(shell $(PKG_CONFIG) --cflags libpng 2>/dev/null)
 PNG_LIBS := $(shell $(PKG_CONFIG) --libs libpng 2>/dev/null)
@@ -87,13 +88,26 @@ endif
 
 .PHONY: all clean run-nested
 
-all: aswlpanel
+MENU_CFLAGS :=
+MENU_LIBS :=
+ifneq ($(strip $(XKBCOMMON_LIBS)),)
+MENU_CFLAGS += $(XKBCOMMON_CFLAGS) -DHAVE_XKBCOMMON=1
+MENU_LIBS += $(XKBCOMMON_LIBS)
+endif
+
+all: aswlpanel aswlmenu
 
 aswlpanel: aswlpanel.o $(PROTOCOL_SRCS)
 	$(CC) $(CFLAGS) -o $@ aswlpanel.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS)
 
 aswlpanel.o: aswlpanel.c $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+
+aswlmenu: aswlmenu.o $(PROTOCOL_SRCS)
+	$(CC) $(CFLAGS) -o $@ aswlmenu.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS) $(MENU_LIBS)
+
+aswlmenu.o: aswlmenu.c $(PROTOCOL_HDRS)
+	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(MENU_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
 
 ifeq ($(strip $(WLROOTS_LIBS)),)
 aswlcomp:
@@ -140,7 +154,7 @@ $(CONTROL_SRC): $(CONTROL_XML) | $(GEN_DIR)
 	$(WAYLAND_SCANNER) private-code $< $@
 
 clean:
-	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlcomp aswlcomp.o
+	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlmenu aswlmenu.o aswlcomp aswlcomp.o
 
-run-nested: aswlcomp aswlpanel
+run-nested: aswlcomp aswlpanel aswlmenu
 	./run-nested.sh

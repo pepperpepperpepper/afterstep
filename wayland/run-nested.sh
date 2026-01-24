@@ -65,7 +65,7 @@ repo_root="$(cd -- "${script_dir}/.." && pwd -P)"
 cd -- "$repo_root"
 
 if [[ "${build}" -eq 1 ]]; then
-  make -C wayland aswlcomp aswlpanel
+  make -C wayland aswlcomp aswlpanel aswlmenu
 fi
 
 if [[ ! -x wayland/aswlcomp ]]; then
@@ -76,6 +76,10 @@ fi
 if [[ ! -x wayland/aswlpanel ]]; then
   echo "run-nested: missing wayland/aswlpanel (build with: make -C wayland)" 1>&2
   exit 1
+fi
+
+if [[ ! -x wayland/aswlmenu ]]; then
+  echo "run-nested: missing wayland/aswlmenu (menu will fall back to fuzzel/bemenu/wofi)" 1>&2
 fi
 
 if [[ -z "${socket}" ]]; then
@@ -108,7 +112,7 @@ cat >"${panel_cfg}" <<'EOF'
 Prev=@workspace_prev
 Next=@workspace_next
 Terminal=${TERMINAL:-foot}
-Menu=fuzzel || bemenu-run || wofi --show drun
+Menu=./wayland/aswlmenu || fuzzel || bemenu-run || wofi --show drun
 Close=@close
 EOF
 
@@ -120,6 +124,7 @@ EOF
 # Common bindings (optional):
 bind Alt+Return exec "${TERMINAL:-foot}"
 bind Alt+d exec "fuzzel || bemenu-run || wofi --show drun"
+bind Alt+space exec "./wayland/aswlmenu"
 bind Alt+Tab focus_next
 bind Alt+Shift+Tab focus_prev
 bind Alt+Left workspace_prev
