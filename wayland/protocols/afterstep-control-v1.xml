@@ -17,6 +17,29 @@
       </description>
       <arg name="command" type="string" summary="Command to execute"/>
     </request>
+
+    <request name="quit">
+      <description summary="Exit the compositor">
+        Requests that the compositor terminates its Wayland display.
+      </description>
+    </request>
+
+    <request name="close_focused">
+      <description summary="Close the currently focused view">
+        Requests that the compositor asks the focused client to close.
+      </description>
+    </request>
+
+    <request name="focus_next">
+      <description summary="Focus the next view">
+        Requests that the compositor changes keyboard focus to another view.
+      </description>
+    </request>
+
+    <request name="focus_prev">
+      <description summary="Focus the previous view">
+        Requests that the compositor changes keyboard focus to another view.
+      </description>
+    </request>
   </interface>
 </protocol>
-

@@ -104,6 +104,9 @@ exec ./wayland/aswlpanel
 # Common bindings (optional):
 bind Alt+Return exec "${TERMINAL:-foot}"
 bind Alt+d exec "fuzzel || bemenu-run || wofi --show drun"
+bind Alt+Tab focus_next
+bind Alt+Shift+Tab focus_prev
+bind Alt+q close_focused
 EOF
 
 echo "run-nested: socket=${socket} backend=${backend:-auto}" 1>&2
@@ -114,4 +117,3 @@ if [[ -n "${backend}" ]]; then
 else
   ./wayland/aswlcomp --socket "${socket}" --autostart "${autostart}" "${extra_args[@]}"
 fi
-

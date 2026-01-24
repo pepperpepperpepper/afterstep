@@ -85,6 +85,13 @@ struct aswl_binding {
 	struct wl_list link; /* aswl_server.bindings */
 	uint32_t mods;
 	xkb_keysym_t keysym;
+	enum {
+		ASWL_BINDING_EXEC = 0,
+		ASWL_BINDING_QUIT,
+		ASWL_BINDING_CLOSE_FOCUSED,
+		ASWL_BINDING_FOCUS_NEXT,
+		ASWL_BINDING_FOCUS_PREV,
+	} action;
 	char *command;
 };
 
@@ -160,6 +167,9 @@ static void focus_topmost_view(struct aswl_server *server);
 static void place_view(struct aswl_view *view);
 static void begin_interactive(struct aswl_view *view, enum aswl_cursor_mode mode, uint32_t edges, uint32_t button);
 static void end_interactive(struct aswl_server *server);
+static void close_focused_view(struct aswl_server *server);
+static void focus_next_view(struct aswl_server *server);
+static void focus_prev_view(struct aswl_server *server);
 
 static void usage(const char *prog)
 {
@@ -197,7 +207,7 @@ static void aswl_control_destroy(struct wl_client *client, struct wl_resource *r
 static void aswl_control_exec(struct wl_client *client, struct wl_resource *resource, const char *command)
 {
 	(void)client;
-	(void)resource;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
 
 	if (command == NULL || command[0] == '\0')
 		return;
@@ -209,11 +219,65 @@ static void aswl_control_exec(struct wl_client *client, struct wl_resource *reso
 
 	fprintf(stderr, "aswlcomp: control exec: %s\n", command);
 	spawn_command(command);
+
+	if (server != NULL)
+		wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_quit(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
+	if (server == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control quit\n");
+	wl_display_terminate(server->display);
+}
+
+static void aswl_control_close_focused(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
+	if (server == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control close_focused\n");
+	close_focused_view(server);
+	wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_focus_next(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
+	if (server == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control focus_next\n");
+	focus_next_view(server);
+	wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_focus_prev(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
+	if (server == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control focus_prev\n");
+	focus_prev_view(server);
+	wl_display_flush_clients(server->display);
 }
 
 static const struct afterstep_control_v1_interface aswl_control_impl = {
 	.destroy = aswl_control_destroy,
 	.exec = aswl_control_exec,
+	.quit = aswl_control_quit,
+	.close_focused = aswl_control_close_focused,
+	.focus_next = aswl_control_focus_next,
+	.focus_prev = aswl_control_focus_prev,
 };
 
 static void aswl_control_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id)
@@ -300,7 +364,7 @@ static bool parse_modifiers(char *mods_str, uint32_t *mods_out)
 	return true;
 }
 
-static void add_binding(struct aswl_server *server, uint32_t mods, xkb_keysym_t keysym, const char *command)
+static void add_binding_exec(struct aswl_server *server, uint32_t mods, xkb_keysym_t keysym, const char *command)
 {
 	if (server == NULL || command == NULL || command[0] == '\0' || keysym == XKB_KEY_NoSymbol)
 		return;
@@ -311,6 +375,7 @@ static void add_binding(struct aswl_server *server, uint32_t mods, xkb_keysym_t 
 
 	b->mods = mods;
 	b->keysym = keysym;
+	b->action = ASWL_BINDING_EXEC;
 	b->command = strdup(command);
 	if (b->command == NULL) {
 		free(b);
@@ -318,6 +383,37 @@ static void add_binding(struct aswl_server *server, uint32_t mods, xkb_keysym_t 
 	}
 
 	wl_list_insert(server->bindings.prev, &b->link);
+}
+
+static void add_binding_action(struct aswl_server *server, uint32_t mods, xkb_keysym_t keysym, int action)
+{
+	if (server == NULL || keysym == XKB_KEY_NoSymbol)
+		return;
+
+	struct aswl_binding *b = calloc(1, sizeof(*b));
+	if (b == NULL)
+		return;
+
+	b->mods = mods;
+	b->keysym = keysym;
+	b->action = action;
+	wl_list_insert(server->bindings.prev, &b->link);
+}
+
+static const char *binding_action_name(int action)
+{
+	switch (action) {
+	case ASWL_BINDING_QUIT:
+		return "quit";
+	case ASWL_BINDING_CLOSE_FOCUSED:
+		return "close_focused";
+	case ASWL_BINDING_FOCUS_NEXT:
+		return "focus_next";
+	case ASWL_BINDING_FOCUS_PREV:
+		return "focus_prev";
+	default:
+		return "exec";
+	}
 }
 
 static bool default_autostart_path(char *out, size_t out_size)
@@ -410,15 +506,35 @@ static void load_config_file(struct aswl_server *server, const char *path, bool 
 					continue;
 			}
 
-			if (strncmp(bind_cmd, "exec", 4) == 0 && isspace((unsigned char)bind_cmd[4]))
+			if (strncmp(bind_cmd, "exec", 4) == 0 && isspace((unsigned char)bind_cmd[4])) {
 				bind_cmd = lstrip(bind_cmd + 4);
-			if (bind_cmd[0] == '\0') {
-				fprintf(stderr, "aswlcomp: bind: missing command\n");
+				if (bind_cmd[0] == '\0') {
+					fprintf(stderr, "aswlcomp: bind: missing command\n");
+					continue;
+				}
+				fprintf(stderr, "aswlcomp: bind: mods=0x%x key=%s exec=%s\n", mods, key_str, bind_cmd);
+				add_binding_exec(server, mods, keysym, bind_cmd);
 				continue;
 			}
 
-			fprintf(stderr, "aswlcomp: bind: mods=0x%x key=%s cmd=%s\n", mods, key_str, bind_cmd);
-			add_binding(server, mods, keysym, bind_cmd);
+			int action = ASWL_BINDING_EXEC;
+			if (str_ieq(bind_cmd, "quit") || str_ieq(bind_cmd, "exit")) {
+				action = ASWL_BINDING_QUIT;
+			} else if (str_ieq(bind_cmd, "close") || str_ieq(bind_cmd, "close_focused")) {
+				action = ASWL_BINDING_CLOSE_FOCUSED;
+			} else if (str_ieq(bind_cmd, "focus_next") || str_ieq(bind_cmd, "next")) {
+				action = ASWL_BINDING_FOCUS_NEXT;
+			} else if (str_ieq(bind_cmd, "focus_prev") || str_ieq(bind_cmd, "prev")) {
+				action = ASWL_BINDING_FOCUS_PREV;
+			}
+
+			if (action == ASWL_BINDING_EXEC) {
+				fprintf(stderr, "aswlcomp: bind: missing exec prefix: %s\n", bind_cmd);
+				continue;
+			}
+
+			fprintf(stderr, "aswlcomp: bind: mods=0x%x key=%s action=%s\n", mods, key_str, binding_action_name(action));
+			add_binding_action(server, mods, keysym, action);
 			continue;
 		}
 
@@ -500,6 +616,49 @@ static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 	                              keyboard->keycodes,
 	                              keyboard->num_keycodes,
 	                              &keyboard->modifiers);
+}
+
+static void close_focused_view(struct aswl_server *server)
+{
+	if (server == NULL || server->focused_view == NULL)
+		return;
+
+	struct aswl_view *view = server->focused_view;
+	if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL) {
+		wlr_xdg_toplevel_send_close(view->xdg_surface->toplevel);
+	}
+}
+
+static void focus_next_view(struct aswl_server *server)
+{
+	if (server == NULL)
+		return;
+
+	struct aswl_view *view;
+	wl_list_for_each(view, &server->views, link) {
+		if (!view->mapped)
+			continue;
+		if (view == server->focused_view)
+			continue;
+		focus_view(view, NULL);
+		return;
+	}
+}
+
+static void focus_prev_view(struct aswl_server *server)
+{
+	if (server == NULL)
+		return;
+
+	struct aswl_view *view;
+	wl_list_for_each_reverse(view, &server->views, link) {
+		if (!view->mapped)
+			continue;
+		if (view == server->focused_view)
+			continue;
+		focus_view(view, NULL);
+		return;
+	}
 }
 
 static void focus_topmost_view(struct aswl_server *server)
@@ -851,8 +1010,28 @@ static void handle_keyboard_key(struct wl_listener *listener, void *data)
 			struct aswl_binding *b;
 			wl_list_for_each(b, &server->bindings, link) {
 				if (b->mods == mods_masked && b->keysym == sym) {
-					fprintf(stderr, "aswlcomp: exec: %s\n", b->command);
-					spawn_command(b->command);
+					fprintf(stderr, "aswlcomp: bind action=%s\n", binding_action_name(b->action));
+					switch (b->action) {
+					case ASWL_BINDING_QUIT:
+						wl_display_terminate(server->display);
+						break;
+					case ASWL_BINDING_CLOSE_FOCUSED:
+						close_focused_view(server);
+						break;
+					case ASWL_BINDING_FOCUS_NEXT:
+						focus_next_view(server);
+						break;
+					case ASWL_BINDING_FOCUS_PREV:
+						focus_prev_view(server);
+						break;
+					case ASWL_BINDING_EXEC:
+					default:
+						if (b->command != NULL && b->command[0] != '\0') {
+							fprintf(stderr, "aswlcomp: exec: %s\n", b->command);
+							spawn_command(b->command);
+						}
+						break;
+					}
 					return;
 				}
 			}

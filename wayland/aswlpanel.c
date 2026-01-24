@@ -1500,6 +1500,34 @@ static void as_state_launch_command(struct as_state *state, const char *command)
 		return;
 
 	if (state != NULL && state->control != NULL) {
+		if (command[0] == '@') {
+			const char *action = command + 1;
+			if (strcmp(action, "quit") == 0 || strcmp(action, "exit") == 0) {
+				fprintf(stderr, "aswlpanel: compositor quit\n");
+				afterstep_control_v1_quit(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+			if (strcmp(action, "close") == 0 || strcmp(action, "close_focused") == 0) {
+				fprintf(stderr, "aswlpanel: compositor close_focused\n");
+				afterstep_control_v1_close_focused(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+			if (strcmp(action, "focus_next") == 0 || strcmp(action, "next") == 0) {
+				fprintf(stderr, "aswlpanel: compositor focus_next\n");
+				afterstep_control_v1_focus_next(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+			if (strcmp(action, "focus_prev") == 0 || strcmp(action, "prev") == 0) {
+				fprintf(stderr, "aswlpanel: compositor focus_prev\n");
+				afterstep_control_v1_focus_prev(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+		}
+
 		fprintf(stderr, "aswlpanel: compositor exec %s\n", command);
 		afterstep_control_v1_exec(state->control, command);
 		(void)wl_display_flush(state->display);
