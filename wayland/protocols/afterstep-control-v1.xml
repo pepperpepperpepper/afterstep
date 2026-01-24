@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="afterstep_control_v1">
-  <interface name="afterstep_control_v1" version="1">
+  <interface name="afterstep_control_v1" version="2">
     <description summary="AfterStep compositor control">
       Minimal control interface for the AfterStep wlroots compositor scaffold.
       Used by Wayland clients in the AfterStep "suite" (panel, launchers, etc.)
@@ -39,6 +39,25 @@
     <request name="focus_prev">
       <description summary="Focus the previous view">
         Requests that the compositor changes keyboard focus to another view.
+      </description>
+    </request>
+
+    <request name="set_workspace">
+      <description summary="Switch to a workspace">
+        Requests that the compositor switches to WORKSPACE (1-based).
+      </description>
+      <arg name="workspace" type="uint" summary="Workspace index (1-based)"/>
+    </request>
+
+    <request name="workspace_next">
+      <description summary="Switch to the next workspace">
+        Requests that the compositor switches to the next workspace.
+      </description>
+    </request>
+
+    <request name="workspace_prev">
+      <description summary="Switch to the previous workspace">
+        Requests that the compositor switches to the previous workspace.
       </description>
     </request>
   </interface>

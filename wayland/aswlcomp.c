@@ -57,6 +57,7 @@ struct aswl_view {
 	struct wlr_scene_tree *scene_tree;
 	bool mapped;
 	bool placed;
+	uint32_t workspace;
 	bool surface_listeners_added;
 
 	struct wl_listener map;
@@ -103,7 +104,11 @@ struct aswl_binding {
 		ASWL_BINDING_CLOSE_FOCUSED,
 		ASWL_BINDING_FOCUS_NEXT,
 		ASWL_BINDING_FOCUS_PREV,
+		ASWL_BINDING_WORKSPACE_SET,
+		ASWL_BINDING_WORKSPACE_NEXT,
+		ASWL_BINDING_WORKSPACE_PREV,
 	} action;
+	uint32_t workspace;
 	char *command;
 };
 
@@ -131,6 +136,8 @@ struct aswl_server {
 	struct wl_list views;
 	struct aswl_view *focused_view;
 	int cascade_offset;
+	uint32_t current_workspace;
+	uint32_t workspace_count;
 
 	struct wl_list bindings;
 
@@ -185,6 +192,9 @@ static void end_interactive(struct aswl_server *server);
 static void close_focused_view(struct aswl_server *server);
 static void focus_next_view(struct aswl_server *server);
 static void focus_prev_view(struct aswl_server *server);
+static void set_workspace(struct aswl_server *server, uint32_t workspace);
+static void workspace_next(struct aswl_server *server);
+static void workspace_prev(struct aswl_server *server);
 
 static void usage(const char *prog)
 {
@@ -286,6 +296,42 @@ static void aswl_control_focus_prev(struct wl_client *client, struct wl_resource
 	wl_display_flush_clients(server->display);
 }
 
+static void aswl_control_set_workspace(struct wl_client *client, struct wl_resource *resource, uint32_t workspace)
+{
+	(void)client;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
+	if (server == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control set_workspace=%u\n", workspace);
+	set_workspace(server, workspace);
+	wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_workspace_next(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
+	if (server == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control workspace_next\n");
+	workspace_next(server);
+	wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_workspace_prev(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	struct aswl_server *server = wl_resource_get_user_data(resource);
+	if (server == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control workspace_prev\n");
+	workspace_prev(server);
+	wl_display_flush_clients(server->display);
+}
+
 static const struct afterstep_control_v1_interface aswl_control_impl = {
 	.destroy = aswl_control_destroy,
 	.exec = aswl_control_exec,
@@ -293,12 +339,15 @@ static const struct afterstep_control_v1_interface aswl_control_impl = {
 	.close_focused = aswl_control_close_focused,
 	.focus_next = aswl_control_focus_next,
 	.focus_prev = aswl_control_focus_prev,
+	.set_workspace = aswl_control_set_workspace,
+	.workspace_next = aswl_control_workspace_next,
+	.workspace_prev = aswl_control_workspace_prev,
 };
 
 static void aswl_control_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
 	struct aswl_server *server = data;
-	uint32_t v = version > 1 ? 1 : version;
+	uint32_t v = version > 2 ? 2 : version;
 	struct wl_resource *res = wl_resource_create(client, &afterstep_control_v1_interface, v, id);
 	if (res == NULL) {
 		wl_client_post_no_memory(client);
@@ -415,6 +464,22 @@ static void add_binding_action(struct aswl_server *server, uint32_t mods, xkb_ke
 	wl_list_insert(server->bindings.prev, &b->link);
 }
 
+static void add_binding_workspace_set(struct aswl_server *server, uint32_t mods, xkb_keysym_t keysym, uint32_t workspace)
+{
+	if (server == NULL || keysym == XKB_KEY_NoSymbol || workspace < 1)
+		return;
+
+	struct aswl_binding *b = calloc(1, sizeof(*b));
+	if (b == NULL)
+		return;
+
+	b->mods = mods;
+	b->keysym = keysym;
+	b->action = ASWL_BINDING_WORKSPACE_SET;
+	b->workspace = workspace;
+	wl_list_insert(server->bindings.prev, &b->link);
+}
+
 static const char *binding_action_name(int action)
 {
 	switch (action) {
@@ -426,6 +491,12 @@ static const char *binding_action_name(int action)
 		return "focus_next";
 	case ASWL_BINDING_FOCUS_PREV:
 		return "focus_prev";
+	case ASWL_BINDING_WORKSPACE_SET:
+		return "workspace";
+	case ASWL_BINDING_WORKSPACE_NEXT:
+		return "workspace_next";
+	case ASWL_BINDING_WORKSPACE_PREV:
+		return "workspace_prev";
 	default:
 		return "exec";
 	}
@@ -521,27 +592,56 @@ static void load_config_file(struct aswl_server *server, const char *path, bool 
 					continue;
 			}
 
-			if (strncmp(bind_cmd, "exec", 4) == 0 && isspace((unsigned char)bind_cmd[4])) {
-				bind_cmd = lstrip(bind_cmd + 4);
-				if (bind_cmd[0] == '\0') {
-					fprintf(stderr, "aswlcomp: bind: missing command\n");
+				if (strncmp(bind_cmd, "exec", 4) == 0 && isspace((unsigned char)bind_cmd[4])) {
+					bind_cmd = lstrip(bind_cmd + 4);
+					if (bind_cmd[0] == '\0') {
+						fprintf(stderr, "aswlcomp: bind: missing command\n");
+						continue;
+					}
+					fprintf(stderr, "aswlcomp: bind: mods=0x%x key=%s exec=%s\n", mods, key_str, bind_cmd);
+					add_binding_exec(server, mods, keysym, bind_cmd);
 					continue;
 				}
-				fprintf(stderr, "aswlcomp: bind: mods=0x%x key=%s exec=%s\n", mods, key_str, bind_cmd);
-				add_binding_exec(server, mods, keysym, bind_cmd);
-				continue;
-			}
 
-			int action = ASWL_BINDING_EXEC;
-			if (str_ieq(bind_cmd, "quit") || str_ieq(bind_cmd, "exit")) {
-				action = ASWL_BINDING_QUIT;
-			} else if (str_ieq(bind_cmd, "close") || str_ieq(bind_cmd, "close_focused")) {
-				action = ASWL_BINDING_CLOSE_FOCUSED;
-			} else if (str_ieq(bind_cmd, "focus_next") || str_ieq(bind_cmd, "next")) {
-				action = ASWL_BINDING_FOCUS_NEXT;
-			} else if (str_ieq(bind_cmd, "focus_prev") || str_ieq(bind_cmd, "prev")) {
-				action = ASWL_BINDING_FOCUS_PREV;
-			}
+				if ((strncmp(bind_cmd, "workspace", 9) == 0 && isspace((unsigned char)bind_cmd[9])) ||
+				    (strncmp(bind_cmd, "ws", 2) == 0 && isspace((unsigned char)bind_cmd[2]))) {
+					char *num = bind_cmd;
+					if (strncmp(bind_cmd, "workspace", 9) == 0)
+						num = lstrip(bind_cmd + 9);
+					else
+						num = lstrip(bind_cmd + 2);
+
+					if (num == NULL || num[0] == '\0') {
+						fprintf(stderr, "aswlcomp: bind: workspace: missing number\n");
+						continue;
+					}
+
+					char *end = NULL;
+					unsigned long ws = strtoul(num, &end, 10);
+					if (end == num || (end != NULL && *end != '\0') || ws < 1 || ws > 1000) {
+						fprintf(stderr, "aswlcomp: bind: workspace: bad number: %s\n", num);
+						continue;
+					}
+
+					fprintf(stderr, "aswlcomp: bind: mods=0x%x key=%s workspace=%lu\n", mods, key_str, ws);
+					add_binding_workspace_set(server, mods, keysym, (uint32_t)ws);
+					continue;
+				}
+
+				int action = ASWL_BINDING_EXEC;
+				if (str_ieq(bind_cmd, "quit") || str_ieq(bind_cmd, "exit")) {
+					action = ASWL_BINDING_QUIT;
+				} else if (str_ieq(bind_cmd, "close") || str_ieq(bind_cmd, "close_focused")) {
+					action = ASWL_BINDING_CLOSE_FOCUSED;
+				} else if (str_ieq(bind_cmd, "focus_next") || str_ieq(bind_cmd, "next")) {
+					action = ASWL_BINDING_FOCUS_NEXT;
+				} else if (str_ieq(bind_cmd, "focus_prev") || str_ieq(bind_cmd, "prev")) {
+					action = ASWL_BINDING_FOCUS_PREV;
+				} else if (str_ieq(bind_cmd, "workspace_next") || str_ieq(bind_cmd, "ws_next") || str_ieq(bind_cmd, "ws+")) {
+					action = ASWL_BINDING_WORKSPACE_NEXT;
+				} else if (str_ieq(bind_cmd, "workspace_prev") || str_ieq(bind_cmd, "ws_prev") || str_ieq(bind_cmd, "ws-")) {
+					action = ASWL_BINDING_WORKSPACE_PREV;
+				}
 
 			if (action == ASWL_BINDING_EXEC) {
 				fprintf(stderr, "aswlcomp: bind: missing exec prefix: %s\n", bind_cmd);
@@ -665,6 +765,15 @@ static void close_focused_view(struct aswl_server *server)
 	}
 }
 
+static bool view_visible(struct aswl_server *server, struct aswl_view *view)
+{
+	if (server == NULL || view == NULL)
+		return false;
+	if (!view->mapped || view->scene_tree == NULL)
+		return false;
+	return view->workspace == server->current_workspace;
+}
+
 static void focus_next_view(struct aswl_server *server)
 {
 	if (server == NULL)
@@ -672,7 +781,7 @@ static void focus_next_view(struct aswl_server *server)
 
 	struct aswl_view *view;
 	wl_list_for_each(view, &server->views, link) {
-		if (!view->mapped)
+		if (!view_visible(server, view))
 			continue;
 		if (view == server->focused_view)
 			continue;
@@ -688,7 +797,7 @@ static void focus_prev_view(struct aswl_server *server)
 
 	struct aswl_view *view;
 	wl_list_for_each_reverse(view, &server->views, link) {
-		if (!view->mapped)
+		if (!view_visible(server, view))
 			continue;
 		if (view == server->focused_view)
 			continue;
@@ -704,11 +813,84 @@ static void focus_topmost_view(struct aswl_server *server)
 
 	struct aswl_view *view;
 	wl_list_for_each_reverse(view, &server->views, link) {
-		if (!view->mapped)
+		if (!view_visible(server, view))
 			continue;
 		focus_view(view, NULL);
 		return;
 	}
+}
+
+static uint32_t normalize_workspace(struct aswl_server *server, uint32_t workspace)
+{
+	if (workspace < 1)
+		workspace = 1;
+
+	if (server != NULL && server->workspace_count > 0 && workspace > server->workspace_count) {
+		workspace = ((workspace - 1) % server->workspace_count) + 1;
+	}
+
+	return workspace;
+}
+
+static void set_workspace(struct aswl_server *server, uint32_t workspace)
+{
+	if (server == NULL)
+		return;
+
+	workspace = normalize_workspace(server, workspace);
+	if (server->current_workspace == workspace)
+		return;
+
+	fprintf(stderr, "aswlcomp: workspace: %u -> %u\n", server->current_workspace, workspace);
+	server->current_workspace = workspace;
+
+	if (server->grabbed_view != NULL && server->grabbed_view->workspace != workspace)
+		end_interactive(server);
+
+	if (server->focused_view != NULL && server->focused_view->workspace != workspace) {
+		struct aswl_view *old = server->focused_view;
+		if (old->xdg_surface != NULL && old->xdg_surface->toplevel != NULL) {
+			(void)wlr_xdg_toplevel_set_activated(old->xdg_surface->toplevel, false);
+		} else if (old->xwayland_surface != NULL) {
+			wlr_xwayland_surface_activate(old->xwayland_surface, false);
+		}
+		server->focused_view = NULL;
+		wlr_seat_keyboard_notify_clear_focus(server->seat);
+	}
+
+	struct aswl_view *view;
+	wl_list_for_each(view, &server->views, link) {
+		if (view->scene_tree == NULL)
+			continue;
+		bool enabled = view->mapped && view->workspace == server->current_workspace;
+		wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
+		if (enabled)
+			place_view(view);
+	}
+
+	focus_topmost_view(server);
+}
+
+static void workspace_next(struct aswl_server *server)
+{
+	if (server == NULL)
+		return;
+
+	uint32_t count = server->workspace_count > 0 ? server->workspace_count : 1;
+	uint32_t next = server->current_workspace + 1;
+	if (next > count)
+		next = 1;
+	set_workspace(server, next);
+}
+
+static void workspace_prev(struct aswl_server *server)
+{
+	if (server == NULL)
+		return;
+
+	uint32_t count = server->workspace_count > 0 ? server->workspace_count : 1;
+	uint32_t prev = server->current_workspace > 1 ? server->current_workspace - 1 : count;
+	set_workspace(server, prev);
 }
 
 static struct aswl_output *output_from_wlr_output(struct aswl_server *server, struct wlr_output *output)
@@ -897,10 +1079,16 @@ static void handle_view_map(struct wl_listener *listener, void *data)
 {
 	(void)data;
 	struct aswl_view *view = wl_container_of(listener, view, map);
+	struct aswl_server *server = view->server;
+
 	view->mapped = true;
-	wlr_scene_node_set_enabled(&view->scene_tree->node, true);
-	place_view(view);
-	focus_view(view, NULL);
+	bool enabled = server != NULL && view->workspace == server->current_workspace;
+	wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
+
+	if (enabled) {
+		place_view(view);
+		focus_view(view, NULL);
+	}
 }
 
 static void handle_view_unmap(struct wl_listener *listener, void *data)
@@ -1117,6 +1305,7 @@ static void handle_new_xwayland_surface(struct wl_listener *listener, void *data
 	view->server = server;
 	view->type = ASWL_VIEW_XWAYLAND;
 	view->xwayland_surface = xsurface;
+	view->workspace = server->current_workspace;
 	xsurface->data = view;
 
 	wl_list_insert(server->views.prev, &view->link);
@@ -1158,6 +1347,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 	view->server = server;
 	view->type = ASWL_VIEW_XDG;
 	view->xdg_surface = xdg_surface;
+	view->workspace = server->current_workspace;
 	view->scene_tree = wlr_scene_xdg_surface_create(server->xdg_tree, xdg_surface);
 	if (view->scene_tree == NULL) {
 		free(view);
@@ -1229,6 +1419,15 @@ static void handle_keyboard_key(struct wl_listener *listener, void *data)
 						break;
 					case ASWL_BINDING_FOCUS_PREV:
 						focus_prev_view(server);
+						break;
+					case ASWL_BINDING_WORKSPACE_SET:
+						set_workspace(server, b->workspace);
+						break;
+					case ASWL_BINDING_WORKSPACE_NEXT:
+						workspace_next(server);
+						break;
+					case ASWL_BINDING_WORKSPACE_PREV:
+						workspace_prev(server);
 						break;
 					case ASWL_BINDING_EXEC:
 					default:
@@ -1796,6 +1995,17 @@ int main(int argc, char **argv)
 	wlr_log_init(WLR_INFO, NULL);
 
 	struct aswl_server server = { 0 };
+	server.current_workspace = 1;
+	server.workspace_count = 9;
+
+	const char *ws_env = getenv("ASWLCOMP_WORKSPACES");
+	if (ws_env != NULL && ws_env[0] != '\0') {
+		char *end = NULL;
+		unsigned long n = strtoul(ws_env, &end, 10);
+		if (end != ws_env && *end == '\0' && n > 0 && n <= 1000) {
+			server.workspace_count = (uint32_t)n;
+		}
+	}
 
 	server.display = wl_display_create();
 	if (server.display == NULL) {
@@ -1831,7 +2041,7 @@ int main(int argc, char **argv)
 	(void)wlr_subcompositor_create(server.display);
 	(void)wlr_data_device_manager_create(server.display);
 
-	server.control_global = wl_global_create(server.display, &afterstep_control_v1_interface, 1, &server, aswl_control_bind);
+	server.control_global = wl_global_create(server.display, &afterstep_control_v1_interface, 2, &server, aswl_control_bind);
 	if (server.control_global == NULL) {
 		fprintf(stderr, "aswlcomp: wl_global_create(afterstep_control_v1) failed\n");
 		return 1;

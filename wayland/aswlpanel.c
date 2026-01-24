@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -60,6 +61,7 @@ struct as_state {
 
 	struct xdg_wm_base *xdg_wm_base;
 	struct afterstep_control_v1 *control;
+	uint32_t control_version;
 
 #if HAVE_WLR_LAYER_SHELL
 	struct zwlr_layer_shell_v1 *layer_shell;
@@ -1526,6 +1528,46 @@ static void as_state_launch_command(struct as_state *state, const char *command)
 				(void)wl_display_flush(state->display);
 				return;
 			}
+
+			if ((strcmp(action, "workspace_next") == 0 || strcmp(action, "ws_next") == 0 || strcmp(action, "ws+") == 0) &&
+			    state->control_version >= 2) {
+				fprintf(stderr, "aswlpanel: compositor workspace_next\n");
+				afterstep_control_v1_workspace_next(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+			if ((strcmp(action, "workspace_prev") == 0 || strcmp(action, "ws_prev") == 0 || strcmp(action, "ws-") == 0) &&
+			    state->control_version >= 2) {
+				fprintf(stderr, "aswlpanel: compositor workspace_prev\n");
+				afterstep_control_v1_workspace_prev(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+
+			const char *ws_arg = NULL;
+			if (strncmp(action, "workspace", 9) == 0) {
+				ws_arg = action + 9;
+			} else if (strncmp(action, "ws", 2) == 0) {
+				ws_arg = action + 2;
+			}
+			if (ws_arg != NULL) {
+				while (*ws_arg == ':' || *ws_arg == '=' || isspace((unsigned char)*ws_arg))
+					ws_arg++;
+
+				if (*ws_arg != '\0' && state->control_version >= 2) {
+					char *end = NULL;
+					unsigned long ws = strtoul(ws_arg, &end, 10);
+					while (end != NULL && isspace((unsigned char)*end))
+						end++;
+
+					if (end != ws_arg && end != NULL && *end == '\0' && ws >= 1 && ws <= 1000) {
+						fprintf(stderr, "aswlpanel: compositor set_workspace=%lu\n", ws);
+						afterstep_control_v1_set_workspace(state->control, (uint32_t)ws);
+						(void)wl_display_flush(state->display);
+						return;
+					}
+				}
+			}
 		}
 
 		fprintf(stderr, "aswlpanel: compositor exec %s\n", command);
@@ -1682,8 +1724,11 @@ static void registry_global(void *data,
 	}
 
 	if (strcmp(interface, afterstep_control_v1_interface.name) == 0) {
-		(void)version;
-		state->control = wl_registry_bind(registry, name, &afterstep_control_v1_interface, 1);
+		uint32_t bind_version = version < 2 ? version : 2;
+		if (bind_version < 1)
+			bind_version = 1;
+		state->control_version = bind_version;
+		state->control = wl_registry_bind(registry, name, &afterstep_control_v1_interface, bind_version);
 		return;
 	}
 

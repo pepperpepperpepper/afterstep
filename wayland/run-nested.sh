@@ -106,6 +106,12 @@ bind Alt+Return exec "${TERMINAL:-foot}"
 bind Alt+d exec "fuzzel || bemenu-run || wofi --show drun"
 bind Alt+Tab focus_next
 bind Alt+Shift+Tab focus_prev
+bind Alt+Left workspace_prev
+bind Alt+Right workspace_next
+bind Alt+1 workspace 1
+bind Alt+2 workspace 2
+bind Alt+3 workspace 3
+bind Alt+4 workspace 4
 bind Alt+q close_focused
 EOF
 
