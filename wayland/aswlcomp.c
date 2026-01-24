@@ -29,6 +29,8 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/log.h>
 
+#include <wlr/xwayland.h>
+
 #include <wlr/util/edges.h>
 
 #include <xkbcommon/xkbcommon.h>
@@ -46,10 +48,16 @@ struct aswl_server;
 struct aswl_view {
 	struct wl_list link; /* aswl_server.views */
 	struct aswl_server *server;
+	enum {
+		ASWL_VIEW_XDG = 0,
+		ASWL_VIEW_XWAYLAND,
+	} type;
 	struct wlr_xdg_surface *xdg_surface;
+	struct wlr_xwayland_surface *xwayland_surface;
 	struct wlr_scene_tree *scene_tree;
 	bool mapped;
 	bool placed;
+	bool surface_listeners_added;
 
 	struct wl_listener map;
 	struct wl_listener unmap;
@@ -57,6 +65,10 @@ struct aswl_view {
 
 	struct wl_listener request_move;
 	struct wl_listener request_resize;
+
+	struct wl_listener xwayland_associate;
+	struct wl_listener xwayland_dissociate;
+	struct wl_listener xwayland_request_configure;
 };
 
 struct aswl_keyboard {
@@ -110,6 +122,7 @@ struct aswl_server {
 	struct wlr_backend *backend;
 	struct wlr_renderer *renderer;
 	struct wlr_allocator *allocator;
+	struct wlr_compositor *compositor;
 
 	struct wlr_output_layout *output_layout;
 	struct wlr_scene *scene;
@@ -127,6 +140,7 @@ struct aswl_server {
 
 	struct wlr_layer_shell_v1 *layer_shell;
 	struct wlr_xdg_shell *xdg_shell;
+	struct wlr_xwayland *xwayland;
 	struct wlr_seat *seat;
 
 	struct wlr_cursor *cursor;
@@ -138,6 +152,7 @@ struct aswl_server {
 	struct wl_listener new_output;
 	struct wl_listener new_input;
 	struct wl_listener new_xdg_surface;
+	struct wl_listener new_xwayland_surface;
 	struct wl_listener new_layer_surface;
 
 	struct wl_listener request_cursor;
@@ -576,9 +591,14 @@ static struct aswl_view *view_from_wlr_surface(struct wlr_surface *surface)
 		struct wlr_surface *parent = xdg_surface->popup->parent;
 		xdg_surface = parent != NULL ? wlr_xdg_surface_try_from_wlr_surface(parent) : NULL;
 	}
-	if (xdg_surface == NULL || xdg_surface->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL)
-		return NULL;
-	return xdg_surface->data;
+	if (xdg_surface != NULL && xdg_surface->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL)
+		return xdg_surface->data;
+
+	struct wlr_xwayland_surface *xsurface = wlr_xwayland_surface_try_from_wlr_surface(surface);
+	if (xsurface != NULL)
+		return xsurface->data;
+
+	return NULL;
 }
 
 static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
@@ -593,21 +613,32 @@ static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 	wl_list_insert(server->views.prev, &view->link);
 
 	if (server->focused_view != view) {
-		if (server->focused_view != NULL && server->focused_view->xdg_surface != NULL &&
-		    server->focused_view->xdg_surface->toplevel != NULL) {
-			(void)wlr_xdg_toplevel_set_activated(server->focused_view->xdg_surface->toplevel, false);
+		if (server->focused_view != NULL) {
+			struct aswl_view *old = server->focused_view;
+			if (old->xdg_surface != NULL && old->xdg_surface->toplevel != NULL) {
+				(void)wlr_xdg_toplevel_set_activated(old->xdg_surface->toplevel, false);
+			} else if (old->xwayland_surface != NULL) {
+				wlr_xwayland_surface_activate(old->xwayland_surface, false);
+			}
 		}
 		server->focused_view = view;
-		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL)
+		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL) {
 			(void)wlr_xdg_toplevel_set_activated(view->xdg_surface->toplevel, true);
+		} else if (view->xwayland_surface != NULL) {
+			wlr_xwayland_surface_activate(view->xwayland_surface, true);
+		}
 	}
 
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
 	if (keyboard == NULL)
 		return;
 
-	if (surface == NULL)
-		surface = view->xdg_surface->surface;
+	if (surface == NULL) {
+		if (view->xdg_surface != NULL)
+			surface = view->xdg_surface->surface;
+		else if (view->xwayland_surface != NULL)
+			surface = view->xwayland_surface->surface;
+	}
 	if (surface == NULL)
 		return;
 
@@ -616,6 +647,9 @@ static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 	                              keyboard->keycodes,
 	                              keyboard->num_keycodes,
 	                              &keyboard->modifiers);
+
+	if (view->xwayland_surface != NULL)
+		wlr_xwayland_surface_offer_focus(view->xwayland_surface);
 }
 
 static void close_focused_view(struct aswl_server *server)
@@ -626,6 +660,8 @@ static void close_focused_view(struct aswl_server *server)
 	struct aswl_view *view = server->focused_view;
 	if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL) {
 		wlr_xdg_toplevel_send_close(view->xdg_surface->toplevel);
+	} else if (view->xwayland_surface != NULL) {
+		wlr_xwayland_surface_close(view->xwayland_surface);
 	}
 }
 
@@ -692,6 +728,11 @@ static void view_get_current_size(struct aswl_view *view, int *width, int *heigh
 {
 	int w = 0;
 	int h = 0;
+
+	if (view != NULL && view->xwayland_surface != NULL) {
+		w = view->xwayland_surface->width;
+		h = view->xwayland_surface->height;
+	}
 
 	if (view != NULL && view->xdg_surface != NULL && view->xdg_surface->surface != NULL) {
 		w = view->xdg_surface->surface->current.width;
@@ -779,6 +820,9 @@ static void place_view(struct aswl_view *view)
 	}
 
 	wlr_scene_node_set_position(&view->scene_tree->node, x, y);
+	if (view->xwayland_surface != NULL && width > 0 && height > 0) {
+		wlr_xwayland_surface_configure(view->xwayland_surface, x, y, (uint16_t)width, (uint16_t)height);
+	}
 	view->placed = true;
 
 	server->cascade_offset += 32;
@@ -875,6 +919,8 @@ static void handle_view_unmap(struct wl_listener *listener, void *data)
 	if (server != NULL && server->focused_view == view) {
 		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL)
 			(void)wlr_xdg_toplevel_set_activated(view->xdg_surface->toplevel, false);
+		else if (view->xwayland_surface != NULL)
+			wlr_xwayland_surface_activate(view->xwayland_surface, false);
 		server->focused_view = NULL;
 		wlr_seat_keyboard_notify_clear_focus(server->seat);
 		focus_topmost_view(server);
@@ -887,11 +933,19 @@ static void handle_view_destroy(struct wl_listener *listener, void *data)
 	struct aswl_view *view = wl_container_of(listener, view, destroy);
 	struct aswl_server *server = view->server;
 
-	wl_list_remove(&view->map.link);
-	wl_list_remove(&view->unmap.link);
+	if (view->surface_listeners_added) {
+		wl_list_remove(&view->map.link);
+		wl_list_remove(&view->unmap.link);
+		view->surface_listeners_added = false;
+	}
 	wl_list_remove(&view->destroy.link);
 	wl_list_remove(&view->request_move.link);
 	wl_list_remove(&view->request_resize.link);
+	if (view->type == ASWL_VIEW_XWAYLAND) {
+		wl_list_remove(&view->xwayland_associate.link);
+		wl_list_remove(&view->xwayland_dissociate.link);
+		wl_list_remove(&view->xwayland_request_configure.link);
+	}
 	wl_list_remove(&view->link);
 
 	if (server != NULL && server->grabbed_view == view) {
@@ -902,6 +956,11 @@ static void handle_view_destroy(struct wl_listener *listener, void *data)
 		server->focused_view = NULL;
 		wlr_seat_keyboard_notify_clear_focus(server->seat);
 		focus_topmost_view(server);
+	}
+
+	if (view->type == ASWL_VIEW_XWAYLAND && view->scene_tree != NULL) {
+		wlr_scene_node_destroy(&view->scene_tree->node);
+		view->scene_tree = NULL;
 	}
 
 	free(view);
@@ -939,6 +998,151 @@ static void handle_request_resize(struct wl_listener *listener, void *data)
 	begin_interactive(view, ASWL_CURSOR_RESIZE, event->edges, 0);
 }
 
+static void xwayland_attach_surface(struct aswl_view *view)
+{
+	if (view == NULL || view->server == NULL || view->xwayland_surface == NULL)
+		return;
+	struct aswl_server *server = view->server;
+	struct wlr_xwayland_surface *xsurface = view->xwayland_surface;
+
+	if (xsurface->surface == NULL)
+		return;
+
+	if (view->scene_tree != NULL)
+		return;
+
+	view->scene_tree = wlr_scene_subsurface_tree_create(server->xdg_tree, xsurface->surface);
+	if (view->scene_tree == NULL)
+		return;
+
+	wlr_scene_node_set_position(&view->scene_tree->node, xsurface->x, xsurface->y);
+
+	/* Start hidden until the client maps. */
+	wlr_scene_node_set_enabled(&view->scene_tree->node, false);
+
+	view->map.notify = handle_view_map;
+	wl_signal_add(&xsurface->surface->events.map, &view->map);
+
+	view->unmap.notify = handle_view_unmap;
+	wl_signal_add(&xsurface->surface->events.unmap, &view->unmap);
+	view->surface_listeners_added = true;
+}
+
+static void xwayland_detach_surface(struct aswl_view *view)
+{
+	if (view == NULL)
+		return;
+
+	if (view->surface_listeners_added) {
+		wl_list_remove(&view->map.link);
+		wl_list_remove(&view->unmap.link);
+		view->surface_listeners_added = false;
+	}
+
+	if (view->scene_tree != NULL) {
+		wlr_scene_node_destroy(&view->scene_tree->node);
+		view->scene_tree = NULL;
+	}
+
+	view->mapped = false;
+}
+
+static void handle_xwayland_associate(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, xwayland_associate);
+	xwayland_attach_surface(view);
+}
+
+static void handle_xwayland_dissociate(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, xwayland_dissociate);
+	struct aswl_server *server = view->server;
+
+	if (server != NULL && server->grabbed_view == view)
+		end_interactive(server);
+
+	if (server != NULL && server->focused_view == view) {
+		server->focused_view = NULL;
+		wlr_seat_keyboard_notify_clear_focus(server->seat);
+		focus_topmost_view(server);
+	}
+
+	xwayland_detach_surface(view);
+}
+
+static void handle_xwayland_request_configure(struct wl_listener *listener, void *data)
+{
+	struct aswl_view *view = wl_container_of(listener, view, xwayland_request_configure);
+	struct wlr_xwayland_surface_configure_event *event = data;
+
+	if (view == NULL || view->xwayland_surface == NULL || view->scene_tree == NULL || event == NULL)
+		return;
+
+	wlr_scene_node_set_position(&view->scene_tree->node, event->x, event->y);
+	wlr_xwayland_surface_configure(view->xwayland_surface, event->x, event->y, event->width, event->height);
+}
+
+static void handle_xwayland_request_move(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, request_move);
+	if (view->server == NULL || view->server->cursor == NULL)
+		return;
+	begin_interactive(view, ASWL_CURSOR_MOVE, 0, 0);
+}
+
+static void handle_xwayland_request_resize(struct wl_listener *listener, void *data)
+{
+	struct aswl_view *view = wl_container_of(listener, view, request_resize);
+	struct wlr_xwayland_resize_event *event = data;
+	if (view->server == NULL || view->server->cursor == NULL || event == NULL)
+		return;
+	begin_interactive(view, ASWL_CURSOR_RESIZE, event->edges, 0);
+}
+
+static void handle_new_xwayland_surface(struct wl_listener *listener, void *data)
+{
+	struct aswl_server *server = wl_container_of(listener, server, new_xwayland_surface);
+	struct wlr_xwayland_surface *xsurface = data;
+
+	if (xsurface == NULL)
+		return;
+
+	struct aswl_view *view = calloc(1, sizeof(*view));
+	if (view == NULL)
+		return;
+
+	view->server = server;
+	view->type = ASWL_VIEW_XWAYLAND;
+	view->xwayland_surface = xsurface;
+	xsurface->data = view;
+
+	wl_list_insert(server->views.prev, &view->link);
+
+	view->destroy.notify = handle_view_destroy;
+	wl_signal_add(&xsurface->events.destroy, &view->destroy);
+
+	view->xwayland_associate.notify = handle_xwayland_associate;
+	wl_signal_add(&xsurface->events.associate, &view->xwayland_associate);
+
+	view->xwayland_dissociate.notify = handle_xwayland_dissociate;
+	wl_signal_add(&xsurface->events.dissociate, &view->xwayland_dissociate);
+
+	view->xwayland_request_configure.notify = handle_xwayland_request_configure;
+	wl_signal_add(&xsurface->events.request_configure, &view->xwayland_request_configure);
+
+	view->request_move.notify = handle_xwayland_request_move;
+	wl_signal_add(&xsurface->events.request_move, &view->request_move);
+
+	view->request_resize.notify = handle_xwayland_request_resize;
+	wl_signal_add(&xsurface->events.request_resize, &view->request_resize);
+
+	/* Xwayland may already have an associated wlr_surface. */
+	xwayland_attach_surface(view);
+}
+
 static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 {
 	struct aswl_server *server = wl_container_of(listener, server, new_xdg_surface);
@@ -952,6 +1156,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 		return;
 
 	view->server = server;
+	view->type = ASWL_VIEW_XDG;
 	view->xdg_surface = xdg_surface;
 	view->scene_tree = wlr_scene_xdg_surface_create(server->xdg_tree, xdg_surface);
 	if (view->scene_tree == NULL) {
@@ -969,6 +1174,7 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 
 	view->unmap.notify = handle_view_unmap;
 	wl_signal_add(&xdg_surface->surface->events.unmap, &view->unmap);
+	view->surface_listeners_added = true;
 
 	view->destroy.notify = handle_view_destroy;
 	wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
@@ -1146,12 +1352,22 @@ static void process_cursor_motion(struct aswl_server *server, uint32_t time_msec
 		int nx = server->grab_view_lx + (int)dx;
 		int ny = server->grab_view_ly + (int)dy;
 		wlr_scene_node_set_position(&view->scene_tree->node, nx, ny);
+		if (view->xwayland_surface != NULL) {
+			int w = server->grab_view_width;
+			int h = server->grab_view_height;
+			if (w <= 0)
+				w = view->xwayland_surface->width;
+			if (h <= 0)
+				h = view->xwayland_surface->height;
+			if (w > 0 && h > 0)
+				wlr_xwayland_surface_configure(view->xwayland_surface, nx, ny, (uint16_t)w, (uint16_t)h);
+		}
 		return;
 	}
 
 	if (server->cursor_mode == ASWL_CURSOR_RESIZE) {
 		struct aswl_view *view = server->grabbed_view;
-		if (view == NULL || view->xdg_surface == NULL || view->xdg_surface->toplevel == NULL)
+		if (view == NULL)
 			return;
 
 		double dx = server->cursor->x - server->grab_lx;
@@ -1182,12 +1398,16 @@ static void process_cursor_motion(struct aswl_server *server, uint32_t time_msec
 			nh = server->grab_view_height + dy_i;
 		}
 
-		int min_w = view->xdg_surface->toplevel->current.min_width;
-		int min_h = view->xdg_surface->toplevel->current.min_height;
-		if (min_w <= 0)
-			min_w = 1;
-		if (min_h <= 0)
-			min_h = 1;
+		int min_w = 1;
+		int min_h = 1;
+		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL) {
+			min_w = view->xdg_surface->toplevel->current.min_width;
+			min_h = view->xdg_surface->toplevel->current.min_height;
+			if (min_w <= 0)
+				min_w = 1;
+			if (min_h <= 0)
+				min_h = 1;
+		}
 
 		if (nw < min_w) {
 			nw = min_w;
@@ -1202,7 +1422,11 @@ static void process_cursor_motion(struct aswl_server *server, uint32_t time_msec
 
 		if ((server->grab_edges & WLR_EDGE_LEFT) != 0 || (server->grab_edges & WLR_EDGE_TOP) != 0)
 			wlr_scene_node_set_position(&view->scene_tree->node, nx, ny);
-		(void)wlr_xdg_toplevel_set_size(view->xdg_surface->toplevel, nw, nh);
+		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL) {
+			(void)wlr_xdg_toplevel_set_size(view->xdg_surface->toplevel, nw, nh);
+		} else if (view->xwayland_surface != NULL) {
+			wlr_xwayland_surface_configure(view->xwayland_surface, nx, ny, (uint16_t)nw, (uint16_t)nh);
+		}
 		return;
 	}
 
@@ -1599,7 +1823,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	(void)wlr_compositor_create(server.display, 6, server.renderer);
+	server.compositor = wlr_compositor_create(server.display, 6, server.renderer);
+	if (server.compositor == NULL) {
+		fprintf(stderr, "aswlcomp: wlr_compositor_create failed\n");
+		return 1;
+	}
 	(void)wlr_subcompositor_create(server.display);
 	(void)wlr_data_device_manager_create(server.display);
 
@@ -1626,6 +1854,17 @@ int main(int argc, char **argv)
 	if (server.seat == NULL) {
 		fprintf(stderr, "aswlcomp: wlr_seat_create failed\n");
 		return 1;
+	}
+
+	server.xwayland = wlr_xwayland_create(server.display, server.compositor, true);
+	if (server.xwayland != NULL) {
+		wlr_xwayland_set_seat(server.xwayland, server.seat);
+		if (server.xwayland->display_name != NULL) {
+			setenv("DISPLAY", server.xwayland->display_name, 1);
+			fprintf(stderr, "aswlcomp: Xwayland DISPLAY=%s\n", server.xwayland->display_name);
+		}
+	} else {
+		fprintf(stderr, "aswlcomp: Xwayland disabled/unavailable\n");
 	}
 
 	server.cursor = wlr_cursor_create();
@@ -1696,6 +1935,11 @@ int main(int argc, char **argv)
 	server.new_xdg_surface.notify = handle_new_xdg_surface;
 	wl_signal_add(&server.xdg_shell->events.new_surface, &server.new_xdg_surface);
 
+	if (server.xwayland != NULL) {
+		server.new_xwayland_surface.notify = handle_new_xwayland_surface;
+		wl_signal_add(&server.xwayland->events.new_surface, &server.new_xwayland_surface);
+	}
+
 	server.new_layer_surface.notify = handle_new_layer_surface;
 	wl_signal_add(&server.layer_shell->events.new_surface, &server.new_layer_surface);
 
@@ -1741,6 +1985,8 @@ int main(int argc, char **argv)
 	free(spawn_cmds);
 	wl_display_run(server.display);
 
+	if (server.xwayland != NULL)
+		wlr_xwayland_destroy(server.xwayland);
 	wl_display_destroy(server.display);
 	return 0;
 }
