@@ -32,6 +32,12 @@
 #ifndef BTN_LEFT
 #define BTN_LEFT 0x110
 #endif
+#ifndef BTN_RIGHT
+#define BTN_RIGHT 0x111
+#endif
+#ifndef BTN_MIDDLE
+#define BTN_MIDDLE 0x112
+#endif
 
 enum {
 	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
@@ -108,6 +114,7 @@ struct as_state {
 	bool pointer_in_surface;
 	int hover_index;
 	int pressed_index;
+	uint32_t pressed_button;
 
 	struct as_button *buttons;
 	size_t button_count;
@@ -1976,11 +1983,12 @@ static void pointer_button(void *data,
 	(void)time;
 	struct as_state *state = data;
 
-	if (button != BTN_LEFT)
+	if (button != BTN_LEFT && button != BTN_RIGHT && button != BTN_MIDDLE)
 		return;
 
 	if (state_w == WL_POINTER_BUTTON_STATE_PRESSED) {
 		state->pressed_index = state->hover_index;
+		state->pressed_button = button;
 		schedule_redraw(state);
 		return;
 	}
@@ -1989,13 +1997,17 @@ static void pointer_button(void *data,
 		return;
 
 	int clicked = state->pressed_index;
+	uint32_t clicked_button = state->pressed_button;
 	state->pressed_index = -1;
+	state->pressed_button = 0;
 	schedule_redraw(state);
 
 	if (clicked < 0 || clicked != state->hover_index)
 		return;
 
 	if ((size_t)clicked < state->button_count) {
+		if (clicked_button != BTN_LEFT)
+			return;
 		fprintf(stderr, "aswlpanel: launch %s: %s\n",
 		        state->buttons[clicked].label,
 		        state->buttons[clicked].command);
@@ -2009,8 +2021,20 @@ static void pointer_button(void *data,
 		return;
 
 	if (state->control != NULL && state->control_version >= 4) {
-		fprintf(stderr, "aswlpanel: focus_window %u\n", win->id);
-		afterstep_control_v1_focus_window(state->control, win->id);
+		if (clicked_button == BTN_LEFT) {
+			fprintf(stderr, "aswlpanel: focus_window %u\n", win->id);
+			afterstep_control_v1_focus_window(state->control, win->id);
+		} else if (clicked_button == BTN_MIDDLE) {
+			fprintf(stderr, "aswlpanel: close_window %u\n", win->id);
+			afterstep_control_v1_close_window(state->control, win->id);
+		} else if (clicked_button == BTN_RIGHT) {
+			uint32_t count = state->workspace_count > 0 ? state->workspace_count : 1;
+			uint32_t next = state->current_workspace + 1;
+			if (next > count)
+				next = 1;
+			fprintf(stderr, "aswlpanel: move_window_to_workspace %u -> %u\n", win->id, next);
+			afterstep_control_v1_move_window_to_workspace(state->control, win->id, next);
+		}
 		(void)wl_display_flush(state->display);
 	}
 }
