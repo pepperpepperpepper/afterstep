@@ -63,6 +63,7 @@ struct aswl_view {
 	struct wlr_xwayland_surface *xwayland_surface;
 	struct wlr_scene_tree *scene_tree;
 	bool mapped;
+	bool is_dock;
 	bool placed;
 	uint32_t workspace;
 	bool surface_listeners_added;
@@ -207,6 +208,7 @@ static void arrange_layers(struct aswl_server *server);
 static void focus_topmost_view(struct aswl_server *server);
 static void focus_view(struct aswl_view *view, struct wlr_surface *surface);
 static void place_view(struct aswl_view *view);
+static void arrange_dock_views(struct aswl_server *server);
 static void begin_interactive(struct aswl_view *view, enum aswl_cursor_mode mode, uint32_t edges, uint32_t button);
 static void end_interactive(struct aswl_server *server);
 static void close_focused_view(struct aswl_server *server);
@@ -313,6 +315,8 @@ static void send_window_state(struct aswl_server *server, struct wl_resource *re
 	if (wl_resource_get_version(resource) < 4)
 		return;
 	if (view->id == 0)
+		return;
+	if (view->is_dock)
 		return;
 
 	uint32_t flags = view_window_flags(server, view);
@@ -565,6 +569,8 @@ static void aswl_control_move_window_to_workspace(struct wl_client *client, stru
 
 	struct aswl_view *view = find_view_by_id(server, id);
 	if (view == NULL)
+		return;
+	if (view->is_dock)
 		return;
 
 	workspace = normalize_workspace(server, workspace);
@@ -1061,6 +1067,8 @@ static bool view_visible(struct aswl_server *server, struct aswl_view *view)
 		return false;
 	if (!view->mapped || view->scene_tree == NULL)
 		return false;
+	if (view->is_dock)
+		return false;
 	return view->workspace == server->current_workspace;
 }
 
@@ -1134,10 +1142,10 @@ static void set_workspace(struct aswl_server *server, uint32_t workspace)
 	fprintf(stderr, "aswlcomp: workspace: %u -> %u\n", server->current_workspace, workspace);
 	server->current_workspace = workspace;
 
-	if (server->grabbed_view != NULL && server->grabbed_view->workspace != workspace)
+	if (server->grabbed_view != NULL && !server->grabbed_view->is_dock && server->grabbed_view->workspace != workspace)
 		end_interactive(server);
 
-	if (server->focused_view != NULL && server->focused_view->workspace != workspace) {
+	if (server->focused_view != NULL && !server->focused_view->is_dock && server->focused_view->workspace != workspace) {
 		struct aswl_view *old = server->focused_view;
 		if (old->xdg_surface != NULL && old->xdg_surface->toplevel != NULL) {
 			(void)wlr_xdg_toplevel_set_activated(old->xdg_surface->toplevel, false);
@@ -1153,12 +1161,13 @@ static void set_workspace(struct aswl_server *server, uint32_t workspace)
 	wl_list_for_each(view, &server->views, link) {
 		if (view->scene_tree == NULL)
 			continue;
-		bool enabled = view->mapped && view->workspace == server->current_workspace;
+		bool enabled = view->mapped && (view->is_dock || view->workspace == server->current_workspace);
 		wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
-		if (enabled)
+		if (enabled && !view->is_dock)
 			place_view(view);
 	}
 
+	arrange_dock_views(server);
 	focus_topmost_view(server);
 	broadcast_workspace_state(server);
 }
@@ -1196,6 +1205,47 @@ static struct aswl_output *output_from_wlr_output(struct aswl_server *server, st
 			return out;
 	}
 	return NULL;
+}
+
+static bool view_is_xwayland_dockapp(struct aswl_view *view)
+{
+	if (view == NULL || view->xwayland_surface == NULL)
+		return false;
+	if (!wlr_xwayland_surface_has_window_type(view->xwayland_surface, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DOCK))
+		return false;
+
+	/*
+	 * _NET_WM_WINDOW_TYPE_DOCK is also used by panels. We only want "dockapps"
+	 * here (small, Wharf-like widgets), not full-width bars.
+	 */
+	uint16_t w = view->xwayland_surface->width;
+	uint16_t h = view->xwayland_surface->height;
+	if (w > 0 && w > 512)
+		return false;
+	if (h > 0 && h > 512)
+		return false;
+
+	return true;
+}
+
+static void view_maybe_mark_dock(struct aswl_view *view)
+{
+	if (view == NULL || view->is_dock)
+		return;
+	if (view->type != ASWL_VIEW_XWAYLAND)
+		return;
+	if (!view_is_xwayland_dockapp(view))
+		return;
+
+	view->is_dock = true;
+
+	if (view->xwayland_surface != NULL) {
+		wlr_xwayland_surface_set_sticky(view->xwayland_surface, true);
+		wlr_xwayland_surface_set_skip_taskbar(view->xwayland_surface, true);
+		wlr_xwayland_surface_set_skip_pager(view->xwayland_surface, true);
+	}
+
+	fprintf(stderr, "aswlcomp: dockapp: class=%s title=%s\n", view_app_id(view), view_title(view));
 }
 
 static void view_get_current_size(struct aswl_view *view, int *width, int *height)
@@ -1244,6 +1294,75 @@ static const char *xcursor_for_resize_edges(uint32_t edges)
 	if ((edges & WLR_EDGE_RIGHT) != 0)
 		return "right_side";
 	return "left_ptr";
+}
+
+static void arrange_dock_views(struct aswl_server *server)
+{
+	if (server == NULL || server->output_layout == NULL)
+		return;
+
+	struct wlr_output *output = wlr_output_layout_get_center_output(server->output_layout);
+	if (output == NULL)
+		return;
+
+	struct wlr_box full = { 0 };
+	wlr_output_layout_get_box(server->output_layout, output, &full);
+
+	struct wlr_box usable = full;
+	struct aswl_output *out = output_from_wlr_output(server, output);
+	if (out != NULL && out->usable_box.width > 0 && out->usable_box.height > 0)
+		usable = out->usable_box;
+
+	const int pad = 12;
+	const int spacing = 8;
+
+	int x = usable.x + pad;
+	int y_bottom = usable.y + usable.height - pad;
+	int row_h = 0;
+
+	struct aswl_view *view;
+	wl_list_for_each(view, &server->views, link) {
+		if (!view->is_dock || !view->mapped || view->scene_tree == NULL)
+			continue;
+
+		int w = 0;
+		int h = 0;
+		view_get_current_size(view, &w, &h);
+		if (w <= 0)
+			w = 64;
+		if (h <= 0)
+			h = 64;
+
+		int max_x = usable.x + usable.width - pad;
+		if (x + w > max_x && x > usable.x + pad) {
+			x = usable.x + pad;
+			y_bottom -= row_h + spacing;
+			row_h = 0;
+		}
+
+		int y = y_bottom - h;
+		if (y < usable.y + pad)
+			y = usable.y + pad;
+
+		wlr_scene_node_set_position(&view->scene_tree->node, x, y);
+		wlr_scene_node_raise_to_top(&view->scene_tree->node);
+
+		if (view->xwayland_surface != NULL) {
+			uint16_t ww = view->xwayland_surface->width;
+			uint16_t hh = view->xwayland_surface->height;
+			if (ww == 0)
+				ww = (uint16_t)w;
+			if (hh == 0)
+				hh = (uint16_t)h;
+			wlr_xwayland_surface_configure(view->xwayland_surface, x, y, ww, hh);
+		}
+
+		view->placed = true;
+
+		x += w + spacing;
+		if (h > row_h)
+			row_h = h;
+	}
 }
 
 static void place_view(struct aswl_view *view)
@@ -1374,12 +1493,18 @@ static void handle_view_map(struct wl_listener *listener, void *data)
 	struct aswl_server *server = view->server;
 
 	view->mapped = true;
-	bool enabled = server != NULL && view->workspace == server->current_workspace;
+	view_maybe_mark_dock(view);
+
+	bool enabled = server != NULL && (view->is_dock || view->workspace == server->current_workspace);
 	wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
 
 	if (enabled) {
-		place_view(view);
-		focus_view(view, NULL);
+		if (view->is_dock) {
+			arrange_dock_views(server);
+		} else {
+			place_view(view);
+			focus_view(view, NULL);
+		}
 	} else if (server != NULL) {
 		broadcast_window_state(server, view);
 	}
@@ -1410,6 +1535,9 @@ static void handle_view_unmap(struct wl_listener *listener, void *data)
 
 	if (server != NULL)
 		broadcast_window_state(server, view);
+
+	if (server != NULL && view->is_dock)
+		arrange_dock_views(server);
 }
 
 static void handle_view_destroy(struct wl_listener *listener, void *data)
@@ -1453,6 +1581,9 @@ static void handle_view_destroy(struct wl_listener *listener, void *data)
 		wlr_seat_keyboard_notify_clear_focus(server->seat);
 		focus_topmost_view(server);
 	}
+
+	if (server != NULL && view->is_dock)
+		arrange_dock_views(server);
 
 	if (view->type == ASWL_VIEW_XWAYLAND && view->scene_tree != NULL) {
 		wlr_scene_node_destroy(&view->scene_tree->node);
@@ -1602,6 +1733,11 @@ static void handle_xwayland_request_configure(struct wl_listener *listener, void
 	if (view == NULL || view->xwayland_surface == NULL || view->scene_tree == NULL || event == NULL)
 		return;
 
+	if (view->is_dock) {
+		arrange_dock_views(view->server);
+		return;
+	}
+
 	wlr_scene_node_set_position(&view->scene_tree->node, event->x, event->y);
 	wlr_xwayland_surface_configure(view->xwayland_surface, event->x, event->y, event->width, event->height);
 }
@@ -1610,6 +1746,8 @@ static void handle_xwayland_request_move(struct wl_listener *listener, void *dat
 {
 	(void)data;
 	struct aswl_view *view = wl_container_of(listener, view, request_move);
+	if (view->is_dock)
+		return;
 	if (view->server == NULL || view->server->cursor == NULL)
 		return;
 	begin_interactive(view, ASWL_CURSOR_MOVE, 0, 0);
@@ -1619,6 +1757,8 @@ static void handle_xwayland_request_resize(struct wl_listener *listener, void *d
 {
 	struct aswl_view *view = wl_container_of(listener, view, request_resize);
 	struct wlr_xwayland_resize_event *event = data;
+	if (view->is_dock)
+		return;
 	if (view->server == NULL || view->server->cursor == NULL || event == NULL)
 		return;
 	begin_interactive(view, ASWL_CURSOR_RESIZE, event->edges, 0);
@@ -2035,12 +2175,15 @@ static void handle_cursor_button(struct wl_listener *listener, void *data)
 	struct wlr_surface *surface = surface_at(server, server->cursor->x, server->cursor->y, &sx, &sy);
 	struct aswl_view *view = surface != NULL ? view_from_wlr_surface(surface) : NULL;
 	if (view != NULL) {
-		focus_view(view, surface);
+		if (view->scene_tree != NULL)
+			wlr_scene_node_raise_to_top(&view->scene_tree->node);
+		if (!view->is_dock)
+			focus_view(view, surface);
 	}
 
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
 	uint32_t mods = keyboard != NULL ? wlr_keyboard_get_modifiers(keyboard) : 0;
-	if ((mods & WLR_MODIFIER_ALT) == 0 || view == NULL)
+	if ((mods & WLR_MODIFIER_ALT) == 0 || view == NULL || view->is_dock)
 		return;
 
 	if (event->button == BTN_LEFT) {
@@ -2291,9 +2434,14 @@ static void arrange_layers_for_output(struct aswl_output *out)
 
 static void arrange_layers(struct aswl_server *server)
 {
+	if (server == NULL)
+		return;
+
 	struct aswl_output *out;
 	wl_list_for_each(out, &server->outputs, link)
 		arrange_layers_for_output(out);
+
+	arrange_dock_views(server);
 }
 
 int main(int argc, char **argv)
