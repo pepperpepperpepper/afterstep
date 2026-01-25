@@ -2,9 +2,12 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #if defined(HAVE_WLROOTS) && HAVE_WLROOTS
@@ -146,6 +149,7 @@ struct aswl_server {
 	struct wlr_renderer *renderer;
 	struct wlr_allocator *allocator;
 	struct wlr_compositor *compositor;
+	char *state_path;
 
 	struct wlr_output_layout *output_layout;
 	struct wlr_scene *scene;
@@ -214,6 +218,9 @@ static void end_interactive(struct aswl_server *server);
 static void close_focused_view(struct aswl_server *server);
 static void focus_next_view(struct aswl_server *server);
 static void focus_prev_view(struct aswl_server *server);
+static bool str_ieq(const char *a, const char *b);
+static char *lstrip(char *s);
+static void rstrip_inplace(char *s);
 static uint32_t normalize_workspace(struct aswl_server *server, uint32_t workspace);
 static void set_workspace(struct aswl_server *server, uint32_t workspace);
 static void workspace_next(struct aswl_server *server);
@@ -221,10 +228,11 @@ static void workspace_prev(struct aswl_server *server);
 static void broadcast_workspace_state(struct aswl_server *server);
 static void broadcast_window_state(struct aswl_server *server, struct aswl_view *view);
 static void broadcast_window_closed(struct aswl_server *server, uint32_t id);
+static void aswl_state_save(struct aswl_server *server);
 
 static void usage(const char *prog)
 {
-	fprintf(stderr, "Usage: %s [--socket NAME] [--autostart PATH] [--spawn CMD]...\n", prog);
+	fprintf(stderr, "Usage: %s [--socket NAME] [--autostart PATH] [--spawn CMD]... [--state PATH]\n", prog);
 	fprintf(stderr, "  --socket NAME  Use a fixed WAYLAND_DISPLAY socket name\n");
 	fprintf(stderr, "  --autostart PATH\n");
 	fprintf(stderr, "                Spawn commands from a file.\n");
@@ -233,6 +241,7 @@ static void usage(const char *prog)
 	fprintf(stderr, "                         or ~/.config/afterstep/aswlcomp.autostart\n");
 	fprintf(stderr, "  --spawn CMD    Spawn a client command after startup (may be repeated)\n");
 	fprintf(stderr, "                (CMD runs via /bin/sh -c with WAYLAND_DISPLAY set)\n");
+	fprintf(stderr, "  --state PATH   Persist basic session state (default: $XDG_STATE_HOME/afterstep/aswlcomp.state)\n");
 }
 
 static void spawn_command(const char *command)
@@ -247,6 +256,246 @@ static void spawn_command(const char *command)
 		execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		_exit(127);
 	}
+}
+
+static char *xstrdup_printf(const char *fmt, ...)
+{
+	if (fmt == NULL)
+		return NULL;
+
+	va_list ap;
+	va_start(ap, fmt);
+	int n = vsnprintf(NULL, 0, fmt, ap);
+	va_end(ap);
+	if (n < 0)
+		return NULL;
+
+	char *buf = malloc((size_t)n + 1);
+	if (buf == NULL)
+		return NULL;
+
+	va_start(ap, fmt);
+	(void)vsnprintf(buf, (size_t)n + 1, fmt, ap);
+	va_end(ap);
+	return buf;
+}
+
+static int aswl_mkdir_p(const char *dir, mode_t mode)
+{
+	if (dir == NULL || dir[0] == '\0')
+		return -1;
+
+	char *path = strdup(dir);
+	if (path == NULL)
+		return -1;
+
+	for (char *p = path + 1; *p != '\0'; p++) {
+		if (*p != '/')
+			continue;
+		*p = '\0';
+		if (mkdir(path, mode) < 0 && errno != EEXIST) {
+			free(path);
+			return -1;
+		}
+		*p = '/';
+	}
+
+	if (mkdir(path, mode) < 0 && errno != EEXIST) {
+		free(path);
+		return -1;
+	}
+
+	free(path);
+	return 0;
+}
+
+static int aswl_ensure_parent_dir(const char *path)
+{
+	if (path == NULL || path[0] == '\0')
+		return -1;
+
+	char *dup = strdup(path);
+	if (dup == NULL)
+		return -1;
+
+	char *slash = strrchr(dup, '/');
+	if (slash == NULL) {
+		free(dup);
+		return 0;
+	}
+	if (slash == dup) {
+		free(dup);
+		return 0;
+	}
+	*slash = '\0';
+	int rc = aswl_mkdir_p(dup, 0700);
+	free(dup);
+	return rc;
+}
+
+static bool parse_u32_strict(const char *s, uint32_t min, uint32_t max, uint32_t *out)
+{
+	if (out == NULL)
+		return false;
+	*out = 0;
+
+	if (s == NULL)
+		return false;
+
+	char *end = NULL;
+	errno = 0;
+	unsigned long n = strtoul(s, &end, 10);
+	if (errno != 0)
+		return false;
+	if (end == s || end == NULL || *end != '\0')
+		return false;
+	if (n < min || n > max)
+		return false;
+
+	*out = (uint32_t)n;
+	return true;
+}
+
+static char *aswl_state_path_default(void)
+{
+	const char *state_home = getenv("XDG_STATE_HOME");
+	if (state_home != NULL && state_home[0] != '\0')
+		return xstrdup_printf("%s/afterstep/aswlcomp.state", state_home);
+
+	const char *home = getenv("HOME");
+	if (home != NULL && home[0] != '\0')
+		return xstrdup_printf("%s/.local/state/afterstep/aswlcomp.state", home);
+
+	return NULL;
+}
+
+static char *aswl_state_path_resolve(const char *override)
+{
+	if (override != NULL && override[0] != '\0')
+		return strdup(override);
+
+	const char *env = getenv("ASWLCOMP_STATE");
+	if (env != NULL && env[0] != '\0')
+		return strdup(env);
+
+	return aswl_state_path_default();
+}
+
+static void aswl_state_load(struct aswl_server *server, bool allow_workspace_count_override)
+{
+	if (server == NULL || server->state_path == NULL)
+		return;
+
+	FILE *fp = fopen(server->state_path, "r");
+	if (fp == NULL)
+		return;
+
+	char *line = NULL;
+	size_t cap = 0;
+	uint32_t loaded_ws = 0;
+	uint32_t loaded_count = 0;
+	bool have_ws = false;
+	bool have_count = false;
+
+	while (getline(&line, &cap, fp) != -1) {
+		rstrip_inplace(line);
+		char *s = lstrip(line);
+		if (s[0] == '\0' || s[0] == '#' || s[0] == ';')
+			continue;
+
+		char *eq = strchr(s, '=');
+		if (eq == NULL)
+			continue;
+		*eq = '\0';
+
+		char *key = lstrip(s);
+		rstrip_inplace(key);
+
+		char *val = lstrip(eq + 1);
+		rstrip_inplace(val);
+
+		if (str_ieq(key, "current_workspace")) {
+			uint32_t ws = 0;
+			if (parse_u32_strict(val, 1, 1000, &ws)) {
+				loaded_ws = ws;
+				have_ws = true;
+			}
+			continue;
+		}
+
+		if (str_ieq(key, "workspace_count")) {
+			uint32_t count = 0;
+			if (parse_u32_strict(val, 1, 1000, &count)) {
+				loaded_count = count;
+				have_count = true;
+			}
+			continue;
+		}
+	}
+
+	free(line);
+	fclose(fp);
+
+	if (have_count && allow_workspace_count_override)
+		server->workspace_count = loaded_count;
+
+	if (have_ws)
+		server->current_workspace = loaded_ws;
+	server->current_workspace = normalize_workspace(server, server->current_workspace);
+}
+
+static void aswl_state_save(struct aswl_server *server)
+{
+	if (server == NULL || server->state_path == NULL)
+		return;
+
+	if (aswl_ensure_parent_dir(server->state_path) != 0) {
+		fprintf(stderr, "aswlcomp: state: ensure dir failed: %s\n", server->state_path);
+		return;
+	}
+
+	char *tmp = xstrdup_printf("%s.XXXXXX", server->state_path);
+	if (tmp == NULL)
+		return;
+
+	int fd = mkstemp(tmp);
+	if (fd < 0) {
+		fprintf(stderr, "aswlcomp: state: mkstemp failed: %s: %s\n", tmp, strerror(errno));
+		free(tmp);
+		return;
+	}
+
+	FILE *fp = fdopen(fd, "w");
+	if (fp == NULL) {
+		(void)close(fd);
+		(void)unlink(tmp);
+		free(tmp);
+		return;
+	}
+
+	fprintf(fp, "# aswlcomp state v1\n");
+	fprintf(fp, "workspace_count=%u\n", server->workspace_count);
+	fprintf(fp, "current_workspace=%u\n", server->current_workspace);
+	(void)fflush(fp);
+
+	bool ok = !ferror(fp);
+	if (ok)
+		ok = fsync(fd) == 0;
+
+	(void)fclose(fp);
+
+	if (!ok) {
+		(void)unlink(tmp);
+		free(tmp);
+		return;
+	}
+
+	if (rename(tmp, server->state_path) < 0) {
+		fprintf(stderr, "aswlcomp: state: rename failed: %s -> %s: %s\n", tmp, server->state_path, strerror(errno));
+		(void)unlink(tmp);
+	}
+
+	free(tmp);
 }
 
 static void broadcast_workspace_state(struct aswl_server *server)
@@ -1170,6 +1419,7 @@ static void set_workspace(struct aswl_server *server, uint32_t workspace)
 	arrange_dock_views(server);
 	focus_topmost_view(server);
 	broadcast_workspace_state(server);
+	aswl_state_save(server);
 }
 
 static void workspace_next(struct aswl_server *server)
@@ -2450,6 +2700,7 @@ int main(int argc, char **argv)
 	const char *autostart_path = NULL;
 	const char **spawn_cmds = NULL;
 	size_t spawn_count = 0;
+	const char *state_path_override = NULL;
 
 	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0)) {
@@ -2461,34 +2712,42 @@ int main(int argc, char **argv)
 				usage(argv[0]);
 				return 2;
 			}
-				socket_name = argv[++i];
-				continue;
+			socket_name = argv[++i];
+			continue;
+		}
+		if (strcmp(argv[i], "--autostart") == 0) {
+			if (i + 1 >= argc) {
+				usage(argv[0]);
+				return 2;
 			}
-			if (strcmp(argv[i], "--autostart") == 0) {
-				if (i + 1 >= argc) {
-					usage(argv[0]);
-					return 2;
-				}
-				autostart_path = argv[++i];
-				continue;
+			autostart_path = argv[++i];
+			continue;
+		}
+		if (strcmp(argv[i], "--state") == 0) {
+			if (i + 1 >= argc) {
+				usage(argv[0]);
+				return 2;
 			}
-			if (strcmp(argv[i], "--spawn") == 0) {
-				if (i + 1 >= argc) {
-					usage(argv[0]);
-					return 2;
-				}
-				const char **new_spawn = realloc(spawn_cmds, (spawn_count + 1) * sizeof(*new_spawn));
-				if (new_spawn == NULL) {
-					fprintf(stderr, "aswlcomp: realloc failed\n");
-					return 1;
-				}
-				spawn_cmds = new_spawn;
-				spawn_cmds[spawn_count++] = argv[++i];
-				continue;
+			state_path_override = argv[++i];
+			continue;
+		}
+		if (strcmp(argv[i], "--spawn") == 0) {
+			if (i + 1 >= argc) {
+				usage(argv[0]);
+				return 2;
 			}
+			const char **new_spawn = realloc(spawn_cmds, (spawn_count + 1) * sizeof(*new_spawn));
+			if (new_spawn == NULL) {
+				fprintf(stderr, "aswlcomp: realloc failed\n");
+				return 1;
+			}
+			spawn_cmds = new_spawn;
+			spawn_cmds[spawn_count++] = argv[++i];
+			continue;
+		}
 
-			fprintf(stderr, "aswlcomp: unknown argument: %s\n", argv[i]);
-			usage(argv[0]);
+		fprintf(stderr, "aswlcomp: unknown argument: %s\n", argv[i]);
+		usage(argv[0]);
 		return 2;
 	}
 
@@ -2499,14 +2758,19 @@ int main(int argc, char **argv)
 	server.workspace_count = 9;
 	server.next_view_id = 1;
 
+	bool workspace_count_from_env = false;
 	const char *ws_env = getenv("ASWLCOMP_WORKSPACES");
 	if (ws_env != NULL && ws_env[0] != '\0') {
 		char *end = NULL;
 		unsigned long n = strtoul(ws_env, &end, 10);
 		if (end != ws_env && *end == '\0' && n > 0 && n <= 1000) {
 			server.workspace_count = (uint32_t)n;
+			workspace_count_from_env = true;
 		}
 	}
+
+	server.state_path = aswl_state_path_resolve(state_path_override);
+	aswl_state_load(&server, !workspace_count_from_env);
 
 	server.display = wl_display_create();
 	if (server.display == NULL) {
