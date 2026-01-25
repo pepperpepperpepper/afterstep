@@ -45,9 +45,16 @@ enum aswl_cursor_mode {
 
 struct aswl_server;
 
+enum {
+	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
+	ASWL_WINDOW_FLAG_FOCUSED = 1u << 1,
+	ASWL_WINDOW_FLAG_XWAYLAND = 1u << 2,
+};
+
 struct aswl_view {
 	struct wl_list link; /* aswl_server.views */
 	struct aswl_server *server;
+	uint32_t id;
 	enum {
 		ASWL_VIEW_XDG = 0,
 		ASWL_VIEW_XWAYLAND,
@@ -66,6 +73,10 @@ struct aswl_view {
 
 	struct wl_listener request_move;
 	struct wl_listener request_resize;
+
+	struct wl_listener set_title;
+	struct wl_listener set_app_id;
+	struct wl_listener set_class;
 
 	struct wl_listener xwayland_associate;
 	struct wl_listener xwayland_dissociate;
@@ -144,6 +155,7 @@ struct aswl_server {
 	int cascade_offset;
 	uint32_t current_workspace;
 	uint32_t workspace_count;
+	uint32_t next_view_id;
 
 	struct wl_list bindings;
 
@@ -193,16 +205,20 @@ struct aswl_server {
 
 static void arrange_layers(struct aswl_server *server);
 static void focus_topmost_view(struct aswl_server *server);
+static void focus_view(struct aswl_view *view, struct wlr_surface *surface);
 static void place_view(struct aswl_view *view);
 static void begin_interactive(struct aswl_view *view, enum aswl_cursor_mode mode, uint32_t edges, uint32_t button);
 static void end_interactive(struct aswl_server *server);
 static void close_focused_view(struct aswl_server *server);
 static void focus_next_view(struct aswl_server *server);
 static void focus_prev_view(struct aswl_server *server);
+static uint32_t normalize_workspace(struct aswl_server *server, uint32_t workspace);
 static void set_workspace(struct aswl_server *server, uint32_t workspace);
 static void workspace_next(struct aswl_server *server);
 static void workspace_prev(struct aswl_server *server);
 static void broadcast_workspace_state(struct aswl_server *server);
+static void broadcast_window_state(struct aswl_server *server, struct aswl_view *view);
+static void broadcast_window_closed(struct aswl_server *server, uint32_t id);
 
 static void usage(const char *prog)
 {
@@ -244,6 +260,118 @@ static void broadcast_workspace_state(struct aswl_server *server)
 			continue;
 		afterstep_control_v1_send_workspace_state(cc->resource, server->current_workspace, server->workspace_count);
 	}
+}
+
+static const char *view_title(struct aswl_view *view)
+{
+	if (view == NULL)
+		return "";
+
+	if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL && view->xdg_surface->toplevel->title != NULL)
+		return view->xdg_surface->toplevel->title;
+
+	if (view->xwayland_surface != NULL && view->xwayland_surface->title != NULL)
+		return view->xwayland_surface->title;
+
+	return "";
+}
+
+static const char *view_app_id(struct aswl_view *view)
+{
+	if (view == NULL)
+		return "";
+
+	if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL && view->xdg_surface->toplevel->app_id != NULL)
+		return view->xdg_surface->toplevel->app_id;
+
+	if (view->xwayland_surface != NULL && view->xwayland_surface->class != NULL)
+		return view->xwayland_surface->class;
+
+	return "";
+}
+
+static uint32_t view_window_flags(struct aswl_server *server, struct aswl_view *view)
+{
+	uint32_t flags = 0;
+	if (view == NULL)
+		return flags;
+
+	if (view->mapped)
+		flags |= ASWL_WINDOW_FLAG_MAPPED;
+	if (server != NULL && server->focused_view == view)
+		flags |= ASWL_WINDOW_FLAG_FOCUSED;
+	if (view->type == ASWL_VIEW_XWAYLAND)
+		flags |= ASWL_WINDOW_FLAG_XWAYLAND;
+
+	return flags;
+}
+
+static void send_window_state(struct aswl_server *server, struct wl_resource *resource, struct aswl_view *view)
+{
+	if (server == NULL || resource == NULL || view == NULL)
+		return;
+	if (wl_resource_get_version(resource) < 4)
+		return;
+	if (view->id == 0)
+		return;
+
+	uint32_t flags = view_window_flags(server, view);
+	afterstep_control_v1_send_window(resource, view->id, view->workspace, flags, view_title(view), view_app_id(view));
+}
+
+static void send_window_list_snapshot(struct aswl_server *server, struct wl_resource *resource)
+{
+	if (server == NULL || resource == NULL)
+		return;
+	if (wl_resource_get_version(resource) < 4)
+		return;
+
+	afterstep_control_v1_send_window_list_begin(resource);
+	struct aswl_view *view;
+	wl_list_for_each(view, &server->views, link)
+		send_window_state(server, resource, view);
+	afterstep_control_v1_send_window_list_end(resource);
+}
+
+static void broadcast_window_state(struct aswl_server *server, struct aswl_view *view)
+{
+	if (server == NULL || view == NULL)
+		return;
+
+	struct aswl_control_client *cc;
+	wl_list_for_each(cc, &server->control_clients, link) {
+		if (cc->resource == NULL)
+			continue;
+		send_window_state(server, cc->resource, view);
+	}
+}
+
+static void broadcast_window_closed(struct aswl_server *server, uint32_t id)
+{
+	if (server == NULL || id == 0)
+		return;
+
+	struct aswl_control_client *cc;
+	wl_list_for_each(cc, &server->control_clients, link) {
+		if (cc->resource == NULL)
+			continue;
+		if (wl_resource_get_version(cc->resource) < 4)
+			continue;
+		afterstep_control_v1_send_window_closed(cc->resource, id);
+	}
+}
+
+static struct aswl_view *find_view_by_id(struct aswl_server *server, uint32_t id)
+{
+	if (server == NULL || id == 0)
+		return NULL;
+
+	struct aswl_view *view;
+	wl_list_for_each(view, &server->views, link) {
+		if (view->id == id)
+			return view;
+	}
+	return NULL;
 }
 
 static void aswl_control_resource_destroy(struct wl_resource *resource)
@@ -372,6 +500,105 @@ static void aswl_control_workspace_prev(struct wl_client *client, struct wl_reso
 	wl_display_flush_clients(server->display);
 }
 
+static void aswl_control_list_windows(struct wl_client *client, struct wl_resource *resource)
+{
+	(void)client;
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
+	if (server == NULL)
+		return;
+	if (wl_resource_get_version(resource) < 4)
+		return;
+
+	fprintf(stderr, "aswlcomp: control list_windows\n");
+	send_window_list_snapshot(server, resource);
+	wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_focus_window(struct wl_client *client, struct wl_resource *resource, uint32_t id)
+{
+	(void)client;
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
+	if (server == NULL)
+		return;
+
+	struct aswl_view *view = find_view_by_id(server, id);
+	if (view == NULL || !view->mapped || view->scene_tree == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control focus_window=%u\n", id);
+	if (view->workspace != server->current_workspace)
+		set_workspace(server, view->workspace);
+	focus_view(view, NULL);
+	wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_close_window(struct wl_client *client, struct wl_resource *resource, uint32_t id)
+{
+	(void)client;
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
+	if (server == NULL)
+		return;
+
+	struct aswl_view *view = find_view_by_id(server, id);
+	if (view == NULL)
+		return;
+
+	fprintf(stderr, "aswlcomp: control close_window=%u\n", id);
+	if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL) {
+		wlr_xdg_toplevel_send_close(view->xdg_surface->toplevel);
+	} else if (view->xwayland_surface != NULL) {
+		wlr_xwayland_surface_close(view->xwayland_surface);
+	}
+	wl_display_flush_clients(server->display);
+}
+
+static void aswl_control_move_window_to_workspace(struct wl_client *client, struct wl_resource *resource, uint32_t id, uint32_t workspace)
+{
+	(void)client;
+	struct aswl_control_client *cc = wl_resource_get_user_data(resource);
+	struct aswl_server *server = cc != NULL ? cc->server : NULL;
+	if (server == NULL)
+		return;
+
+	struct aswl_view *view = find_view_by_id(server, id);
+	if (view == NULL)
+		return;
+
+	workspace = normalize_workspace(server, workspace);
+	if (view->workspace == workspace)
+		return;
+
+	fprintf(stderr, "aswlcomp: control move_window_to_workspace id=%u ws=%u\n", id, workspace);
+	view->workspace = workspace;
+
+	if (view->scene_tree != NULL) {
+		bool enabled = view->mapped && view->workspace == server->current_workspace;
+		wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
+		if (enabled)
+			place_view(view);
+	}
+
+	if (server->grabbed_view == view && view->workspace != server->current_workspace)
+		end_interactive(server);
+
+	if (server->focused_view == view && view->workspace != server->current_workspace) {
+		if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL) {
+			(void)wlr_xdg_toplevel_set_activated(view->xdg_surface->toplevel, false);
+		} else if (view->xwayland_surface != NULL) {
+			wlr_xwayland_surface_activate(view->xwayland_surface, false);
+		}
+		server->focused_view = NULL;
+		wlr_seat_keyboard_notify_clear_focus(server->seat);
+		focus_topmost_view(server);
+	}
+
+	broadcast_window_state(server, view);
+	wl_display_flush_clients(server->display);
+}
+
 static const struct afterstep_control_v1_interface aswl_control_impl = {
 	.destroy = aswl_control_destroy,
 	.exec = aswl_control_exec,
@@ -382,12 +609,16 @@ static const struct afterstep_control_v1_interface aswl_control_impl = {
 	.set_workspace = aswl_control_set_workspace,
 	.workspace_next = aswl_control_workspace_next,
 	.workspace_prev = aswl_control_workspace_prev,
+	.list_windows = aswl_control_list_windows,
+	.focus_window = aswl_control_focus_window,
+	.close_window = aswl_control_close_window,
+	.move_window_to_workspace = aswl_control_move_window_to_workspace,
 };
 
 static void aswl_control_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
 	struct aswl_server *server = data;
-	uint32_t v = version > 3 ? 3 : version;
+	uint32_t v = version > 4 ? 4 : version;
 	struct wl_resource *res = wl_resource_create(client, &afterstep_control_v1_interface, v, id);
 	if (res == NULL) {
 		wl_client_post_no_memory(client);
@@ -408,6 +639,8 @@ static void aswl_control_bind(struct wl_client *client, void *data, uint32_t ver
 	wl_resource_set_implementation(res, &aswl_control_impl, cc, aswl_control_resource_destroy);
 	if (v >= 3)
 		afterstep_control_v1_send_workspace_state(res, server->current_workspace, server->workspace_count);
+	if (v >= 4)
+		send_window_list_snapshot(server, res);
 }
 
 static bool str_ieq(const char *a, const char *b)
@@ -760,18 +993,18 @@ static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 		return;
 
 	struct aswl_server *server = view->server;
+	struct aswl_view *old_focus = server->focused_view;
 
 	wlr_scene_node_raise_to_top(&view->scene_tree->node);
 	wl_list_remove(&view->link);
 	wl_list_insert(server->views.prev, &view->link);
 
-	if (server->focused_view != view) {
-		if (server->focused_view != NULL) {
-			struct aswl_view *old = server->focused_view;
-			if (old->xdg_surface != NULL && old->xdg_surface->toplevel != NULL) {
-				(void)wlr_xdg_toplevel_set_activated(old->xdg_surface->toplevel, false);
-			} else if (old->xwayland_surface != NULL) {
-				wlr_xwayland_surface_activate(old->xwayland_surface, false);
+	if (old_focus != view) {
+		if (old_focus != NULL) {
+			if (old_focus->xdg_surface != NULL && old_focus->xdg_surface->toplevel != NULL) {
+				(void)wlr_xdg_toplevel_set_activated(old_focus->xdg_surface->toplevel, false);
+			} else if (old_focus->xwayland_surface != NULL) {
+				wlr_xwayland_surface_activate(old_focus->xwayland_surface, false);
 			}
 		}
 		server->focused_view = view;
@@ -783,26 +1016,30 @@ static void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 	}
 
 	struct wlr_keyboard *keyboard = wlr_seat_get_keyboard(server->seat);
-	if (keyboard == NULL)
-		return;
+	if (keyboard != NULL) {
+		if (surface == NULL) {
+			if (view->xdg_surface != NULL)
+				surface = view->xdg_surface->surface;
+			else if (view->xwayland_surface != NULL)
+				surface = view->xwayland_surface->surface;
+		}
+		if (surface != NULL) {
+			wlr_seat_keyboard_notify_enter(server->seat,
+			                              surface,
+			                              keyboard->keycodes,
+			                              keyboard->num_keycodes,
+			                              &keyboard->modifiers);
+		}
 
-	if (surface == NULL) {
-		if (view->xdg_surface != NULL)
-			surface = view->xdg_surface->surface;
-		else if (view->xwayland_surface != NULL)
-			surface = view->xwayland_surface->surface;
+		if (view->xwayland_surface != NULL)
+			wlr_xwayland_surface_offer_focus(view->xwayland_surface);
 	}
-	if (surface == NULL)
-		return;
 
-	wlr_seat_keyboard_notify_enter(server->seat,
-	                              surface,
-	                              keyboard->keycodes,
-	                              keyboard->num_keycodes,
-	                              &keyboard->modifiers);
-
-	if (view->xwayland_surface != NULL)
-		wlr_xwayland_surface_offer_focus(view->xwayland_surface);
+	if (old_focus != view) {
+		if (old_focus != NULL)
+			broadcast_window_state(server, old_focus);
+		broadcast_window_state(server, view);
+	}
 }
 
 static void close_focused_view(struct aswl_server *server)
@@ -909,6 +1146,7 @@ static void set_workspace(struct aswl_server *server, uint32_t workspace)
 		}
 		server->focused_view = NULL;
 		wlr_seat_keyboard_notify_clear_focus(server->seat);
+		broadcast_window_state(server, old);
 	}
 
 	struct aswl_view *view;
@@ -1142,6 +1380,8 @@ static void handle_view_map(struct wl_listener *listener, void *data)
 	if (enabled) {
 		place_view(view);
 		focus_view(view, NULL);
+	} else if (server != NULL) {
+		broadcast_window_state(server, view);
 	}
 }
 
@@ -1167,6 +1407,9 @@ static void handle_view_unmap(struct wl_listener *listener, void *data)
 		wlr_seat_keyboard_notify_clear_focus(server->seat);
 		focus_topmost_view(server);
 	}
+
+	if (server != NULL)
+		broadcast_window_state(server, view);
 }
 
 static void handle_view_destroy(struct wl_listener *listener, void *data)
@@ -1174,15 +1417,26 @@ static void handle_view_destroy(struct wl_listener *listener, void *data)
 	(void)data;
 	struct aswl_view *view = wl_container_of(listener, view, destroy);
 	struct aswl_server *server = view->server;
+	uint32_t id = view->id;
 
 	if (view->surface_listeners_added) {
 		wl_list_remove(&view->map.link);
 		wl_list_remove(&view->unmap.link);
 		view->surface_listeners_added = false;
 	}
+	if (server != NULL)
+		broadcast_window_closed(server, id);
+
 	wl_list_remove(&view->destroy.link);
 	wl_list_remove(&view->request_move.link);
 	wl_list_remove(&view->request_resize.link);
+	if (view->type == ASWL_VIEW_XDG) {
+		wl_list_remove(&view->set_title.link);
+		wl_list_remove(&view->set_app_id.link);
+	} else if (view->type == ASWL_VIEW_XWAYLAND) {
+		wl_list_remove(&view->set_title.link);
+		wl_list_remove(&view->set_class.link);
+	}
 	if (view->type == ASWL_VIEW_XWAYLAND) {
 		wl_list_remove(&view->xwayland_associate.link);
 		wl_list_remove(&view->xwayland_dissociate.link);
@@ -1206,6 +1460,30 @@ static void handle_view_destroy(struct wl_listener *listener, void *data)
 	}
 
 	free(view);
+}
+
+static void handle_view_set_title(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, set_title);
+	if (view->server != NULL)
+		broadcast_window_state(view->server, view);
+}
+
+static void handle_view_set_app_id(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, set_app_id);
+	if (view->server != NULL)
+		broadcast_window_state(view->server, view);
+}
+
+static void handle_view_set_class(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, set_class);
+	if (view->server != NULL)
+		broadcast_window_state(view->server, view);
 }
 
 static void handle_request_move(struct wl_listener *listener, void *data)
@@ -1287,6 +1565,8 @@ static void xwayland_detach_surface(struct aswl_view *view)
 	}
 
 	view->mapped = false;
+	if (view->server != NULL)
+		broadcast_window_state(view->server, view);
 }
 
 static void handle_xwayland_associate(struct wl_listener *listener, void *data)
@@ -1360,12 +1640,21 @@ static void handle_new_xwayland_surface(struct wl_listener *listener, void *data
 	view->type = ASWL_VIEW_XWAYLAND;
 	view->xwayland_surface = xsurface;
 	view->workspace = server->current_workspace;
+	view->id = server->next_view_id++;
+	if (server->next_view_id == 0)
+		server->next_view_id = 1;
 	xsurface->data = view;
 
 	wl_list_insert(server->views.prev, &view->link);
 
 	view->destroy.notify = handle_view_destroy;
 	wl_signal_add(&xsurface->events.destroy, &view->destroy);
+
+	view->set_title.notify = handle_view_set_title;
+	wl_signal_add(&xsurface->events.set_title, &view->set_title);
+
+	view->set_class.notify = handle_view_set_class;
+	wl_signal_add(&xsurface->events.set_class, &view->set_class);
 
 	view->xwayland_associate.notify = handle_xwayland_associate;
 	wl_signal_add(&xsurface->events.associate, &view->xwayland_associate);
@@ -1402,6 +1691,9 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 	view->type = ASWL_VIEW_XDG;
 	view->xdg_surface = xdg_surface;
 	view->workspace = server->current_workspace;
+	view->id = server->next_view_id++;
+	if (server->next_view_id == 0)
+		server->next_view_id = 1;
 	view->scene_tree = wlr_scene_xdg_surface_create(server->xdg_tree, xdg_surface);
 	if (view->scene_tree == NULL) {
 		free(view);
@@ -1422,6 +1714,12 @@ static void handle_new_xdg_surface(struct wl_listener *listener, void *data)
 
 	view->destroy.notify = handle_view_destroy;
 	wl_signal_add(&xdg_surface->events.destroy, &view->destroy);
+
+	view->set_title.notify = handle_view_set_title;
+	wl_signal_add(&xdg_surface->toplevel->events.set_title, &view->set_title);
+
+	view->set_app_id.notify = handle_view_set_app_id;
+	wl_signal_add(&xdg_surface->toplevel->events.set_app_id, &view->set_app_id);
 
 	view->request_move.notify = handle_request_move;
 	wl_signal_add(&xdg_surface->toplevel->events.request_move, &view->request_move);
@@ -2051,6 +2349,7 @@ int main(int argc, char **argv)
 	struct aswl_server server = { 0 };
 	server.current_workspace = 1;
 	server.workspace_count = 9;
+	server.next_view_id = 1;
 
 	const char *ws_env = getenv("ASWLCOMP_WORKSPACES");
 	if (ws_env != NULL && ws_env[0] != '\0') {
@@ -2095,7 +2394,7 @@ int main(int argc, char **argv)
 	(void)wlr_subcompositor_create(server.display);
 	(void)wlr_data_device_manager_create(server.display);
 
-	server.control_global = wl_global_create(server.display, &afterstep_control_v1_interface, 3, &server, aswl_control_bind);
+	server.control_global = wl_global_create(server.display, &afterstep_control_v1_interface, 4, &server, aswl_control_bind);
 	if (server.control_global == NULL) {
 		fprintf(stderr, "aswlcomp: wl_global_create(afterstep_control_v1) failed\n");
 		return 1;

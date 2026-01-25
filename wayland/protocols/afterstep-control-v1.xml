@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="afterstep_control_v1">
-  <interface name="afterstep_control_v1" version="3">
+  <interface name="afterstep_control_v1" version="4">
     <description summary="AfterStep compositor control">
       Minimal control interface for the AfterStep wlroots compositor scaffold.
       Used by Wayland clients in the AfterStep "suite" (panel, launchers, etc.)
@@ -61,6 +61,37 @@
       </description>
     </request>
 
+    <request name="list_windows">
+      <description summary="Request a window list snapshot">
+        Requests that the compositor sends a window list snapshot via:
+        window_list_begin, zero or more window events, then window_list_end.
+      </description>
+    </request>
+
+    <request name="focus_window">
+      <description summary="Focus a window by ID">
+        Requests that the compositor focuses the window. If the window is on a
+        different workspace, the compositor may switch to it.
+      </description>
+      <arg name="id" type="uint" summary="Window ID"/>
+    </request>
+
+    <request name="close_window">
+      <description summary="Close a window by ID">
+        Requests that the compositor asks the target client to close.
+      </description>
+      <arg name="id" type="uint" summary="Window ID"/>
+    </request>
+
+    <request name="move_window_to_workspace">
+      <description summary="Move a window to a workspace">
+        Moves the window to WORKSPACE (1-based). The compositor does not
+        automatically switch workspaces.
+      </description>
+      <arg name="id" type="uint" summary="Window ID"/>
+      <arg name="workspace" type="uint" summary="Workspace index (1-based)"/>
+    </request>
+
     <event name="workspace_state">
       <description summary="Workspace state notification">
         Notifies clients of the current workspace (1-based) and total workspace count.
@@ -68,6 +99,35 @@
       </description>
       <arg name="current" type="uint" summary="Current workspace (1-based)"/>
       <arg name="count" type="uint" summary="Workspace count"/>
+    </event>
+
+    <event name="window_list_begin">
+      <description summary="Begin a window list snapshot"/>
+    </event>
+
+    <event name="window">
+      <description summary="Window state">
+        Upsert-style window state notification. FLAGS is a bitmask:
+          1 = mapped
+          2 = focused
+          4 = xwayland
+      </description>
+      <arg name="id" type="uint" summary="Window ID"/>
+      <arg name="workspace" type="uint" summary="Workspace index (1-based)"/>
+      <arg name="flags" type="uint" summary="Bitmask of window flags"/>
+      <arg name="title" type="string" summary="Window title (may be empty)"/>
+      <arg name="app_id" type="string" summary="App ID/class (may be empty)"/>
+    </event>
+
+    <event name="window_list_end">
+      <description summary="End a window list snapshot"/>
+    </event>
+
+    <event name="window_closed">
+      <description summary="Window closed">
+        Sent when the window is destroyed and should be removed from clients' lists.
+      </description>
+      <arg name="id" type="uint" summary="Window ID"/>
     </event>
   </interface>
 </protocol>

@@ -33,6 +33,12 @@
 #define BTN_LEFT 0x110
 #endif
 
+enum {
+	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
+	ASWL_WINDOW_FLAG_FOCUSED = 1u << 1,
+	ASWL_WINDOW_FLAG_XWAYLAND = 1u << 2,
+};
+
 struct as_button {
 	char *label;
 	char *command;
@@ -40,6 +46,14 @@ struct as_button {
 	uint32_t *icon_argb;
 	int icon_w;
 	int icon_h;
+};
+
+struct as_window {
+	uint32_t id;
+	uint32_t workspace;
+	uint32_t flags;
+	char *title;
+	char *app_id;
 };
 
 struct as_buffer {
@@ -100,6 +114,11 @@ struct as_state {
 	bool buttons_owned;
 	char *buttons_config_path;
 	bool buttons_has_workspaces_directive;
+
+	struct as_window *windows;
+	size_t window_count;
+	size_t window_cap;
+	bool window_list_in_progress;
 
 	struct aswl_theme theme;
 };
@@ -911,6 +930,106 @@ static void as_state_free_buttons(struct as_state *state)
 	state->buttons_owned = false;
 }
 
+static void as_window_destroy(struct as_window *win)
+{
+	if (win == NULL)
+		return;
+	free(win->title);
+	free(win->app_id);
+	*win = (struct as_window){ 0 };
+}
+
+static void as_state_clear_windows(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+	for (size_t i = 0; i < state->window_count; i++)
+		as_window_destroy(&state->windows[i]);
+	state->window_count = 0;
+}
+
+static void as_state_destroy_windows(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+	as_state_clear_windows(state);
+	free(state->windows);
+	state->windows = NULL;
+	state->window_cap = 0;
+}
+
+static struct as_window *as_state_find_window(struct as_state *state, uint32_t id)
+{
+	if (state == NULL || id == 0)
+		return NULL;
+	for (size_t i = 0; i < state->window_count; i++) {
+		if (state->windows[i].id == id)
+			return &state->windows[i];
+	}
+	return NULL;
+}
+
+static bool as_state_upsert_window(struct as_state *state,
+                                  uint32_t id,
+                                  uint32_t workspace,
+                                  uint32_t flags,
+                                  const char *title,
+                                  const char *app_id)
+{
+	if (state == NULL || id == 0)
+		return false;
+
+	struct as_window *win = as_state_find_window(state, id);
+	if (win == NULL) {
+		if (state->window_count == state->window_cap) {
+			size_t next = state->window_cap == 0 ? 16 : state->window_cap * 2;
+			struct as_window *tmp = realloc(state->windows, next * sizeof(*tmp));
+			if (tmp == NULL)
+				return false;
+			state->windows = tmp;
+			state->window_cap = next;
+		}
+
+		win = &state->windows[state->window_count++];
+		*win = (struct as_window){ 0 };
+		win->id = id;
+	}
+
+	win->workspace = workspace;
+	win->flags = flags;
+
+	char *new_title = strdup(title != NULL ? title : "");
+	char *new_app_id = strdup(app_id != NULL ? app_id : "");
+	if (new_title == NULL || new_app_id == NULL) {
+		free(new_title);
+		free(new_app_id);
+		return false;
+	}
+
+	free(win->title);
+	free(win->app_id);
+	win->title = new_title;
+	win->app_id = new_app_id;
+	return true;
+}
+
+static bool as_state_remove_window(struct as_state *state, uint32_t id)
+{
+	if (state == NULL || id == 0)
+		return false;
+
+	for (size_t i = 0; i < state->window_count; i++) {
+		if (state->windows[i].id != id)
+			continue;
+		as_window_destroy(&state->windows[i]);
+		if (i + 1 < state->window_count)
+			memmove(&state->windows[i], &state->windows[i + 1], (state->window_count - i - 1) * sizeof(state->windows[0]));
+		state->window_count--;
+		return true;
+	}
+	return false;
+}
+
 static bool append_button(struct as_button **buttons,
                           size_t *count,
                           size_t *cap,
@@ -1290,9 +1409,60 @@ static int as_state_button_width(struct as_state *state, const struct as_layout 
 	return w;
 }
 
+static bool as_window_visible(const struct as_state *state, const struct as_window *win)
+{
+	if (state == NULL || win == NULL)
+		return false;
+	if ((win->flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
+		return false;
+	return win->workspace == state->current_workspace;
+}
+
+static const char *as_window_label(const struct as_window *win)
+{
+	if (win == NULL)
+		return "Window";
+	if (win->title != NULL && win->title[0] != '\0')
+		return win->title;
+	if (win->app_id != NULL && win->app_id[0] != '\0')
+		return win->app_id;
+	return "Window";
+}
+
+static int as_state_window_width(struct as_state *state, const struct as_layout *layout, const struct as_window *win)
+{
+	if (state == NULL || layout == NULL || win == NULL)
+		return 0;
+
+	const char *label = as_window_label(win);
+	int label_w = as_font5x7_text_width(label, layout->text_scale);
+	int w = layout->icon_pad + label_w + layout->icon_pad;
+
+	if (w < layout->btn_h)
+		w = layout->btn_h;
+	if (w > layout->max_btn_w)
+		w = layout->max_btn_w;
+
+	return w;
+}
+
+static struct as_window *as_state_visible_window_nth(struct as_state *state, size_t n)
+{
+	if (state == NULL)
+		return NULL;
+	size_t idx = 0;
+	for (size_t i = 0; i < state->window_count; i++) {
+		if (!as_window_visible(state, &state->windows[i]))
+			continue;
+		if (idx++ == n)
+			return &state->windows[i];
+	}
+	return NULL;
+}
+
 static int as_state_hit_test(struct as_state *state, int x, int y)
 {
-	if (state->button_count == 0)
+	if (state == NULL)
 		return -1;
 
 	struct as_layout layout;
@@ -1310,6 +1480,25 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 			return (int)i;
 
 		rx += rw + layout.spacing;
+	}
+
+	int wy = layout.pad;
+	int wh = layout.btn_h;
+	size_t vis_idx = 0;
+	for (;;) {
+		struct as_window *win = as_state_visible_window_nth(state, vis_idx);
+		if (win == NULL)
+			break;
+
+		int ww = as_state_window_width(state, &layout, win);
+		if (rx + ww > state->width - layout.pad)
+			break;
+
+		if (x >= rx && x < rx + ww && y >= wy && y < wy + wh)
+			return (int)state->button_count + (int)vis_idx;
+
+		rx += ww + layout.spacing;
+		vis_idx++;
 	}
 
 	return -1;
@@ -1427,6 +1616,49 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		int ty = ry + (rh - text_h) / 2;
 		if (tw > 0)
 			as_buffer_draw_text5x7(buf, tx, ty, state->buttons[i].label, tw, layout.text_scale, base_fg);
+
+		rx += rw + layout.spacing;
+	}
+
+	for (size_t vis_idx = 0;; vis_idx++) {
+		struct as_window *win = as_state_visible_window_nth(state, vis_idx);
+		if (win == NULL)
+			break;
+
+		int idx = (int)state->button_count + (int)vis_idx;
+
+		uint32_t base_bg = state->theme.panel_button_bg;
+		uint32_t base_fg = state->theme.panel_button_fg;
+		if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0) {
+			base_bg = state->theme.panel_ws_active_bg;
+			base_fg = state->theme.panel_ws_active_fg;
+		}
+
+		uint32_t btn_bg = base_bg;
+		if (idx == state->pressed_index)
+			btn_bg = aswl_color_nudge(base_bg, 48);
+		else if (idx == state->hover_index)
+			btn_bg = aswl_color_nudge(base_bg, 24);
+
+		int rw = as_state_window_width(state, &layout, win);
+		int rh = layout.btn_h;
+		if (rx + rw > state->width - layout.pad)
+			break;
+
+		as_buffer_fill_rect(buf, rx, ry, rw, rh, btn_bg);
+
+		/* Cheap border. */
+		as_buffer_fill_rect(buf, rx, ry, rw, 1, state->theme.panel_border);
+		as_buffer_fill_rect(buf, rx, ry + rh - 1, rw, 1, state->theme.panel_border);
+		as_buffer_fill_rect(buf, rx, ry, 1, rh, state->theme.panel_border);
+		as_buffer_fill_rect(buf, rx + rw - 1, ry, 1, rh, state->theme.panel_border);
+
+		int text_h = as_font5x7_glyph_h(layout.text_scale);
+		int tx = rx + layout.icon_pad;
+		int tw = rw - 2 * layout.icon_pad;
+		int ty = ry + (rh - text_h) / 2;
+		if (tw > 0)
+			as_buffer_draw_text5x7(buf, tx, ty, as_window_label(win), tw, layout.text_scale, base_fg);
 
 		rx += rw + layout.spacing;
 	}
@@ -1763,13 +1995,24 @@ static void pointer_button(void *data,
 	if (clicked < 0 || clicked != state->hover_index)
 		return;
 
-	if ((size_t)clicked >= state->button_count)
+	if ((size_t)clicked < state->button_count) {
+		fprintf(stderr, "aswlpanel: launch %s: %s\n",
+		        state->buttons[clicked].label,
+		        state->buttons[clicked].command);
+		as_state_launch_command(state, state->buttons[clicked].command);
+		return;
+	}
+
+	size_t win_idx = (size_t)clicked - state->button_count;
+	struct as_window *win = as_state_visible_window_nth(state, win_idx);
+	if (win == NULL || win->id == 0)
 		return;
 
-	fprintf(stderr, "aswlpanel: launch %s: %s\n",
-	        state->buttons[clicked].label,
-	        state->buttons[clicked].command);
-	as_state_launch_command(state, state->buttons[clicked].command);
+	if (state->control != NULL && state->control_version >= 4) {
+		fprintf(stderr, "aswlpanel: focus_window %u\n", win->id);
+		afterstep_control_v1_focus_window(state->control, win->id);
+		(void)wl_display_flush(state->display);
+	}
 }
 
 static void pointer_axis(void *data,
@@ -1882,8 +2125,65 @@ static void control_workspace_state(void *data,
 	schedule_redraw(state);
 }
 
+static void control_window_list_begin(void *data, struct afterstep_control_v1 *control)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	state->window_list_in_progress = true;
+	as_state_clear_windows(state);
+}
+
+static void control_window(void *data,
+                           struct afterstep_control_v1 *control,
+                           uint32_t id,
+                           uint32_t workspace,
+                           uint32_t flags,
+                           const char *title,
+                           const char *app_id)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	(void)as_state_upsert_window(state, id, workspace, flags, title, app_id);
+	if (!state->window_list_in_progress)
+		schedule_redraw(state);
+}
+
+static void control_window_list_end(void *data, struct afterstep_control_v1 *control)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	state->window_list_in_progress = false;
+	schedule_redraw(state);
+}
+
+static void control_window_closed(void *data,
+                                  struct afterstep_control_v1 *control,
+                                  uint32_t id)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	if (as_state_remove_window(state, id))
+		schedule_redraw(state);
+}
+
 static const struct afterstep_control_v1_listener control_listener = {
 	.workspace_state = control_workspace_state,
+	.window_list_begin = control_window_list_begin,
+	.window = control_window,
+	.window_list_end = control_window_list_end,
+	.window_closed = control_window_closed,
 };
 
 static void registry_global(void *data,
@@ -1906,13 +2206,15 @@ static void registry_global(void *data,
 	}
 
 	if (strcmp(interface, afterstep_control_v1_interface.name) == 0) {
-		uint32_t bind_version = version < 3 ? version : 3;
+		uint32_t bind_version = version < 4 ? version : 4;
 		if (bind_version < 1)
 			bind_version = 1;
 		state->control_version = bind_version;
 		state->control = wl_registry_bind(registry, name, &afterstep_control_v1_interface, bind_version);
 		if (state->control != NULL && bind_version >= 3)
 			afterstep_control_v1_add_listener(state->control, &control_listener, state);
+		if (state->control != NULL && bind_version >= 4)
+			afterstep_control_v1_list_windows(state->control);
 		return;
 	}
 
@@ -2011,6 +2313,7 @@ static void cleanup(struct as_state *state)
 
 	as_state_destroy_buffers(state);
 	as_state_free_buttons(state);
+	as_state_destroy_windows(state);
 	free(state->buttons_config_path);
 	state->buttons_config_path = NULL;
 
