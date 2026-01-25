@@ -86,6 +86,7 @@ Tips:
 - Workspace switching (configurable): `bind Alt+1 workspace 1`, `bind Alt+Right workspace_next`, etc.
 - Panel config: `~/.config/afterstep/aswlpanel.conf` (or `ASWLPANEL_CONFIG`); supports `@workspaces` (auto workspace buttons) and `@workspace N` actions.
 - Menu/launcher: `aswlmenu` (config: `~/.config/afterstep/aswlmenu.conf` or `ASWLMENU_CONFIG`; scans `.desktop` apps by default)
+- Theme colors: `aswlpanel`/`aswlmenu` will try to read AfterStep’s current look/colorscheme from `~/.afterstep/non-configurable/0_look` and `~/.afterstep/non-configurable/0_colorscheme` (or `/usr/share/afterstep/non-configurable/*`). Optional overrides: `~/.config/afterstep/aswltheme.conf` or `ASWLTHEME_CONFIG` (keys: `LookPath=...`, `ColorSchemePath=...`, `PanelStyle=...`, `MenuItemStyle=...`, `MenuHiliteStyle=...`, `MenuTitleStyle=...`).
 - `--spawn` may be repeated to launch multiple clients
 - Optional autostart file: `~/.config/afterstep/aswlcomp.autostart` (one command per line, optional `exec ` prefix; also supports `bind MODS+KEY exec CMD`)
 - If Xwayland is available, `aswlcomp` sets `DISPLAY` (printed at startup) so it can run legacy X11 apps under Wayland.

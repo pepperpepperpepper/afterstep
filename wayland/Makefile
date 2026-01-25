@@ -97,17 +97,20 @@ endif
 
 all: aswlpanel aswlmenu
 
-aswlpanel: aswlpanel.o $(PROTOCOL_SRCS)
-	$(CC) $(CFLAGS) -o $@ aswlpanel.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS)
+aswlpanel: aswlpanel.o aswltheme.o $(PROTOCOL_SRCS)
+	$(CC) $(CFLAGS) -o $@ aswlpanel.o aswltheme.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS)
 
 aswlpanel.o: aswlpanel.c $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
 
-aswlmenu: aswlmenu.o $(PROTOCOL_SRCS)
-	$(CC) $(CFLAGS) -o $@ aswlmenu.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS) $(MENU_LIBS)
+aswlmenu: aswlmenu.o aswltheme.o $(PROTOCOL_SRCS)
+	$(CC) $(CFLAGS) -o $@ aswlmenu.o aswltheme.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS) $(MENU_LIBS)
 
 aswlmenu.o: aswlmenu.c $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(MENU_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+
+aswltheme.o: aswltheme.c aswltheme.h
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 ifeq ($(strip $(WLROOTS_LIBS)),)
 aswlcomp:
@@ -154,7 +157,7 @@ $(CONTROL_SRC): $(CONTROL_XML) | $(GEN_DIR)
 	$(WAYLAND_SCANNER) private-code $< $@
 
 clean:
-	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlmenu aswlmenu.o aswlcomp aswlcomp.o
+	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlmenu aswlmenu.o aswltheme.o aswlcomp aswlcomp.o
 
 run-nested: aswlcomp aswlpanel aswlmenu
 	./run-nested.sh

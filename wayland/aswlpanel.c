@@ -26,6 +26,8 @@
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #endif
 
+#include "aswltheme.h"
+
 /* Avoid pulling in linux headers just for BTN_LEFT. */
 #ifndef BTN_LEFT
 #define BTN_LEFT 0x110
@@ -98,6 +100,8 @@ struct as_state {
 	bool buttons_owned;
 	char *buttons_config_path;
 	bool buttons_has_workspaces_directive;
+
+	struct aswl_theme theme;
 };
 
 static void schedule_redraw(struct as_state *state);
@@ -1313,7 +1317,7 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
-	as_buffer_paint_solid(buf, 0xFF202020u);
+	as_buffer_paint_solid(buf, state->theme.panel_bg);
 
 	struct as_layout layout;
 	if (!as_state_get_layout(state, &layout))
@@ -1328,11 +1332,23 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		bool is_ws = as_command_parse_workspace_target(state->buttons[i].command, &ws_target);
 		bool active_ws = is_ws && ws_target == state->current_workspace;
 
-		uint32_t btn_bg = active_ws ? 0xFF2E4A7Au : 0xFF3A3A3Au;
+		uint32_t base_bg = state->theme.panel_button_bg;
+		uint32_t base_fg = state->theme.panel_button_fg;
+		if (is_ws) {
+			if (active_ws) {
+				base_bg = state->theme.panel_ws_active_bg;
+				base_fg = state->theme.panel_ws_active_fg;
+			} else {
+				base_bg = state->theme.panel_ws_inactive_bg;
+				base_fg = state->theme.panel_ws_inactive_fg;
+			}
+		}
+
+		uint32_t btn_bg = base_bg;
 		if (idx == state->pressed_index)
-			btn_bg = active_ws ? 0xFF3E5A8Au : 0xFF6A6A6Au;
+			btn_bg = aswl_color_nudge(base_bg, 48);
 		else if (idx == state->hover_index)
-			btn_bg = active_ws ? 0xFF3A5790u : 0xFF505050u;
+			btn_bg = aswl_color_nudge(base_bg, 24);
 
 		int rw = as_state_button_width(state, &layout, i);
 		int rh = layout.btn_h;
@@ -1340,10 +1356,10 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		as_buffer_fill_rect(buf, rx, ry, rw, rh, btn_bg);
 
 		/* Cheap border. */
-		as_buffer_fill_rect(buf, rx, ry, rw, 1, 0xFF101010u);
-		as_buffer_fill_rect(buf, rx, ry + rh - 1, rw, 1, 0xFF101010u);
-		as_buffer_fill_rect(buf, rx, ry, 1, rh, 0xFF101010u);
-		as_buffer_fill_rect(buf, rx + rw - 1, ry, 1, rh, 0xFF101010u);
+		as_buffer_fill_rect(buf, rx, ry, rw, 1, state->theme.panel_border);
+		as_buffer_fill_rect(buf, rx, ry + rh - 1, rw, 1, state->theme.panel_border);
+		as_buffer_fill_rect(buf, rx, ry, 1, rh, state->theme.panel_border);
+		as_buffer_fill_rect(buf, rx + rw - 1, ry, 1, rh, state->theme.panel_border);
 
 		/* Icon box (placeholder): big initial + small index digit. */
 		int ix = rx + layout.icon_pad;
@@ -1353,17 +1369,13 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		if (is > max_is)
 			is = max_is;
 		if (is > 0) {
-			uint32_t icon_bg = active_ws ? 0xFF213452u : 0xFF2A2A2Au;
-			if (idx == state->pressed_index)
-				icon_bg = active_ws ? 0xFF2B4468u : 0xFF3A3A3Au;
-			else if (idx == state->hover_index)
-				icon_bg = active_ws ? 0xFF26405Eu : 0xFF333333u;
+			uint32_t icon_bg = aswl_color_darken(btn_bg, 32);
 
 			as_buffer_fill_rect(buf, ix, iy, is, is, icon_bg);
-			as_buffer_fill_rect(buf, ix, iy, is, 1, 0xFF101010u);
-			as_buffer_fill_rect(buf, ix, iy + is - 1, is, 1, 0xFF101010u);
-			as_buffer_fill_rect(buf, ix, iy, 1, is, 0xFF101010u);
-			as_buffer_fill_rect(buf, ix + is - 1, iy, 1, is, 0xFF101010u);
+			as_buffer_fill_rect(buf, ix, iy, is, 1, state->theme.panel_border);
+			as_buffer_fill_rect(buf, ix, iy + is - 1, is, 1, state->theme.panel_border);
+			as_buffer_fill_rect(buf, ix, iy, 1, is, state->theme.panel_border);
+			as_buffer_fill_rect(buf, ix + is - 1, iy, 1, is, state->theme.panel_border);
 
 			bool drew_image = false;
 			if (state->buttons[i].icon_argb != NULL && state->buttons[i].icon_w > 0 && state->buttons[i].icon_h > 0) {
@@ -1398,14 +1410,14 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 				int gh = as_font5x7_glyph_h(icon_scale);
 				int gx = ix + (is - gw) / 2;
 				int gy = iy + (is - gh) / 2;
-				as_buffer_draw_glyph5x7(buf, gx, gy, icon_c, icon_scale, 0xFFF0F0F0u);
+				as_buffer_draw_glyph5x7(buf, gx, gy, icon_c, icon_scale, base_fg);
 			}
 
 			int number = (int)i + 1;
 			int digit = number % 10;
 			char digit_c = (char)('0' + digit);
 			int badge_scale = clamp_int(is / 16, 1, 2);
-			as_buffer_draw_glyph5x7(buf, ix + 2, iy + 2, digit_c, badge_scale, 0xFFD0D0D0u);
+			as_buffer_draw_glyph5x7(buf, ix + 2, iy + 2, digit_c, badge_scale, aswl_color_nudge(base_fg, 64));
 		}
 
 		/* Text label to the right of the icon. */
@@ -1414,7 +1426,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		int tw = rw - (layout.icon_pad + layout.icon_size + layout.text_gap + layout.icon_pad);
 		int ty = ry + (rh - text_h) / 2;
 		if (tw > 0)
-			as_buffer_draw_text5x7(buf, tx, ty, state->buttons[i].label, tw, layout.text_scale, 0xFFE0E0E0u);
+			as_buffer_draw_text5x7(buf, tx, ty, state->buttons[i].label, tw, layout.text_scale, base_fg);
 
 		rx += rw + layout.spacing;
 	}
@@ -2046,6 +2058,9 @@ int main(void)
 		.current_workspace = 1,
 		.workspace_count = 9,
 	};
+
+	aswl_theme_init_default(&state.theme);
+	(void)aswl_theme_load(&state.theme);
 
 	as_state_load_buttons(&state);
 

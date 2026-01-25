@@ -25,6 +25,8 @@
 #include "afterstep-control-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
+#include "aswltheme.h"
+
 /* Avoid pulling in linux headers just for BTN_LEFT/KEY_* values. */
 #ifndef BTN_LEFT
 #define BTN_LEFT 0x110
@@ -126,6 +128,8 @@ struct as_state {
 
 	bool include_desktop_entries;
 	char *menu_config_path;
+
+	struct aswl_theme theme;
 };
 
 static void schedule_redraw(struct as_state *state);
@@ -1184,28 +1188,28 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
-	as_buffer_paint_solid(buf, 0xFF202020u);
+	as_buffer_paint_solid(buf, state->theme.menu_bg);
 
 	struct as_menu_layout layout;
 	if (!as_state_get_layout(state, &layout))
 		return;
 
 	/* Border */
-	as_buffer_fill_rect(buf, 0, 0, buf->width, 1, 0xFF101010u);
-	as_buffer_fill_rect(buf, 0, buf->height - 1, buf->width, 1, 0xFF101010u);
-	as_buffer_fill_rect(buf, 0, 0, 1, buf->height, 0xFF101010u);
-	as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, 0xFF101010u);
+	as_buffer_fill_rect(buf, 0, 0, buf->width, 1, state->theme.menu_border);
+	as_buffer_fill_rect(buf, 0, buf->height - 1, buf->width, 1, state->theme.menu_border);
+	as_buffer_fill_rect(buf, 0, 0, 1, buf->height, state->theme.menu_border);
+	as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, state->theme.menu_border);
 
 	/* Header/filter bar */
-	as_buffer_fill_rect(buf, 0, 0, buf->width, layout.header_h, 0xFF2D2D2Du);
-	as_buffer_fill_rect(buf, 0, layout.header_h - 1, buf->width, 1, 0xFF101010u);
+	as_buffer_fill_rect(buf, 0, 0, buf->width, layout.header_h, state->theme.menu_header_bg);
+	as_buffer_fill_rect(buf, 0, layout.header_h - 1, buf->width, 1, state->theme.menu_border);
 
 	char header[512];
 	const char *filter = state->filter != NULL ? state->filter : "";
 	(void)snprintf(header, sizeof(header), "> %s", filter);
 	int tx = layout.pad;
 	int ty = (layout.header_h - as_font5x7_glyph_h(layout.text_scale)) / 2;
-	as_buffer_draw_text5x7(buf, tx, ty, header, buf->width - 2 * layout.pad, layout.text_scale, 0xFFE8E8E8u);
+	as_buffer_draw_text5x7(buf, tx, ty, header, buf->width - 2 * layout.pad, layout.text_scale, state->theme.menu_header_fg);
 
 	/* List */
 	size_t rows = as_state_visible_rows(state, &layout);
@@ -1225,16 +1229,19 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 
 		int y = row_y0 + (int)row * layout.row_h;
 
-		uint32_t bg = 0xFF262626u;
-		if (idx == state->selected_index)
-			bg = 0xFF3A507Au;
-		else if (idx == state->pressed_index)
-			bg = 0xFF5A5A5Au;
-		else if (idx == state->hover_index)
-			bg = 0xFF404040u;
+		uint32_t bg = state->theme.menu_item_bg;
+		uint32_t fg = state->theme.menu_item_fg;
+		if (idx == state->selected_index) {
+			bg = state->theme.menu_item_sel_bg;
+			fg = state->theme.menu_item_sel_fg;
+		} else if (idx == state->pressed_index) {
+			bg = aswl_color_nudge(bg, 48);
+		} else if (idx == state->hover_index) {
+			bg = aswl_color_nudge(bg, 24);
+		}
 
 		as_buffer_fill_rect(buf, list_x, y, list_w, layout.row_h, bg);
-		as_buffer_fill_rect(buf, list_x, y + layout.row_h - 1, list_w, 1, 0xFF101010u);
+		as_buffer_fill_rect(buf, list_x, y + layout.row_h - 1, list_w, 1, state->theme.menu_border);
 
 		char line[512];
 		if (e->pinned)
@@ -1243,7 +1250,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 			(void)snprintf(line, sizeof(line), "  %s", e->label);
 
 		int ly = y + (layout.row_h - as_font5x7_glyph_h(layout.text_scale)) / 2;
-		as_buffer_draw_text5x7(buf, list_x + 8, ly, line, list_w - 16, layout.text_scale, 0xFFE0E0E0u);
+		as_buffer_draw_text5x7(buf, list_x + 8, ly, line, list_w - 16, layout.text_scale, fg);
 	}
 
 	/* Footer/help (small) */
@@ -1253,8 +1260,8 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	int fh = as_font5x7_glyph_h(layout.help_scale);
 	int fy = buf->height - fh - 6;
 	if (fy > layout.header_h) {
-		as_buffer_fill_rect(buf, 0, fy - 6, buf->width, fh + 12, 0xFF202020u);
-		as_buffer_draw_text5x7(buf, layout.pad, fy, footer, buf->width - 2 * layout.pad, layout.help_scale, 0xFFB0B0B0u);
+		as_buffer_fill_rect(buf, 0, fy - 6, buf->width, fh + 12, state->theme.menu_footer_bg);
+		as_buffer_draw_text5x7(buf, layout.pad, fy, footer, buf->width - 2 * layout.pad, layout.help_scale, state->theme.menu_footer_fg);
 	}
 }
 
@@ -2322,6 +2329,9 @@ int main(void)
 		.selected_index = 0,
 		.scroll = 0,
 	};
+
+	aswl_theme_init_default(&state.theme);
+	(void)aswl_theme_load(&state.theme);
 
 	as_state_load_menu(&state);
 	as_state_finalize_menu(&state);
