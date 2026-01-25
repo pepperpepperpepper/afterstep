@@ -95,7 +95,7 @@ MENU_CFLAGS += $(XKBCOMMON_CFLAGS) -DHAVE_XKBCOMMON=1
 MENU_LIBS += $(XKBCOMMON_LIBS)
 endif
 
-all: aswlpanel aswlmenu
+all: aswlpanel aswlmenu aswlctl
 
 aswlpanel: aswlpanel.o aswltheme.o $(PROTOCOL_SRCS)
 	$(CC) $(CFLAGS) -o $@ aswlpanel.o aswltheme.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS)
@@ -108,6 +108,12 @@ aswlmenu: aswlmenu.o aswltheme.o $(PROTOCOL_SRCS)
 
 aswlmenu.o: aswlmenu.c $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(MENU_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+
+aswlctl: aswlctl.o $(PROTOCOL_SRCS)
+	$(CC) $(CFLAGS) -o $@ aswlctl.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS)
+
+aswlctl.o: aswlctl.c $(PROTOCOL_HDRS)
+	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
 
 aswltheme.o: aswltheme.c aswltheme.h
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -157,7 +163,7 @@ $(CONTROL_SRC): $(CONTROL_XML) | $(GEN_DIR)
 	$(WAYLAND_SCANNER) private-code $< $@
 
 clean:
-	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlmenu aswlmenu.o aswltheme.o aswlcomp aswlcomp.o
+	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlmenu aswlmenu.o aswlctl aswlctl.o aswltheme.o aswlcomp aswlcomp.o
 
 run-nested: aswlcomp aswlpanel aswlmenu
 	./run-nested.sh
