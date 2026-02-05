@@ -73,6 +73,14 @@ struct as_menu_entry {
 	int icon_h;
 };
 
+struct as_menu_stack_entry {
+	char *section; /* NULL for root menu (outside @menu blocks) */
+	char *title;   /* default title for this menu level (may be overridden by @title) */
+	char *filter;
+	int selected_index;
+	int scroll;
+};
+
 struct as_buffer {
 	struct wl_buffer *wl_buffer;
 	void *data;
@@ -141,6 +149,10 @@ struct as_state {
 
 	bool include_desktop_entries;
 	char *menu_config_path;
+	char *menu_section;
+	struct as_menu_stack_entry *menu_stack;
+	size_t menu_stack_len;
+	size_t menu_stack_cap;
 	char *title;
 	bool title_fixed;
 	bool show_help;
@@ -155,6 +167,10 @@ struct as_state {
 static void schedule_redraw(struct as_state *state);
 static void draw_and_commit(struct as_state *state);
 static void frame_done(void *data, struct wl_callback *cb, uint32_t time_ms);
+static void rstrip(char *s);
+static char *lstrip(char *s);
+static bool as_state_go_back(struct as_state *state);
+static void as_state_activate_entry(struct as_state *state, size_t entry_idx);
 
 static const struct wl_callback_listener frame_listener = {
 	.done = frame_done,
@@ -1204,15 +1220,146 @@ static bool menu_command_is_submenu(const char *command)
 	return c == '\0' || isspace((unsigned char)c) || c == ':' || c == '=';
 }
 
+static void as_state_filter_clear_silent(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+	if (state->filter != NULL)
+		state->filter[0] = '\0';
+	state->filter_len = 0;
+}
+
+static void as_state_menu_stack_clear(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+
+	for (size_t i = 0; i < state->menu_stack_len; i++) {
+		free(state->menu_stack[i].section);
+		free(state->menu_stack[i].title);
+		free(state->menu_stack[i].filter);
+	}
+	free(state->menu_stack);
+	state->menu_stack = NULL;
+	state->menu_stack_len = 0;
+	state->menu_stack_cap = 0;
+}
+
+static bool as_state_menu_stack_push(struct as_state *state)
+{
+	if (state == NULL)
+		return false;
+
+	if (state->menu_stack_len == state->menu_stack_cap) {
+		size_t next = state->menu_stack_cap == 0 ? 8 : state->menu_stack_cap * 2;
+		struct as_menu_stack_entry *tmp = realloc(state->menu_stack, next * sizeof(*tmp));
+		if (tmp == NULL)
+			return false;
+		state->menu_stack = tmp;
+		state->menu_stack_cap = next;
+	}
+
+	struct as_menu_stack_entry ent = { 0 };
+	ent.section = state->menu_section;
+	state->menu_section = NULL;
+	ent.title = state->title;
+	state->title = NULL;
+	ent.selected_index = state->selected_index;
+	ent.scroll = state->scroll;
+	if (state->filter != NULL && state->filter_len > 0)
+		ent.filter = strdup(state->filter);
+
+	state->menu_stack[state->menu_stack_len++] = ent;
+	return true;
+}
+
+static bool menu_config_section_exists(const char *path, const char *section)
+{
+	if (path == NULL || path[0] == '\0' || section == NULL || section[0] == '\0')
+		return false;
+
+	FILE *fp = fopen(path, "r");
+	if (fp == NULL)
+		return false;
+
+	char *line = NULL;
+	size_t cap = 0;
+	ssize_t len;
+	bool found = false;
+
+	while ((len = getline(&line, &cap, fp)) != -1) {
+		while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+			line[--len] = '\0';
+
+		char *s = lstrip(line);
+		if (*s == '\0' || *s == '#')
+			continue;
+		if (*s != '@')
+			continue;
+		s++;
+
+		char *arg = strchr(s, ' ');
+		if (arg != NULL) {
+			*arg = '\0';
+			arg = lstrip(arg + 1);
+			rstrip(arg);
+		}
+
+		if (strcmp(s, "menu") != 0)
+			continue;
+		if (arg == NULL || arg[0] == '\0')
+			continue;
+		if (strcmp(arg, section) == 0) {
+			found = true;
+			break;
+		}
+	}
+
+	free(line);
+	fclose(fp);
+	return found;
+}
+
+static char *menu_command_submenu_target(const char *command, const char *fallback_label)
+{
+	if (!menu_command_is_submenu(command))
+		return NULL;
+
+	const char *action = command + 1;
+	while (*action != '\0' && isspace((unsigned char)*action))
+		action++;
+	if (strncmp(action, "submenu", 6) != 0)
+		return NULL;
+
+	const char *arg = action + 6;
+	while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+		arg++;
+
+	const char *picked = arg;
+	if (picked[0] == '\0')
+		picked = fallback_label != NULL ? fallback_label : "";
+
+	while (*picked != '\0' && isspace((unsigned char)*picked))
+		picked++;
+
+	char *out = strdup(picked);
+	if (out == NULL)
+		return NULL;
+	rstrip(out);
+	if (out[0] == '\0') {
+		free(out);
+		return NULL;
+	}
+	return out;
+}
+
 static void as_state_launch_command(struct as_state *state, const char *command)
 {
 	if (command == NULL || command[0] == '\0')
 		return;
 
-	if (menu_command_is_submenu(command)) {
-		fprintf(stderr, "aswlmenu: submenu placeholder: %s\n", command);
+	if (menu_command_is_submenu(command))
 		return;
-	}
 
 	if (state != NULL && state->control != NULL) {
 		if (command[0] == '@') {
@@ -2241,12 +2388,7 @@ static void pointer_button(void *data,
 	if (entry_idx >= state->entry_count)
 		return;
 
-	fprintf(stderr, "aswlmenu: launch %s: %s\n",
-	        state->entries[entry_idx].label,
-	        state->entries[entry_idx].command);
-	as_state_launch_command(state, state->entries[entry_idx].command);
-	if (!menu_command_is_submenu(state->entries[entry_idx].command))
-		state->running = false;
+	as_state_activate_entry(state, entry_idx);
 }
 
 static void pointer_axis(void *data,
@@ -2412,6 +2554,8 @@ static void keyboard_key(void *data,
 	if (key == KEY_ESC) {
 		if (state->filter_len > 0)
 			(void)as_state_filter_set(state, "");
+		else if (state->menu_stack_len > 0)
+			(void)as_state_go_back(state);
 		else
 			state->running = false;
 		return;
@@ -2428,12 +2572,7 @@ static void keyboard_key(void *data,
 		size_t entry_idx = state->filtered[state->selected_index];
 		if (entry_idx >= state->entry_count)
 			return;
-		fprintf(stderr, "aswlmenu: launch %s: %s\n",
-		        state->entries[entry_idx].label,
-		        state->entries[entry_idx].command);
-		as_state_launch_command(state, state->entries[entry_idx].command);
-		if (!menu_command_is_submenu(state->entries[entry_idx].command))
-			state->running = false;
+		as_state_activate_entry(state, entry_idx);
 		return;
 	}
 
@@ -2848,7 +2987,7 @@ static int cmp_entry_label_ci(const void *a, const void *b)
 	return strcasecmp(ea->label, eb->label);
 }
 
-static bool load_menu_from_file(struct as_state *state, const char *path)
+static bool load_menu_from_file_section(struct as_state *state, const char *path, const char *section)
 {
 	if (state == NULL || path == NULL || path[0] == '\0')
 		return false;
@@ -2861,6 +3000,8 @@ static bool load_menu_from_file(struct as_state *state, const char *path)
 	size_t line_cap = 0;
 	ssize_t line_len;
 	bool any = false;
+	bool in_section = section == NULL;
+	bool saw_section = section == NULL;
 
 	while ((line_len = getline(&line, &line_cap, fp)) != -1) {
 		while (line_len > 0 && (line[line_len - 1] == '\n' || line[line_len - 1] == '\r'))
@@ -2878,6 +3019,22 @@ static bool load_menu_from_file(struct as_state *state, const char *path)
 				arg = lstrip(arg + 1);
 				rstrip(arg);
 			}
+
+			if (strcmp(s, "menu") == 0) {
+				in_section = false;
+				if (section != NULL && arg != NULL && arg[0] != '\0' && strcmp(arg, section) == 0) {
+					in_section = true;
+					saw_section = true;
+				}
+				continue;
+			}
+			if (strcmp(s, "endmenu") == 0 || strcmp(s, "end_menu") == 0) {
+				in_section = section == NULL;
+				continue;
+			}
+
+			if (!in_section)
+				continue;
 
 			if (strcmp(s, "desktop_entries") == 0 || strcmp(s, "desktop") == 0) {
 				state->include_desktop_entries = true;
@@ -2908,6 +3065,9 @@ static bool load_menu_from_file(struct as_state *state, const char *path)
 				continue;
 			}
 		}
+
+		if (!in_section)
+			continue;
 
 		char *eq = strchr(s, '=');
 		if (eq == NULL)
@@ -2940,7 +3100,14 @@ static bool load_menu_from_file(struct as_state *state, const char *path)
 
 	free(line);
 	fclose(fp);
+	if (section != NULL)
+		return saw_section || any;
 	return any;
+}
+
+static bool load_menu_from_file(struct as_state *state, const char *path)
+{
+	return load_menu_from_file_section(state, path, NULL);
 }
 
 static void as_state_load_menu(struct as_state *state)
@@ -3003,6 +3170,156 @@ static void as_state_finalize_menu(struct as_state *state)
 	}
 
 	as_state_rebuild_filtered(state);
+}
+
+static bool as_state_reload_menu_from_config(struct as_state *state)
+{
+	if (state == NULL)
+		return false;
+	if (state->menu_config_path == NULL || state->menu_config_path[0] == '\0')
+		return false;
+
+	as_state_free_entries(state);
+	as_state_free_filtered(state);
+	state->selected_index = 0;
+	state->hover_index = -1;
+	state->pressed_index = -1;
+	state->scroll = 0;
+	as_state_filter_clear_silent(state);
+
+	state->include_desktop_entries = state->menu_section == NULL;
+	if (!load_menu_from_file_section(state, state->menu_config_path, state->menu_section))
+		return false;
+
+	as_state_finalize_menu(state);
+	as_state_autosize(state);
+	return true;
+}
+
+static bool as_state_go_back(struct as_state *state)
+{
+	if (state == NULL)
+		return false;
+	if (state->menu_stack_len == 0)
+		return false;
+
+	struct as_menu_stack_entry ent = state->menu_stack[--state->menu_stack_len];
+
+	free(state->menu_section);
+	state->menu_section = ent.section;
+	ent.section = NULL;
+
+	free(state->title);
+	state->title = ent.title;
+	ent.title = NULL;
+
+	int restore_selected = ent.selected_index;
+	int restore_scroll = ent.scroll;
+	char *restore_filter = ent.filter;
+	ent.filter = NULL;
+
+	bool ok = as_state_reload_menu_from_config(state);
+	if (ok) {
+		if (restore_filter != NULL)
+			(void)as_state_filter_set(state, restore_filter);
+
+		if (state->filtered_count > 0) {
+			if (restore_selected < 0)
+				restore_selected = 0;
+			if ((size_t)restore_selected >= state->filtered_count)
+				restore_selected = (int)(state->filtered_count - 1);
+
+			if (restore_scroll < 0)
+				restore_scroll = 0;
+			if ((size_t)restore_scroll > state->filtered_count)
+				restore_scroll = 0;
+
+			state->selected_index = restore_selected;
+			state->scroll = restore_scroll;
+			as_state_ensure_selection_visible(state);
+		}
+	}
+
+	free(restore_filter);
+	free(ent.section);
+	free(ent.title);
+	free(ent.filter);
+	return ok;
+}
+
+static void as_state_open_submenu(struct as_state *state, size_t entry_idx)
+{
+	if (state == NULL)
+		return;
+	if (entry_idx >= state->entry_count)
+		return;
+	if (state->menu_config_path == NULL || state->menu_config_path[0] == '\0')
+		return;
+
+	const struct as_menu_entry *e = &state->entries[entry_idx];
+	char *target = menu_command_submenu_target(e->command, e->label);
+	if (target == NULL)
+		return;
+
+	if (!menu_config_section_exists(state->menu_config_path, target)) {
+		fprintf(stderr, "aswlmenu: submenu section not found: %s\n", target);
+		free(target);
+		return;
+	}
+
+	char *submenu_title = NULL;
+	if (e->label != NULL && e->label[0] != '\0')
+		submenu_title = strdup(e->label);
+	if (submenu_title == NULL)
+		submenu_title = strdup(target);
+	if (submenu_title == NULL) {
+		free(target);
+		return;
+	}
+
+	if (!as_state_menu_stack_push(state)) {
+		free(submenu_title);
+		free(target);
+		return;
+	}
+
+	free(state->menu_section);
+	state->menu_section = target;
+	target = NULL;
+
+	free(state->title);
+	state->title = submenu_title;
+	submenu_title = NULL;
+
+	state->include_desktop_entries = false;
+	if (!as_state_reload_menu_from_config(state)) {
+		fprintf(stderr, "aswlmenu: failed to load submenu '%s'\n",
+		        state->menu_section != NULL ? state->menu_section : "(null)");
+		(void)as_state_go_back(state);
+	}
+}
+
+static void as_state_activate_entry(struct as_state *state, size_t entry_idx)
+{
+	if (state == NULL)
+		return;
+	if (entry_idx >= state->entry_count)
+		return;
+
+	const char *cmd = state->entries[entry_idx].command;
+	if (menu_command_is_submenu(cmd)) {
+		const char *label = state->entries[entry_idx].label != NULL ? state->entries[entry_idx].label : "(null)";
+		fprintf(stderr, "aswlmenu: open submenu %s\n", label);
+		as_state_open_submenu(state, entry_idx);
+		return;
+	}
+
+	const char *label = state->entries[entry_idx].label != NULL ? state->entries[entry_idx].label : "(null)";
+	const char *command = state->entries[entry_idx].command != NULL ? state->entries[entry_idx].command : "(null)";
+	fprintf(stderr, "aswlmenu: launch %s: %s\n",
+	        label, command);
+	as_state_launch_command(state, cmd);
+	state->running = false;
 }
 
 static void update_window_list_title(struct as_state *state)
@@ -3256,6 +3573,9 @@ static void cleanup(struct as_state *state)
 	as_state_free_entries(state);
 	free(state->menu_config_path);
 	state->menu_config_path = NULL;
+	as_state_menu_stack_clear(state);
+	free(state->menu_section);
+	state->menu_section = NULL;
 	free(state->title);
 	state->title = NULL;
 	free(state->filter);
