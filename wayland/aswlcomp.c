@@ -395,6 +395,7 @@ struct aswl_deco_assets {
 
 	struct aswl_theme theme;
 	struct aswl_font deco_font;
+	struct aswl_font deco_font_inactive;
 	struct aswl_deco_assets deco;
 	struct aswl_dock_config dock;
 
@@ -5239,11 +5240,12 @@ static struct wlr_buffer *view_render_titlebar_buffer(struct aswl_view *view, in
 
 		/* Title text (centered between button clusters). */
 		const char *title = view_title(view);
+		struct aswl_font *title_font = focused ? &server->deco_font : &server->deco_font_inactive;
 		int scale = clamp_int((title_h - 8) / 7, 1, 12);
-		if (server->deco_font.use_freetype && server->deco_font.base_px > 0)
+		if (title_font->use_freetype && title_font->base_px > 0)
 			scale = 1;
-		(void)aswl_font_set_scale(&server->deco_font, scale);
-		int text_h = aswl_font_height(&server->deco_font);
+		(void)aswl_font_set_scale(title_font, scale);
+		int text_h = aswl_font_height(title_font);
 
 		int left_end = pin_x + hit_box;
 		int right_start = iconize_x;
@@ -5252,12 +5254,12 @@ static struct wlr_buffer *view_render_titlebar_buffer(struct aswl_view *view, in
 		int text_right = right_start - tx_pad;
 		int tw = text_right - text_left;
 		if (tw > 0 && title != NULL && title[0] != '\0') {
-			int title_w = aswl_font_text_width(&server->deco_font, title);
+			int title_w = aswl_font_text_width(title_font, title);
 			int tx = text_left;
 			if (title_w > 0 && title_w < tw)
 				tx = text_left + (tw - title_w) / 2;
 			int ty = (title_h - text_h) / 2;
-			aswl_font_draw_text(&server->deco_font, pixels, frame_w, title_h, frame_w, tx, ty, title, tw, fg);
+			aswl_font_draw_text(title_font, pixels, frame_w, title_h, frame_w, tx, ty, title, tw, fg);
 		}
 
 		return aswl_pixbuf_buffer_create(pixels, frame_w, title_h);
@@ -8391,8 +8393,11 @@ int main(int argc, char **argv)
 	aswl_theme_init_default(&server.theme);
 	(void)aswl_theme_load(&server.theme);
 	aswl_font_init(&server.deco_font);
+	aswl_font_init(&server.deco_font_inactive);
 	const char *deco_font = server.theme.frame_font != NULL ? server.theme.frame_font : server.theme.panel_font;
 	(void)aswl_font_load(&server.deco_font, deco_font);
+	const char *deco_inactive_font = server.theme.frame_inactive_font != NULL ? server.theme.frame_inactive_font : deco_font;
+	(void)aswl_font_load(&server.deco_font_inactive, deco_inactive_font);
 	aswl_dock_config_init(&server.dock);
 
 	bool workspace_count_from_env = false;
@@ -8839,6 +8844,7 @@ int main(int argc, char **argv)
 
 			aswl_outputs_persist_destroy(&server);
 			aswl_deco_assets_destroy(&server.deco);
+			aswl_font_destroy(&server.deco_font_inactive);
 			aswl_font_destroy(&server.deco_font);
 			aswl_dock_config_destroy(&server.dock);
 			aswl_theme_destroy(&server.theme);

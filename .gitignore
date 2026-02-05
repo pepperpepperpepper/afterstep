@@ -109,6 +109,10 @@ tools/postcard.sh
 /screenshots/asan-wayland-test/
 /screenshots/wayland-test-*/
 
+# Track the current Wayland screenshot baseline in-repo (used by README.md).
+!/screenshots/2026-02-05-wayland/
+!/screenshots/2026-02-05-wayland/**
+
 # Local notes (keep untracked)
 /plan.md
 /refactor_plan.md

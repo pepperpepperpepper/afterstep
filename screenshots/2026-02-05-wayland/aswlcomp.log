@@ -1,0 +1,280 @@
+00:00:00.000 [INFO] [backend/backend.c:342] Loading user-specified backends due to WLR_BACKENDS: x11
+00:00:00.000 [INFO] [backend/x11/backend.c:393] Creating X11 backend
+00:00:00.000 [INFO] [backend/x11/backend.c:464] X11 does not support DRI3 extension
+00:00:00.001 [INFO] [util/env.c:25] Loading WLR_RENDERER option: pixman
+00:00:00.001 [INFO] [render/pixman/renderer.c:328] Creating pixman renderer
+00:00:00.001 [ERROR] [types/wlr_linux_dmabuf_v1.c:1094] Failed to get renderer DRM FD
+aswlcomp: wlr_linux_dmabuf_v1_create_with_renderer failed
+aswlcomp: Xwayland DISPLAY=:0
+00:00:00.001 [INFO] [backend/x11/backend.c:164] Starting X11 backend
+aswlcomp: running on WAYLAND_DISPLAY=aswlcomp-shot-449639
+aswlcomp: autostart file: /dev/null
+00:00:00.025 [ERROR] [backend/x11/backend.c:713] X11 error: op ChangeProperty (no minor), code Atom (no extension), sequence 58, value 0
+00:00:00.025 [ERROR] [backend/x11/backend.c:713] X11 error: op ChangeProperty (no minor), code Atom (no extension), sequence 59, value 0
+00:00:00.025 [ERROR] [backend/x11/backend.c:713] X11 error: op ChangeProperty (no minor), code Atom (no extension), sequence 60, value 0
+aswlcomp: control exec: ./wayland/aswlbg
+00:00:00.052 [INFO] [xwayland/server.c:107] Starting Xwayland on :0
+Xwayland glamor: GBM Wayland interfaces not available
+Failed to initialize glamor, falling back to sw
+The XKEYBOARD keymap compiler (xkbcomp) reports:
+> Warning:          Unsupported maximum keycode 708, clipping.
+>                   X11 cannot support keycodes above 255.
+> Warning:          Virtual modifier Hyper multiply defined
+>                   Using 0, ignoring 0
+> Warning:          Virtual modifier ScrollLock multiply defined
+>                   Using 0, ignoring 0
+Errors from xkbcomp are not fatal to the X server
+aswlcomp: control exec: ./wayland/aswlbanner
+aswlcomp: control exec: ASWLPANEL_HEIGHT=64 ASWLPANEL_CONFIG='screenshots/2026-02-05-wayland/aswlpanel-top.conf' ./wayland/aswlpanel
+aswlcomp: control exec: ASWLPANEL_HEIGHT=24 ASWLPANEL_WINDOW_LIST=focused ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_CONFIG='screenshots/2026-02-05-wayland/aswlpanel-top-winlist.conf' ./wayland/aswlpanel
+aswlcomp: control exec: ASWLPANEL_CLOCK_OVERRIDE=05:45 ASWLPANEL_CONFIG='screenshots/2026-02-05-wayland/aswlpanel-right-dock.conf' ./wayland/aswlpanel
+aswlcomp: control exec: ASWLPANEL_MODE=pager ASWLPANEL_CONFIG='screenshots/2026-02-05-wayland/aswlpanel-right-pager.conf' ./wayland/aswlpanel
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control exec: ./wayland/aswlmenu
+aswlcomp: control list_windows
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: I'm terribly sorry, but image file "logos/GNUStep" is nowhere to be found.
+unknown warning: I'm terribly sorry, but image file "logos/GNUStep" is nowhere to be found.
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+unknown warning: Image recall failed for id [menu.folder_pixmap].
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control close_focused
+aswlcomp: control set_workspace=1
+aswlcomp: control exec: weston-simple-shm
+aswlcomp: control exec: xterm -fa Monospace -fs 12
+aswlcomp: control exec: xeyes
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control exec: ./wayland/aswlmenu --windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control focus_window=3
+aswlcomp: control close_focused
+00:00:19.271 [ERROR] [xwayland/xwm.c:1920] xcb error: op ConfigureWindow (no minor), code Window (no extension), sequence 246, value 8388620
+00:00:19.271 [ERROR] [xwayland/xwm.c:1920] xcb error: op ConfigureWindow (no minor), code Window (no extension), sequence 248, value 8388620
+00:00:19.271 [ERROR] [xwayland/xwm.c:1920] xcb error: op ChangeProperty (no minor), code Window (no extension), sequence 251, value 8388620
+00:00:19.271 [ERROR] [xwayland/xwm.c:1920] xcb error: op ConfigureWindow (no minor), code Window (no extension), sequence 253, value 8388620
+00:00:19.271 [ERROR] [xwayland/xwm.c:1920] xcb error: op ChangeProperty (no minor), code Window (no extension), sequence 256, value 8388620
+00:00:19.271 [ERROR] [xwayland/xwm.c:1920] xcb error: op DeleteProperty (no minor), code Window (no extension), sequence 257, value 8388620
+aswlcomp: control exec: weston-simple-shm
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control list_windows
+aswlcomp: control set_workspace=1
+aswlcomp: control exec: /tmp/tmp.xYp3mhaEXX/aswlx11dockapp-demo --size 96 --title 'dockapp' --seconds 120
+aswlcomp: dockapp: class= title=dockapp
+aswlcomp: control quit
+(EE) failed to read Wayland events: Broken pipe
+simple-shm exiting
+simple-shm exiting
+X connection to :0 broken (explicit kill or server shutdown).
+X connection to :0 broken (explicit kill or server shutdown).
+X connection to :0 broken (explicit kill or server shutdown).
+X connection to :0 broken (explicit kill or server shutdown).

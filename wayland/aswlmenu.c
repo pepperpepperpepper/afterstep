@@ -134,6 +134,22 @@ struct as_state {
 	int selected_index; /* index in filtered list */
 	int scroll;        /* first visible filtered index */
 
+	/* Header/titlebar close button (AfterStep-ish). */
+	bool hover_close;
+	bool pressed_close;
+	int close_x;
+	int close_y;
+	int close_w;
+	int close_h;
+	bool close_icon_tried;
+	uint32_t *close_icon_argb;
+	int close_icon_w;
+	int close_icon_h;
+	bool close_icon_pressed_tried;
+	uint32_t *close_icon_pressed_argb;
+	int close_icon_pressed_w;
+	int close_icon_pressed_h;
+
 	char *filter;
 	size_t filter_len;
 	size_t filter_cap;
@@ -162,6 +178,8 @@ struct as_state {
 
 	struct aswl_theme theme;
 	struct aswl_font font;
+	struct aswl_font header_font;
+	struct aswl_font hilite_font;
 };
 
 static void schedule_redraw(struct as_state *state);
@@ -1808,16 +1826,30 @@ static bool as_state_get_layout(struct as_state *state, struct as_menu_layout *l
 
 	layout->pad = 10;
 	layout->text_scale = 2;
-	if (state->font.use_freetype && state->font.base_px > 0)
+	if ((state->font.use_freetype && state->font.base_px > 0) ||
+	    (state->header_font.use_freetype && state->header_font.base_px > 0) ||
+	    (state->hilite_font.use_freetype && state->hilite_font.base_px > 0))
 		layout->text_scale = 1;
 	layout->help_scale = 1;
 
 	(void)aswl_font_set_scale(&state->font, layout->text_scale);
-	int text_h = aswl_font_height(&state->font);
-	layout->header_h = text_h + 2 * 8;
-	layout->row_h = text_h + 2 * 6;
-	if (layout->row_h < text_h + 4)
-		layout->row_h = text_h + 4;
+	(void)aswl_font_set_scale(&state->header_font, layout->text_scale);
+	(void)aswl_font_set_scale(&state->hilite_font, layout->text_scale);
+
+	int item_text_h = aswl_font_height(&state->font);
+	int header_text_h = aswl_font_height(&state->header_font);
+	if (header_text_h <= 0)
+		header_text_h = item_text_h;
+
+	int hilite_text_h = aswl_font_height(&state->hilite_font);
+	int row_text_h = item_text_h;
+	if (hilite_text_h > row_text_h)
+		row_text_h = hilite_text_h;
+
+	layout->header_h = header_text_h + 2 * 8;
+	layout->row_h = row_text_h + 2 * 6;
+	if (layout->row_h < row_text_h + 4)
+		layout->row_h = row_text_h + 4;
 
 	layout->icon_size = layout->row_h - 8;
 	if (layout->icon_size < 0)
@@ -1827,6 +1859,117 @@ static bool as_state_get_layout(struct as_state *state, struct as_menu_layout *l
 	layout->icon_col_w = layout->icon_size > 0 ? layout->icon_size + 10 : 0;
 
 	return true;
+}
+
+static void as_state_update_close_button_metrics(struct as_state *state, const struct as_menu_layout *layout)
+{
+	if (state == NULL || layout == NULL)
+		return;
+
+	state->close_x = 0;
+	state->close_y = 0;
+	state->close_w = 0;
+	state->close_h = 0;
+
+	/*
+	 * Menus draw a 1px border at the edge; keep the button inside that.
+	 * Use the same general sizing rules as the compositor decorations.
+	 */
+	int border = 1;
+	int header_h = layout->header_h;
+	int icon_box = clamp_int(header_h - 8, 10, 16);
+	int hit_box = clamp_int(icon_box + 4, icon_box, header_h - 2 * border);
+	if (hit_box <= 0)
+		return;
+
+	int btn_outer_pad = 2;
+	int x = state->width - border - btn_outer_pad - hit_box;
+	int y = (header_h - hit_box) / 2;
+	if (x < border)
+		x = border;
+	if (y < border)
+		y = border;
+
+	/* If the menu is extremely narrow, just skip the button. */
+	if (x + hit_box > state->width - border)
+		return;
+
+	state->close_x = x;
+	state->close_y = y;
+	state->close_w = hit_box;
+	state->close_h = hit_box;
+}
+
+static bool as_state_point_in_close_button(const struct as_state *state, int x, int y)
+{
+	if (state == NULL || state->close_w <= 0 || state->close_h <= 0)
+		return false;
+	return x >= state->close_x && x < state->close_x + state->close_w && y >= state->close_y &&
+	       y < state->close_y + state->close_h;
+}
+
+static bool as_state_try_load_icon(struct as_state *state,
+                                  bool *tried,
+                                  uint32_t **out_argb,
+                                  int *out_w,
+                                  int *out_h,
+                                  const char *const specs[])
+{
+	if (state == NULL || tried == NULL || out_argb == NULL || out_w == NULL || out_h == NULL)
+		return false;
+	if (*out_argb != NULL && *out_w > 0 && *out_h > 0)
+		return true;
+	if (*tried)
+		return false;
+	*tried = true;
+
+	if (specs == NULL)
+		return false;
+
+	for (size_t i = 0; specs[i] != NULL; i++) {
+		uint32_t *argb = NULL;
+		int w = 0;
+		int h = 0;
+		if (aswl_icon_load_argb(specs[i], &argb, &w, &h) && argb != NULL && w > 0 && h > 0) {
+			free(*out_argb);
+			*out_argb = argb;
+			*out_w = w;
+			*out_h = h;
+			return true;
+		}
+		free(argb);
+	}
+
+	return false;
+}
+
+static void as_state_ensure_close_button_icons(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+
+	bool light = aswl_color_is_light(state->theme.menu_header_bg);
+
+	static const char *const close_dark_specs[] = { "default-kill-dark", "dots/abi-close", NULL };
+	static const char *const close_light_specs[] = { "default-kill-light", "dots/abi-close", NULL };
+	static const char *const close_dark_pressed_specs[] = { "default-kill-dark-pressed", "dots/abi-close-push", NULL };
+	static const char *const close_light_pressed_specs[] = { "default-kill-light-pressed", "dots/abi-close-push", NULL };
+
+	const char *const *normal_specs = light ? close_dark_specs : close_light_specs;
+	const char *const *pressed_specs = light ? close_dark_pressed_specs : close_light_pressed_specs;
+
+	(void)as_state_try_load_icon(state,
+	                            &state->close_icon_tried,
+	                            &state->close_icon_argb,
+	                            &state->close_icon_w,
+	                            &state->close_icon_h,
+	                            normal_specs);
+	(void)as_state_try_load_icon(state,
+	                            &state->close_icon_pressed_tried,
+	                            &state->close_icon_pressed_argb,
+	                            &state->close_icon_pressed_w,
+	                            &state->close_icon_pressed_h,
+	                            pressed_specs);
 }
 
 static void as_state_autosize(struct as_state *state)
@@ -1839,6 +1982,7 @@ static void as_state_autosize(struct as_state *state)
 		return;
 
 	(void)aswl_font_set_scale(&state->font, layout.text_scale);
+	(void)aswl_font_set_scale(&state->header_font, layout.text_scale);
 
 	/* Size to fit the menu content, similar to AfterStep's classic root menu. */
 	size_t max_rows = (size_t)env_int("ASWLMENU_ROWS", 12, 1, 64);
@@ -1873,7 +2017,7 @@ static void as_state_autosize(struct as_state *state)
 	}
 
 	const char *header = state->title != NULL ? state->title : "AfterStep";
-	int header_w = aswl_font_text_width(&state->font, header);
+	int header_w = aswl_font_text_width(&state->header_font, header);
 
 	int arrow_w = aswl_font_text_width(&state->font, ">");
 	int list_w = 8 + layout.icon_col_w + max_label_w + 8;
@@ -1948,24 +2092,23 @@ static void as_state_select_delta(struct as_state *state, int delta)
 	schedule_redraw(state);
 }
 
-static int as_state_hit_test(struct as_state *state, int x, int y)
+static int as_state_hit_test_layout(struct as_state *state, const struct as_menu_layout *layout, int x, int y)
 {
-	struct as_menu_layout layout;
-	if (!as_state_get_layout(state, &layout))
+	if (state == NULL || layout == NULL)
 		return -1;
 
-	if (y < layout.header_h)
+	if (y < layout->header_h)
 		return -1;
 
-	int list_y = y - layout.header_h - layout.pad;
+	int list_y = y - layout->header_h - layout->pad;
 	if (list_y < 0)
 		return -1;
 
-	int row = list_y / layout.row_h;
+	int row = list_y / layout->row_h;
 	if (row < 0)
 		return -1;
 
-	size_t visible = as_state_visible_rows(state, &layout);
+	size_t visible = as_state_visible_rows(state, layout);
 	if ((size_t)row >= visible)
 		return -1;
 
@@ -1973,12 +2116,39 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 	if (idx < 0 || (size_t)idx >= state->filtered_count)
 		return -1;
 
-	int row_y = layout.header_h + layout.pad + row * layout.row_h;
-	if (y < row_y || y >= row_y + layout.row_h)
+	int row_y = layout->header_h + layout->pad + row * layout->row_h;
+	if (y < row_y || y >= row_y + layout->row_h)
 		return -1;
 
 	(void)x;
 	return idx;
+}
+
+static void as_state_update_hover(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+
+	int old_idx = state->hover_index;
+	bool old_close = state->hover_close;
+
+	if (!state->pointer_in_surface) {
+		state->hover_index = -1;
+		state->hover_close = false;
+	} else {
+		struct as_menu_layout layout;
+		if (!as_state_get_layout(state, &layout)) {
+			state->hover_index = -1;
+			state->hover_close = false;
+		} else {
+			as_state_update_close_button_metrics(state, &layout);
+			state->hover_close = as_state_point_in_close_button(state, state->pointer_x, state->pointer_y);
+			state->hover_index = as_state_hit_test_layout(state, &layout, state->pointer_x, state->pointer_y);
+		}
+	}
+
+	if (state->hover_index != old_idx || state->hover_close != old_close)
+		schedule_redraw(state);
 }
 
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
@@ -2000,6 +2170,9 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	if (!as_state_get_layout(state, &layout))
 		return;
 
+	as_state_update_close_button_metrics(state, &layout);
+	as_state_ensure_close_button_icons(state);
+
 	uint32_t *pixels = (uint32_t *)buf->data;
 	int stride_px = buf->stride / 4;
 
@@ -2014,6 +2187,62 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	                          0);
 	as_buffer_fill_rect(buf, 0, layout.header_h - 1, buf->width, 1, state->theme.menu_border);
 
+	/* Close button (top-right). */
+	int icon_box = clamp_int(layout.header_h - 8, 10, 16);
+	if (state->close_w > 0 && state->close_h > 0) {
+		as_buffer_draw_bevel_rect(buf,
+		                          state->close_x,
+		                          state->close_y,
+		                          state->close_w,
+		                          state->close_h,
+		                          state->theme.menu_header_bg,
+		                          state->pressed_close);
+
+		const uint32_t *icon = state->close_icon_argb;
+		int iw = state->close_icon_w;
+		int ih = state->close_icon_h;
+		if (state->pressed_close && state->close_icon_pressed_argb != NULL) {
+			icon = state->close_icon_pressed_argb;
+			iw = state->close_icon_pressed_w;
+			ih = state->close_icon_pressed_h;
+		}
+
+		if (icon != NULL && iw > 0 && ih > 0) {
+			int dw = iw;
+			int dh = ih;
+			if (dw > icon_box || dh > icon_box) {
+				double sx = (double)icon_box / (double)dw;
+				double sy = (double)icon_box / (double)dh;
+				double s = sx < sy ? sx : sy;
+				dw = (int)((double)dw * s + 0.5);
+				dh = (int)((double)dh * s + 0.5);
+				if (dw < 1)
+					dw = 1;
+				if (dh < 1)
+					dh = 1;
+			}
+
+			int px = state->close_x + (state->close_w - dw) / 2;
+			int py = state->close_y + (state->close_h - dh) / 2;
+			as_buffer_draw_image_bilinear(buf, px, py, dw, dh, icon, iw, ih);
+		} else {
+			(void)aswl_font_set_scale(&state->font, 1);
+			int fh = aswl_font_height(&state->font);
+			int fx = state->close_x + 2;
+			int fy = state->close_y + (state->close_h - fh) / 2;
+			aswl_font_draw_text(&state->font,
+			                    pixels,
+			                    buf->width,
+			                    buf->height,
+			                    stride_px,
+			                    fx,
+			                    fy,
+			                    "X",
+			                    state->close_w - 4,
+			                    state->theme.menu_header_fg);
+		}
+	}
+
 	char header[512];
 	const char *filter = state->filter != NULL ? state->filter : "";
 	if (filter[0] != '\0') {
@@ -2027,10 +2256,32 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	} else {
 		(void)snprintf(header, sizeof(header), "AfterStep");
 	}
-	int tx = layout.pad;
+
+	/* Reset font scales after any temporary draws (e.g. close-button fallback glyph). */
 	(void)aswl_font_set_scale(&state->font, layout.text_scale);
-	int ty = (layout.header_h - aswl_font_height(&state->font)) / 2;
-	aswl_font_draw_text(&state->font,
+	(void)aswl_font_set_scale(&state->header_font, layout.text_scale);
+	(void)aswl_font_set_scale(&state->hilite_font, layout.text_scale);
+
+	struct aswl_font *header_font = filter[0] != '\0' ? &state->font : &state->header_font;
+	int text_h = aswl_font_height(header_font);
+	int ty = (layout.header_h - text_h) / 2;
+
+	int text_left = layout.pad;
+	int text_right = buf->width - layout.pad;
+	if (state->close_w > 0)
+		text_right = state->close_x - layout.pad;
+	int header_text_w = text_right - text_left;
+	if (header_text_w < 1)
+		header_text_w = 1;
+
+	int tx = text_left;
+	if (filter[0] == '\0') {
+		int hw = aswl_font_text_width(header_font, header);
+		if (hw > 0 && hw < header_text_w)
+			tx = text_left + (header_text_w - hw) / 2;
+	}
+
+	aswl_font_draw_text(header_font,
 	                    pixels,
 	                    buf->width,
 	                    buf->height,
@@ -2038,7 +2289,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	                    tx,
 	                    ty,
 	                    header,
-	                    buf->width - 2 * layout.pad,
+	                    header_text_w,
 	                    state->theme.menu_header_fg);
 
 	/* List */
@@ -2061,22 +2312,33 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 
 		bool submenu = menu_command_is_submenu(e->command);
 
+		/*
+		 * AfterStep's look.DEFAULT uses `TextureMenuItemsIndividually 0`, which
+		 * means the menu background should be a single continuous texture/
+		 * gradient rather than restarting the gradient for each row. We paint
+		 * the full menu background once at the top of `as_state_draw()`; only
+		 * paint per-row backgrounds for highlighted rows.
+		 */
+		bool highlight = (idx == state->selected_index) || (idx == state->hover_index) || (idx == state->pressed_index);
+
 		uint32_t bg = state->theme.menu_item_bg;
 		uint32_t fg = state->theme.menu_item_fg;
-		const struct aswl_gradient *grad = &state->theme.menu_item_gradient;
-		uint8_t nudge = 0;
-		if (idx == state->selected_index) {
+		struct aswl_font *row_font = &state->font;
+
+		if (highlight) {
+			uint8_t nudge = (idx == state->pressed_index) ? 48 : 0;
 			bg = state->theme.menu_item_sel_bg;
 			fg = state->theme.menu_item_sel_fg;
-			grad = &state->theme.menu_item_sel_gradient;
-		} else if (idx == state->pressed_index) {
-			nudge = 48;
-		} else if (idx == state->hover_index) {
-			nudge = 24;
+			row_font = &state->hilite_font;
+			as_buffer_fill_style_rect(buf,
+			                          list_x,
+			                          y,
+			                          list_w,
+			                          layout.row_h,
+			                          &state->theme.menu_item_sel_gradient,
+			                          bg,
+			                          nudge);
 		}
-
-		as_buffer_fill_style_rect(buf, list_x, y, list_w, layout.row_h, grad, bg, nudge);
-		as_buffer_fill_rect(buf, list_x, y + layout.row_h - 1, list_w, 1, state->theme.menu_border);
 
 			if (layout.icon_size > 0) {
 				as_menu_entry_try_load_icon(e);
@@ -2110,14 +2372,14 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 			(void)snprintf(line, sizeof(line), "%s", e->label);
 
 		int text_x = list_x + 8 + layout.icon_col_w;
-		int arrow_w = submenu ? aswl_font_text_width(&state->font, ">") : 0;
+		int arrow_w = submenu ? aswl_font_text_width(row_font, ">") : 0;
 		int text_w = list_w - (text_x - list_x) - 8;
 		if (submenu)
 			text_w -= arrow_w + 8;
 		if (text_w < 0)
 			text_w = 0;
-		int ly = y + (layout.row_h - aswl_font_height(&state->font)) / 2;
-		aswl_font_draw_text(&state->font,
+		int ly = y + (layout.row_h - aswl_font_height(row_font)) / 2;
+		aswl_font_draw_text(row_font,
 		                    pixels,
 		                    buf->width,
 		                    buf->height,
@@ -2136,7 +2398,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 				aw = list_x + list_w - 8 - ax;
 			}
 			if (aw > 0) {
-				aswl_font_draw_text(&state->font,
+				aswl_font_draw_text(row_font,
 				                    pixels,
 				                    buf->width,
 				                    buf->height,
@@ -2309,8 +2571,7 @@ static void pointer_enter(void *data,
 	state->pointer_in_surface = true;
 	state->pointer_x = (int)wl_fixed_to_double(surface_x);
 	state->pointer_y = (int)wl_fixed_to_double(surface_y);
-	state->hover_index = as_state_hit_test(state, state->pointer_x, state->pointer_y);
-	schedule_redraw(state);
+	as_state_update_hover(state);
 }
 
 static void pointer_leave(void *data,
@@ -2325,7 +2586,9 @@ static void pointer_leave(void *data,
 	struct as_state *state = data;
 	state->pointer_in_surface = false;
 	state->hover_index = -1;
+	state->hover_close = false;
 	state->pressed_index = -1;
+	state->pressed_close = false;
 	schedule_redraw(state);
 }
 
@@ -2341,11 +2604,7 @@ static void pointer_motion(void *data,
 
 	state->pointer_x = (int)wl_fixed_to_double(surface_x);
 	state->pointer_y = (int)wl_fixed_to_double(surface_y);
-
-	int old = state->hover_index;
-	state->hover_index = state->pointer_in_surface ? as_state_hit_test(state, state->pointer_x, state->pointer_y) : -1;
-	if (state->hover_index != old)
-		schedule_redraw(state);
+	as_state_update_hover(state);
 }
 
 static void pointer_button(void *data,
@@ -2363,14 +2622,32 @@ static void pointer_button(void *data,
 	if (button != BTN_LEFT)
 		return;
 
+	as_state_update_hover(state);
+
 	if (state_w == WL_POINTER_BUTTON_STATE_PRESSED) {
+		if (state->hover_close) {
+			state->pressed_close = true;
+			state->pressed_index = -1;
+			schedule_redraw(state);
+			return;
+		}
 		state->pressed_index = state->hover_index;
+		state->pressed_close = false;
 		schedule_redraw(state);
 		return;
 	}
 
 	if (state_w != WL_POINTER_BUTTON_STATE_RELEASED)
 		return;
+
+	if (state->pressed_close) {
+		bool clicked = state->hover_close;
+		state->pressed_close = false;
+		schedule_redraw(state);
+		if (clicked)
+			state->running = false;
+		return;
+	}
 
 	int clicked = state->pressed_index;
 	state->pressed_index = -1;
@@ -3582,6 +3859,18 @@ static void cleanup(struct as_state *state)
 	state->filter = NULL;
 	state->filter_len = 0;
 	state->filter_cap = 0;
+	free(state->close_icon_argb);
+	state->close_icon_argb = NULL;
+	state->close_icon_w = 0;
+	state->close_icon_h = 0;
+	state->close_icon_tried = false;
+	free(state->close_icon_pressed_argb);
+	state->close_icon_pressed_argb = NULL;
+	state->close_icon_pressed_w = 0;
+	state->close_icon_pressed_h = 0;
+	state->close_icon_pressed_tried = false;
+	aswl_font_destroy(&state->hilite_font);
+	aswl_font_destroy(&state->header_font);
 	aswl_font_destroy(&state->font);
 	aswl_theme_destroy(&state->theme);
 
@@ -3680,13 +3969,33 @@ int main(int argc, char **argv)
 		state.show_help = true;
 
 	aswl_font_init(&state.font);
-	const char *font_spec = getenv("ASWLMENU_FONT");
+	aswl_font_init(&state.header_font);
+	aswl_font_init(&state.hilite_font);
+	const char *menu_font_env = getenv("ASWLMENU_FONT");
+	const char *global_font_env = getenv("ASWL_FONT");
+	bool env_override = (menu_font_env != NULL && menu_font_env[0] != '\0') || (global_font_env != NULL && global_font_env[0] != '\0');
+
+	const char *font_spec = menu_font_env;
 	if (font_spec == NULL || font_spec[0] == '\0')
-		font_spec = getenv("ASWL_FONT");
+		font_spec = global_font_env;
 	if ((font_spec == NULL || font_spec[0] == '\0') && state.theme.menu_font != NULL && state.theme.menu_font[0] != '\0')
 		font_spec = state.theme.menu_font;
 	if (!aswl_font_load(&state.font, font_spec) && font_spec != NULL && font_spec[0] != '\0')
 		fprintf(stderr, "aswlmenu: failed to load font '%s', using builtin 5x7\n", font_spec);
+
+	const char *header_font_spec = font_spec;
+	const char *hilite_font_spec = font_spec;
+	if (!env_override) {
+		if (state.theme.menu_title_font != NULL && state.theme.menu_title_font[0] != '\0')
+			header_font_spec = state.theme.menu_title_font;
+		if (state.theme.menu_hilite_font != NULL && state.theme.menu_hilite_font[0] != '\0')
+			hilite_font_spec = state.theme.menu_hilite_font;
+	}
+
+	if (!aswl_font_load(&state.header_font, header_font_spec) && header_font_spec != NULL && header_font_spec[0] != '\0')
+		fprintf(stderr, "aswlmenu: failed to load header font '%s', using builtin 5x7\n", header_font_spec);
+	if (!aswl_font_load(&state.hilite_font, hilite_font_spec) && hilite_font_spec != NULL && hilite_font_spec[0] != '\0')
+		fprintf(stderr, "aswlmenu: failed to load hilite font '%s', using builtin 5x7\n", hilite_font_spec);
 
 	if (!state.window_list_mode) {
 		as_state_load_menu(&state);

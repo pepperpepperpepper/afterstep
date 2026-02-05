@@ -40,6 +40,7 @@ void aswl_theme_init_default(struct aswl_theme *theme)
 		.frame_inactive_fg = 0xFFE0E0E0u,
 		.frame_border = 0xFF101010u,
 		.frame_font = NULL,
+		.frame_inactive_font = NULL,
 
 		.menu_bg = 0xFF202020u,
 		.menu_border = 0xFF101010u,
@@ -53,6 +54,8 @@ void aswl_theme_init_default(struct aswl_theme *theme)
 		.menu_footer_fg = 0xFFB0B0B0u,
 
 		.menu_font = NULL,
+		.menu_title_font = NULL,
+		.menu_hilite_font = NULL,
 	};
 }
 
@@ -72,10 +75,16 @@ void aswl_theme_destroy(struct aswl_theme *theme)
 	aswl_gradient_destroy(&theme->menu_item_sel_gradient);
 	free(theme->panel_font);
 	free(theme->menu_font);
+	free(theme->menu_title_font);
+	free(theme->menu_hilite_font);
 	free(theme->frame_font);
+	free(theme->frame_inactive_font);
 	theme->panel_font = NULL;
 	theme->menu_font = NULL;
+	theme->menu_title_font = NULL;
+	theme->menu_hilite_font = NULL;
 	theme->frame_font = NULL;
+	theme->frame_inactive_font = NULL;
 }
 
 void aswl_gradient_destroy(struct aswl_gradient *grad)
@@ -1355,8 +1364,14 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	theme->panel_font = NULL;
 	free(theme->menu_font);
 	theme->menu_font = NULL;
+	free(theme->menu_title_font);
+	theme->menu_title_font = NULL;
+	free(theme->menu_hilite_font);
+	theme->menu_hilite_font = NULL;
 	free(theme->frame_font);
 	theme->frame_font = NULL;
+	free(theme->frame_inactive_font);
+	theme->frame_inactive_font = NULL;
 
 	aswl_gradient_destroy(&theme->panel_bg_gradient);
 	aswl_gradient_destroy(&theme->panel_button_gradient);
@@ -1605,8 +1620,23 @@ bool aswl_theme_load(struct aswl_theme *theme)
 		applied = true;
 		font = NULL;
 	}
+	if (cfg.win_inactive_style != NULL && aswl_resolve_style_font(styles, style_count, cfg.win_inactive_style, &font)) {
+		theme->frame_inactive_font = font;
+		applied = true;
+		font = NULL;
+	}
 	if (cfg.menu_item_style != NULL && aswl_resolve_style_font(styles, style_count, cfg.menu_item_style, &font)) {
 		theme->menu_font = font;
+		applied = true;
+		font = NULL;
+	}
+	if (cfg.menu_title_style != NULL && aswl_resolve_style_font(styles, style_count, cfg.menu_title_style, &font)) {
+		theme->menu_title_font = font;
+		applied = true;
+		font = NULL;
+	}
+	if (cfg.menu_hilite_style != NULL && aswl_resolve_style_font(styles, style_count, cfg.menu_hilite_style, &font)) {
+		theme->menu_hilite_font = font;
 		applied = true;
 		font = NULL;
 	}

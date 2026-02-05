@@ -38,6 +38,7 @@ struct aswl_theme {
 	uint32_t frame_inactive_fg;
 	uint32_t frame_border;
 	char *frame_font;
+	char *frame_inactive_font;
 
 	struct aswl_gradient frame_active_gradient;
 	struct aswl_gradient frame_inactive_gradient;
@@ -58,6 +59,8 @@ struct aswl_theme {
 	struct aswl_gradient menu_item_sel_gradient;
 
 	char *menu_font;
+	char *menu_title_font;
+	char *menu_hilite_font;
 };
 
 void aswl_theme_init_default(struct aswl_theme *theme);
