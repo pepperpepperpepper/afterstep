@@ -197,10 +197,45 @@ char *locate_image_file_in_path( const char *file, ASImageImportParams *iparams 
 #endif
 
 		/* first lets try to find file as it is */
-		if( (realfilename = locate_image_file(file, iparams->search_path)) == NULL )
+		realfilename = locate_image_file(file, iparams->search_path);
+		if( realfilename == NULL )
 		{
-  		tmp = safemalloc( filename_len+3+1);
-			strcpy(tmp, file);
+			/*
+			 * AfterStep's in-repo asset layout stores many images under
+			 * "<group>/png/<name>" (or "<group>/xml/<name>") but refers to them
+			 * as "<group>/<name>".
+			 *
+			 * Try inserting "/png/" and "/xml/" for simple 2-segment paths
+			 * (group/name) when the direct lookup fails.
+			 */
+			const char *slash = strchr(file, '/');
+			if (slash != NULL && strchr(slash + 1, '/') == NULL) {
+				const char *dot = strrchr(file, '.');
+				if (dot == NULL || dot < slash) {
+					int group_len = (int)(slash - file);
+					const char *name = slash + 1;
+
+					char *candidate = safemalloc((size_t)group_len + 5 + strlen(name) + 1);
+					strncpy(candidate, file, (size_t)group_len);
+					candidate[group_len] = '\0';
+					strcat(candidate, "/png/");
+					strcat(candidate, name);
+
+					realfilename = locate_image_file(candidate, iparams->search_path);
+					if (realfilename == NULL) {
+						candidate[group_len] = '\0';
+						strcat(candidate, "/xml/");
+						strcat(candidate, name);
+						realfilename = locate_image_file(candidate, iparams->search_path);
+					}
+					free(candidate);
+				}
+			}
+
+			if (realfilename == NULL) {
+				tmp = safemalloc( filename_len+3+1);
+				strcpy(tmp, file);
+			}
 		}
 		if( realfilename == NULL && !get_flags(iparams->flags, AS_IMPORT_SKIP_COMPRESSED))
 		{ /* let's try and see if appending .gz will make any difference */

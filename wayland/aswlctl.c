@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -28,6 +29,51 @@ struct aswl_state {
 	bool list_done;
 };
 
+static bool flush_with_timeout(struct wl_display *display, int timeout_ms)
+{
+	if (display == NULL)
+		return false;
+
+	int fd = wl_display_get_fd(display);
+	if (fd < 0)
+		return false;
+
+	int waited_ms = 0;
+	while (1) {
+		int rc = wl_display_flush(display);
+		if (rc >= 0) {
+			/* 0 means there's nothing left to write. */
+			if (rc == 0)
+				return true;
+			/* Wrote something; keep flushing until the outgoing buffer is empty. */
+			continue;
+		}
+
+		if (errno != EAGAIN)
+			return false;
+		if (waited_ms >= timeout_ms)
+			return false;
+
+		int slice = timeout_ms - waited_ms;
+		if (slice > 50)
+			slice = 50;
+
+		struct pollfd pfd = {
+			.fd = fd,
+			.events = POLLOUT,
+		};
+
+		int prc;
+		do {
+			prc = poll(&pfd, 1, slice);
+		} while (prc < 0 && errno == EINTR);
+
+		if (prc < 0)
+			return false;
+		waited_ms += slice;
+	}
+}
+
 static void usage(const char *prog)
 {
 	fprintf(stderr, "Usage: %s COMMAND [ARGS...]\n", prog);
@@ -36,6 +82,8 @@ static void usage(const char *prog)
 	fprintf(stderr, "  exec CMD...                       Execute a command (runs in compositor via /bin/sh -c)\n");
 	fprintf(stderr, "  quit                              Exit the compositor\n");
 	fprintf(stderr, "  close_focused                     Close the focused window\n");
+	fprintf(stderr, "  fullscreen | toggle_fullscreen     Toggle fullscreen on the focused window\n");
+	fprintf(stderr, "  maximize | toggle_maximized        Toggle maximized on the focused window\n");
 	fprintf(stderr, "  focus_next | focus_prev           Change focus\n");
 	fprintf(stderr, "  workspace N                       Switch to workspace N (1-based)\n");
 	fprintf(stderr, "  workspace_next | workspace_prev   Switch workspaces\n");
@@ -162,6 +210,21 @@ static void handle_control_workspace_state(void *data,
 	(void)count;
 }
 
+static void handle_control_output_state(void *data,
+                                        struct afterstep_control_v1 *control,
+                                        uint32_t width,
+                                        uint32_t height)
+{
+	(void)control;
+	struct aswl_state *st = data;
+	if (st == NULL)
+		return;
+
+	/* Not used by aswlctl yet; keep for completeness. */
+	(void)width;
+	(void)height;
+}
+
 static void handle_control_window_list_begin(void *data, struct afterstep_control_v1 *control)
 {
 	(void)control;
@@ -201,6 +264,28 @@ static void handle_control_window(void *data,
 	       title != NULL ? title : "");
 }
 
+static void handle_control_window_geometry(void *data,
+                                          struct afterstep_control_v1 *control,
+                                          uint32_t id,
+                                          int32_t x,
+                                          int32_t y,
+                                          int32_t width,
+                                          int32_t height)
+{
+	(void)control;
+	struct aswl_state *st = data;
+	if (st == NULL)
+		return;
+	if (!st->listing_windows)
+		return;
+
+	(void)id;
+	(void)x;
+	(void)y;
+	(void)width;
+	(void)height;
+}
+
 static void handle_control_window_list_end(void *data, struct afterstep_control_v1 *control)
 {
 	(void)control;
@@ -223,8 +308,10 @@ static void handle_control_window_closed(void *data, struct afterstep_control_v1
 
 static const struct afterstep_control_v1_listener control_listener = {
 	.workspace_state = handle_control_workspace_state,
+	.output_state = handle_control_output_state,
 	.window_list_begin = handle_control_window_list_begin,
 	.window = handle_control_window,
+	.window_geometry = handle_control_window_geometry,
 	.window_list_end = handle_control_window_list_end,
 	.window_closed = handle_control_window_closed,
 };
@@ -241,8 +328,8 @@ static void handle_registry_global(void *data,
 
 	if (strcmp(interface, afterstep_control_v1_interface.name) == 0) {
 		uint32_t bind_version = version;
-		if (bind_version > 4)
-			bind_version = 4;
+		if (bind_version > 6)
+			bind_version = 6;
 		st->control_version = bind_version;
 		st->control = wl_registry_bind(registry, name, &afterstep_control_v1_interface, bind_version);
 		st->got_control = st->control != NULL;
@@ -341,7 +428,7 @@ int main(int argc, char **argv)
 		}
 		afterstep_control_v1_exec(st.control, joined);
 		free(joined);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		(void)wl_display_roundtrip(st.display);
 		disconnect_control(&st);
 		return 0;
@@ -349,28 +436,87 @@ int main(int argc, char **argv)
 
 	if (strcmp(cmd, "quit") == 0) {
 		afterstep_control_v1_quit(st.control);
-		(void)wl_display_flush(st.display);
+		if (!flush_with_timeout(st.display, 2000)) {
+			fprintf(stderr, "aswlctl: quit: flush failed: %s\n", strerror(errno));
+			disconnect_control(&st);
+			return 1;
+		}
+
+		/*
+		 * Keep the connection alive briefly so the compositor has a chance to
+		 * read and dispatch the quit request before we disconnect. This makes
+		 * quit reliable under load.
+		 */
+		int fd = wl_display_get_fd(st.display);
+		int waited_ms = 0;
+		while (fd >= 0 && waited_ms < 5000) {
+			struct pollfd pfd = {
+				.fd = fd,
+				.events = POLLIN,
+			};
+
+			int prc;
+			do {
+				prc = poll(&pfd, 1, 50);
+			} while (prc < 0 && errno == EINTR);
+
+			if (prc < 0)
+				break;
+			if (prc == 0) {
+				waited_ms += 50;
+				continue;
+			}
+			if ((pfd.revents & (POLLHUP | POLLERR)) != 0)
+				break;
+			if (wl_display_dispatch(st.display) < 0)
+				break;
+		}
+
 		disconnect_control(&st);
 		return 0;
 	}
 
 	if (strcmp(cmd, "close_focused") == 0) {
 		afterstep_control_v1_close_focused(st.control);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
+		disconnect_control(&st);
+		return 0;
+	}
+
+	if (strcmp(cmd, "fullscreen") == 0 || strcmp(cmd, "toggle_fullscreen") == 0) {
+		if (st.control_version < 5) {
+			fprintf(stderr, "aswlctl: fullscreen requires control protocol v5\n");
+			disconnect_control(&st);
+			return 1;
+		}
+		afterstep_control_v1_toggle_fullscreen(st.control);
+		(void)flush_with_timeout(st.display, 2000);
+		disconnect_control(&st);
+		return 0;
+	}
+
+	if (strcmp(cmd, "maximize") == 0 || strcmp(cmd, "toggle_maximized") == 0 || strcmp(cmd, "toggle_maximize") == 0) {
+		if (st.control_version < 5) {
+			fprintf(stderr, "aswlctl: maximize requires control protocol v5\n");
+			disconnect_control(&st);
+			return 1;
+		}
+		afterstep_control_v1_toggle_maximized(st.control);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
 
 	if (strcmp(cmd, "focus_next") == 0) {
 		afterstep_control_v1_focus_next(st.control);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
 
 	if (strcmp(cmd, "focus_prev") == 0) {
 		afterstep_control_v1_focus_prev(st.control);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
@@ -388,21 +534,21 @@ int main(int argc, char **argv)
 			return 2;
 		}
 		afterstep_control_v1_set_workspace(st.control, ws);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
 
 	if (strcmp(cmd, "workspace_next") == 0 || strcmp(cmd, "ws_next") == 0) {
 		afterstep_control_v1_workspace_next(st.control);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
 
 	if (strcmp(cmd, "workspace_prev") == 0 || strcmp(cmd, "ws_prev") == 0) {
 		afterstep_control_v1_workspace_prev(st.control);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
@@ -416,7 +562,7 @@ int main(int argc, char **argv)
 		st.listing_windows = false;
 		st.list_done = false;
 		afterstep_control_v1_list_windows(st.control);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 
 		while (!st.list_done) {
 			if (wl_display_dispatch(st.display) < 0) {
@@ -448,7 +594,7 @@ int main(int argc, char **argv)
 			return 2;
 		}
 		afterstep_control_v1_focus_window(st.control, id);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
@@ -471,7 +617,7 @@ int main(int argc, char **argv)
 			return 2;
 		}
 		afterstep_control_v1_close_window(st.control, id);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}
@@ -500,7 +646,7 @@ int main(int argc, char **argv)
 			return 2;
 		}
 		afterstep_control_v1_move_window_to_workspace(st.control, id, ws);
-		(void)wl_display_flush(st.display);
+		(void)flush_with_timeout(st.display, 2000);
 		disconnect_control(&st);
 		return 0;
 	}

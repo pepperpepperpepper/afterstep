@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="afterstep_control_v1">
-  <interface name="afterstep_control_v1" version="4">
+  <interface name="afterstep_control_v1" version="6">
     <description summary="AfterStep compositor control">
       Minimal control interface for the AfterStep wlroots compositor scaffold.
       Used by Wayland clients in the AfterStep "suite" (panel, launchers, etc.)
@@ -92,6 +92,18 @@
       <arg name="workspace" type="uint" summary="Workspace index (1-based)"/>
     </request>
 
+    <request name="toggle_fullscreen">
+      <description summary="Toggle fullscreen for the focused view">
+        Requests that the compositor toggles the focused client's fullscreen state.
+      </description>
+    </request>
+
+    <request name="toggle_maximized">
+      <description summary="Toggle maximized for the focused view">
+        Requests that the compositor toggles the focused client's maximized state.
+      </description>
+    </request>
+
     <event name="workspace_state">
       <description summary="Workspace state notification">
         Notifies clients of the current workspace (1-based) and total workspace count.
@@ -128,6 +140,28 @@
         Sent when the window is destroyed and should be removed from clients' lists.
       </description>
       <arg name="id" type="uint" summary="Window ID"/>
+    </event>
+
+    <event name="output_state" since="6">
+      <description summary="Output size notification">
+        Notifies clients of the (single) output size in logical pixels.
+        Sent on bind and whenever the output size changes. Used by pager-style
+        clients to scale window rectangles.
+      </description>
+      <arg name="width" type="uint" summary="Output width (logical pixels)"/>
+      <arg name="height" type="uint" summary="Output height (logical pixels)"/>
+    </event>
+
+    <event name="window_geometry" since="6">
+      <description summary="Window geometry">
+        Frame geometry for a window in output-local coordinates.
+        Sent during window list snapshots, and may also be sent when windows move/resize.
+      </description>
+      <arg name="id" type="uint" summary="Window ID"/>
+      <arg name="x" type="int" summary="Frame x (output-local)"/>
+      <arg name="y" type="int" summary="Frame y (output-local)"/>
+      <arg name="width" type="int" summary="Frame width"/>
+      <arg name="height" type="int" summary="Frame height"/>
     </event>
   </interface>
 </protocol>

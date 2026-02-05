@@ -67,6 +67,16 @@ Optional compositor scaffold (requires `wlroots` development files on your syste
 make -C wayland aswlcomp
 ```
 
+Wayland session packaging (display managers):
+
+```sh
+make install.wayland
+```
+
+This installs a `wayland-sessions` entry (`AfterStep-Wayland.desktop`) plus a small wrapper
+(`afterstep-wayland-session`) that prefers user configs in `~/.config/afterstep/` and falls back to
+system defaults in `$prefix/share/afterstep/wayland/`.
+
 Nested Wayland dev run (from an existing Wayland session):
 
 ```sh
@@ -84,9 +94,9 @@ Tips:
 - `Alt+Escape` exits `aswlcomp`
 - `Alt+LMB` moves windows, `Alt+RMB` resizes windows
 - Workspace switching (configurable): `bind Alt+1 workspace 1`, `bind Alt+Right workspace_next`, etc.
-- Panel config: `~/.config/afterstep/aswlpanel.conf` (or `ASWLPANEL_CONFIG`); supports `@workspaces` (auto workspace buttons) and `@workspace N` actions.
-- Menu/launcher: `aswlmenu` (config: `~/.config/afterstep/aswlmenu.conf` or `ASWLMENU_CONFIG`; scans `.desktop` apps by default)
-- Theme colors: `aswlpanel`/`aswlmenu` will try to read AfterStep’s current look/colorscheme from `~/.afterstep/non-configurable/0_look` and `~/.afterstep/non-configurable/0_colorscheme` (or `/usr/share/afterstep/non-configurable/*`). Optional overrides: `~/.config/afterstep/aswltheme.conf` or `ASWLTHEME_CONFIG` (keys: `LookPath=...`, `ColorSchemePath=...`, `PanelStyle=...`, `MenuItemStyle=...`, `MenuHiliteStyle=...`, `MenuTitleStyle=...`).
+- Panel config: `~/.config/afterstep/aswlpanel.conf` (or `ASWLPANEL_CONFIG`); supports `@workspaces` (auto workspace buttons), `@workspace N` actions, and `Label|ICON=command` buttons (ICON can be a path, an AfterStep icon spec like `normal/Document` / `Text.xpm`, or an XDG icon name like `firefox`).
+- Menu/launcher: `aswlmenu` (config: `~/.config/afterstep/aswlmenu.conf` or `ASWLMENU_CONFIG`; pinned entries support `Label|ICON=command`; `.desktop` apps are scanned by default and their `Icon=` names are resolved via XDG icon themes and `/usr/share/pixmaps` (PNG only). Optional override: `ASWL_ICON_THEME`.)
+- Theme colors/fonts: `aswlpanel`/`aswlmenu` will try to read AfterStep’s current look/colorscheme from `~/.afterstep/non-configurable/0_look` and `~/.afterstep/non-configurable/0_colorscheme` (or `/usr/share/afterstep/non-configurable/*`). Optional overrides: `~/.config/afterstep/aswltheme.conf` or `ASWLTHEME_CONFIG` (keys: `LookPath=...`, `ColorSchemePath=...`, `PanelStyle=...`, `MenuItemStyle=...`, `MenuHiliteStyle=...`, `MenuTitleStyle=...`). If built with FreeType+fontconfig, they also attempt to use `Font` from the selected `MyStyle` (overrides: `ASWL_FONT`, `ASWLPANEL_FONT`, `ASWLMENU_FONT`; set to `builtin`/`5x7` to force the embedded font).
 - `--spawn` may be repeated to launch multiple clients
 - Optional autostart file: `~/.config/afterstep/aswlcomp.autostart` (one command per line, optional `exec ` prefix; also supports `bind MODS+KEY exec CMD`)
 - If Xwayland is available, `aswlcomp` sets `DISPLAY` (printed at startup) so it can run legacy X11 apps under Wayland.

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=AfterStep (Wayland)
+Type=Application
+Comment=AfterStep Wayland session (wlroots-based compositor scaffold).
+DesktopNames=AfterStep
+

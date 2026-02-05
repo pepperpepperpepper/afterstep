@@ -18,6 +18,7 @@ configure.h
 # AfterStep build process resulting files
 AfterStep.desktop
 AfterStep.desktop.final
+AfterStep-Wayland.desktop.session
 AfterStep.spec
 afterstep/applications/modules.desktop
 afterstep/autoexec
@@ -99,6 +100,14 @@ tools/postcard.sh
 /afterstep-xephyr-*.log
 /afterstep-xorg-*.log
 /afterstep-screenshots*/
+/afterstep-wayland-*.log
+/afterstep-wayland-smoke-repro.*
+/$xml_out
+
+# Wayland screenshot harness outputs (keep local by default)
+/screenshots/*-wayland/
+/screenshots/asan-wayland-test/
+/screenshots/wayland-test-*/
 
 # Local notes (keep untracked)
 /plan.md

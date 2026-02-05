@@ -1,0 +1,80 @@
+#!/bin/sh
+set -eu
+
+bin_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+
+guess_share_dir() {
+  if [ -d "${bin_dir}/../share/afterstep" ]; then
+    (CDPATH= cd -- "${bin_dir}/../share/afterstep" && pwd -P)
+    return 0
+  fi
+  if [ -d "/usr/share/afterstep" ]; then
+    printf '%s\n' "/usr/share/afterstep"
+    return 0
+  fi
+  return 1
+}
+
+share_dir="${AFTERSTEP_SHAREDIR:-}"
+if [ -z "${share_dir}" ]; then
+  share_dir="$(guess_share_dir 2>/dev/null || true)"
+fi
+
+wayland_dir="${AFTERSTEP_WAYLAND_DIR:-}"
+if [ -z "${wayland_dir}" ] && [ -n "${share_dir}" ]; then
+  wayland_dir="${share_dir}/wayland"
+fi
+
+xdg_conf_home="${XDG_CONFIG_HOME:-${HOME:-}/.config}"
+user_dir="${xdg_conf_home}/afterstep"
+
+pick_readable() {
+  for p in "$@"; do
+    if [ -n "${p}" ] && [ -r "${p}" ]; then
+      printf '%s\n' "${p}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+autostart="$(pick_readable \
+  "${user_dir}/aswlcomp.autostart" \
+  "${HOME:-}/.config/afterstep/aswlcomp.autostart" \
+  "${wayland_dir}/aswlcomp.autostart" \
+  "" || true)"
+
+if [ -z "${autostart}" ]; then
+  printf '%s\n' "afterstep-wayland-session: no autostart file found" >&2
+  exit 1
+fi
+
+if [ -z "${ASWLPANEL_CONFIG:-}" ]; then
+  ASWLPANEL_CONFIG="$(pick_readable \
+    "${user_dir}/aswlpanel.conf" \
+    "${HOME:-}/.config/afterstep/aswlpanel.conf" \
+    "${wayland_dir}/aswlpanel.conf" \
+    "" || true)"
+  export ASWLPANEL_CONFIG
+fi
+
+if [ -z "${ASWLMENU_CONFIG:-}" ]; then
+  ASWLMENU_CONFIG="$(pick_readable \
+    "${user_dir}/aswlmenu.conf" \
+    "${HOME:-}/.config/afterstep/aswlmenu.conf" \
+    "${wayland_dir}/aswlmenu.conf" \
+    "" || true)"
+  export ASWLMENU_CONFIG
+fi
+
+export AFTERSTEP_SHAREDIR="${share_dir}"
+export AFTERSTEP_WAYLAND_DIR="${wayland_dir}"
+
+export XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-AfterStep:wlroots}"
+export XDG_SESSION_DESKTOP="${XDG_SESSION_DESKTOP:-AfterStep}"
+export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+
+PATH="${bin_dir}:${PATH:-/usr/bin:/bin}"
+export PATH
+
+exec "${bin_dir}/aswlcomp" --autostart "${autostart}" "$@"

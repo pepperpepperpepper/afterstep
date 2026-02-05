@@ -16,6 +16,7 @@ no_giolib_app_dirs =
 desktop_subdirs = $(SYSSHAREDIR)/applications $(SHAREDIR)/applications
 session_subdirs = $(SYSCONFDIR)/X11/sessions $(SYSSHAREDIR)/xsessions $(SHAREDIR)/xsessions
 gnome_session_subdirs = $(SYSSHAREDIR)/gnome-session/sessions $(SHAREDIR)/gnome-session/sessions
+wayland_session_subdirs = $(SYSSHAREDIR)/wayland-sessions $(SHAREDIR)/wayland-sessions
 
 subdirs         = libAfterBase libAfterImage libAfterStep libAfterConf @LIBASGTKDIR@ \
                   src/afterstep \
@@ -38,8 +39,8 @@ subdirs         = libAfterBase libAfterImage libAfterStep libAfterConf @LIBASGTK
 
 RECURSIVE_TARGETS = all libs install install.bin install.lib install.man install.script install.data uninstall clean distclean indent deps
 
-all: AfterStep.desktop.final AfterStep.desktop.session
-libs: AfterStep.desktop.final AfterStep.desktop.session
+all: AfterStep.desktop.final AfterStep.desktop.session AfterStep-Wayland.desktop.session
+libs: AfterStep.desktop.final AfterStep.desktop.session AfterStep-Wayland.desktop.session
 install: install.wmprops install.desktop mkdir
 install.bin: mkdir.bin
 install.lib: mkdir.lib
@@ -51,7 +52,7 @@ indent: indent-local
 deps: deps-local
 
 clean-local:
-	$(RMF) AfterStep.desktop.final AfterStep.desktop.session
+	$(RMF) AfterStep.desktop.final AfterStep.desktop.session AfterStep-Wayland.desktop.session
 
 distclean-local:
 	$(RMF) config.cache config.log config.status Makefile.bak Makefile config.h configure.h *.o *~ *% *.bak \#* core
@@ -115,6 +116,42 @@ AfterStep.desktop.session:
 			echo "Exec=$(AFTER_EXEC_COMMAND)" >> AfterStep.desktop.session ; \
 			echo "TryExec=$(AFTER_BIN_DIR)/afterstep" >> AfterStep.desktop.session ; \
 		fi;
+
+AfterStep-Wayland.desktop.session:
+	@$(CP) AfterStep-Wayland.desktop AfterStep-Wayland.desktop.session; \
+		echo "Exec=$(AFTER_BIN_DIR)/afterstep-wayland-session" >> AfterStep-Wayland.desktop.session ; \
+		echo "TryExec=$(AFTER_BIN_DIR)/afterstep-wayland-session" >> AfterStep-Wayland.desktop.session ; \
+		echo "Icon=$(AFTER_SHAREDIR)/desktop/icons/large/AfterStep3" >> AfterStep-Wayland.desktop.session
+
+install.wayland: mkdir.bin mkdir.share AfterStep-Wayland.desktop.session
+	@set -e; \
+		echo "Building Wayland binaries..." ; \
+		(cd wayland && $(MAKE) aswlcomp aswlpanel aswlmenu aswlctl aswlbg aswlbanner aswllock aswlidle aswlrandr aswlprobe) ; \
+		echo "Installing Wayland binaries into $(AFTER_BIN_DIR)..." ; \
+		$(INSTALL_PROGRAM) wayland/aswlcomp $(AFTER_BIN_DIR)/aswlcomp ; \
+		$(INSTALL_PROGRAM) wayland/aswlpanel $(AFTER_BIN_DIR)/aswlpanel ; \
+		$(INSTALL_PROGRAM) wayland/aswlmenu $(AFTER_BIN_DIR)/aswlmenu ; \
+		$(INSTALL_PROGRAM) wayland/aswlctl $(AFTER_BIN_DIR)/aswlctl ; \
+		$(INSTALL_PROGRAM) wayland/aswlbg $(AFTER_BIN_DIR)/aswlbg ; \
+		$(INSTALL_PROGRAM) wayland/aswlbanner $(AFTER_BIN_DIR)/aswlbanner ; \
+		$(INSTALL_PROGRAM) wayland/aswllock $(AFTER_BIN_DIR)/aswllock ; \
+		$(INSTALL_PROGRAM) wayland/aswlidle $(AFTER_BIN_DIR)/aswlidle ; \
+		$(INSTALL_PROGRAM) wayland/aswlrandr $(AFTER_BIN_DIR)/aswlrandr ; \
+		$(INSTALL_PROGRAM) wayland/aswlprobe $(AFTER_BIN_DIR)/aswlprobe ; \
+		$(INSTALL_SCRIPT) wayland/afterstep-wayland-session $(AFTER_BIN_DIR)/afterstep-wayland-session ; \
+		echo "Installing Wayland default configs into $(AFTER_SHAREDIR)/wayland..." ; \
+		$(MKDIR) -p $(AFTER_SHAREDIR)/wayland ; \
+		$(INSTALL_DATA) afterstep/wayland/aswlcomp.autostart $(AFTER_SHAREDIR)/wayland/aswlcomp.autostart ; \
+		$(INSTALL_DATA) afterstep/wayland/aswlpanel.conf $(AFTER_SHAREDIR)/wayland/aswlpanel.conf ; \
+		$(INSTALL_DATA) afterstep/wayland/aswlmenu.conf $(AFTER_SHAREDIR)/wayland/aswlmenu.conf ; \
+		echo "Installing Wayland session desktop entry..." ; \
+		for I in ${wayland_session_subdirs}; do \
+			$(MKDIR) -p $$I ; \
+			if [ -d $$I ] && [ -w $$I ] ; then \
+				echo "installing AfterStep-Wayland.desktop $$I" ; \
+				$(INSTALL_DATA) AfterStep-Wayland.desktop.session $$I/AfterStep-Wayland.desktop ; \
+			fi; \
+		done
 
 
 mkdir:  mkdir.bin mkdir.lib mkdir.man mkdir.share
@@ -193,4 +230,3 @@ ChangeLog:
 	tools/git-cl.sh .; \
 	tools/git-cl.sh libAfterBase ; \
 	tools/git-cl.sh libAfterImage
-

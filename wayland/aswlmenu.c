@@ -25,7 +25,9 @@
 #include "afterstep-control-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
+#include "aswlicon.h"
 #include "aswltheme.h"
+#include "aswlfont.h"
 
 /* Avoid pulling in linux headers just for BTN_LEFT/KEY_* values. */
 #ifndef BTN_LEFT
@@ -54,10 +56,21 @@
 #define KEY_PAGEDOWN 109
 #endif
 
+enum {
+	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
+	ASWL_WINDOW_FLAG_FOCUSED = 1u << 1,
+	ASWL_WINDOW_FLAG_XWAYLAND = 1u << 2,
+};
+
 struct as_menu_entry {
 	char *label;
+	char *icon_spec;
 	char *command;
 	bool pinned;
+	bool icon_tried;
+	uint32_t *icon_argb;
+	int icon_w;
+	int icon_h;
 };
 
 struct as_buffer {
@@ -128,8 +141,15 @@ struct as_state {
 
 	bool include_desktop_entries;
 	char *menu_config_path;
+	char *title;
+	bool title_fixed;
+	bool show_help;
+	bool window_list_mode;
+	bool window_list_in_progress;
+	uint32_t current_workspace;
 
 	struct aswl_theme theme;
+	struct aswl_font font;
 };
 
 static void schedule_redraw(struct as_state *state);
@@ -139,6 +159,27 @@ static void frame_done(void *data, struct wl_callback *cb, uint32_t time_ms);
 static const struct wl_callback_listener frame_listener = {
 	.done = frame_done,
 };
+
+static int clamp_int(int v, int lo, int hi)
+{
+	if (v < lo)
+		return lo;
+	if (v > hi)
+		return hi;
+	return v;
+}
+
+static int env_int(const char *name, int def, int lo, int hi)
+{
+	const char *s = name != NULL ? getenv(name) : NULL;
+	if (s != NULL && s[0] != '\0') {
+		char *end = NULL;
+		long v = strtol(s, &end, 10);
+		if (end != s && *end == '\0')
+			def = (int)v;
+	}
+	return clamp_int(def, lo, hi);
+}
 
 static int create_tmpfile(size_t size)
 {
@@ -222,7 +263,7 @@ static struct as_buffer *as_buffer_create(struct as_state *state, int width, int
 	                                           width,
 	                                           height,
 	                                           buf->stride,
-	                                           WL_SHM_FORMAT_XRGB8888);
+	                                           WL_SHM_FORMAT_ARGB8888);
 	wl_shm_pool_destroy(pool);
 	close(fd);
 
@@ -239,15 +280,60 @@ static struct as_buffer *as_buffer_create(struct as_state *state, int width, int
 	return buf;
 }
 
+static uint32_t as_premul_argb(uint32_t argb)
+{
+	uint32_t a = (argb >> 24) & 0xFFu;
+	if (a == 0)
+		return 0;
+	if (a == 255u)
+		return argb;
+
+	uint32_t r = (argb >> 16) & 0xFFu;
+	uint32_t g = (argb >> 8) & 0xFFu;
+	uint32_t b = argb & 0xFFu;
+
+	r = (r * a + 127u) / 255u;
+	g = (g * a + 127u) / 255u;
+	b = (b * a + 127u) / 255u;
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+static uint32_t as_unpremul_argb(uint32_t argb)
+{
+	uint32_t a = (argb >> 24) & 0xFFu;
+	if (a == 0)
+		return 0;
+	if (a == 255u)
+		return argb;
+
+	uint32_t r = (argb >> 16) & 0xFFu;
+	uint32_t g = (argb >> 8) & 0xFFu;
+	uint32_t b = argb & 0xFFu;
+
+	r = (r * 255u + a / 2u) / a;
+	g = (g * 255u + a / 2u) / a;
+	b = (b * 255u + a / 2u) / a;
+
+	if (r > 255u)
+		r = 255u;
+	if (g > 255u)
+		g = 255u;
+	if (b > 255u)
+		b = 255u;
+
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
 static void as_buffer_paint_solid(struct as_buffer *buf, uint32_t argb)
 {
 	if (buf == NULL || buf->data == NULL)
 		return;
 
+	uint32_t premul = as_premul_argb(argb);
 	uint32_t *pixels = buf->data;
 	size_t count = (size_t)buf->width * (size_t)buf->height;
 	for (size_t i = 0; i < count; i++)
-		pixels[i] = argb;
+		pixels[i] = premul;
 }
 
 static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t argb)
@@ -275,13 +361,388 @@ static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int 
 	if (x2 <= x1 || y2 <= y1)
 		return;
 
+	uint32_t premul = as_premul_argb(argb);
 	for (int yy = y1; yy < y2; yy++) {
 		uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)yy * (size_t)buf->stride);
 		for (int xx = x1; xx < x2; xx++)
-			row[xx] = argb;
+			row[xx] = premul;
 	}
 }
 
+static void as_buffer_draw_bevel_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t base_argb, bool sunken)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (w <= 1 || h <= 1)
+		return;
+
+	(void)base_argb;
+
+	int x1 = x;
+	int y1 = y;
+	int x2 = x + w;
+	int y2 = y + h;
+	if (x1 < 0)
+		x1 = 0;
+	if (y1 < 0)
+		y1 = 0;
+	if (x2 > buf->width)
+		x2 = buf->width;
+	if (y2 > buf->height)
+		y2 = buf->height;
+	if (x2 - x1 <= 1 || y2 - y1 <= 1)
+		return;
+
+	uint32_t *pixels = (uint32_t *)buf->data;
+	int stride_px = buf->stride / 4;
+
+	int top = y1;
+	int bottom = y2 - 1;
+	int left = x1;
+	int right = x2 - 1;
+
+	/* Top edge */
+	{
+		uint32_t *row = pixels + (size_t)top * (size_t)stride_px;
+		for (int xx = left; xx <= right; xx++) {
+			uint32_t base = as_unpremul_argb(row[xx]);
+			uint32_t c = sunken ? aswl_color_darken(base, 120) : aswl_color_lighten(base, 64);
+			row[xx] = as_premul_argb(c);
+		}
+	}
+
+	/* Bottom edge */
+	{
+		uint32_t *row = pixels + (size_t)bottom * (size_t)stride_px;
+		for (int xx = left; xx <= right; xx++) {
+			uint32_t base = as_unpremul_argb(row[xx]);
+			uint32_t c = sunken ? aswl_color_lighten(base, 64) : aswl_color_darken(base, 120);
+			row[xx] = as_premul_argb(c);
+		}
+	}
+
+	/* Left/right edges (excluding corners to avoid double-darkening). */
+	for (int yy = top + 1; yy <= bottom - 1; yy++) {
+		uint32_t *row = pixels + (size_t)yy * (size_t)stride_px;
+		uint32_t base_l = as_unpremul_argb(row[left]);
+		uint32_t base_r = as_unpremul_argb(row[right]);
+		uint32_t c_l = sunken ? aswl_color_darken(base_l, 120) : aswl_color_lighten(base_l, 64);
+		uint32_t c_r = sunken ? aswl_color_lighten(base_r, 64) : aswl_color_darken(base_r, 120);
+		row[left] = as_premul_argb(c_l);
+		row[right] = as_premul_argb(c_r);
+	}
+}
+
+static double as_gradient_t(int type, int x, int y, int w, int h)
+{
+	if (w <= 1)
+		w = 1;
+	if (h <= 1)
+		h = 1;
+
+	switch (type) {
+	case 1:
+		type = 6;
+		break;
+	case 2:
+		type = 8;
+		break;
+	case 4:
+		type = 9;
+		break;
+	default:
+		break;
+	}
+
+	double fx = (double)x;
+	double fy = (double)y;
+	double fw = (double)(w - 1);
+	double fh = (double)(h - 1);
+
+	switch (type) {
+	case 6:
+	{
+		double denom = fw + fh;
+		if (denom <= 0.0)
+			return 0.0;
+		return (fx + fy) / denom;
+	}
+	case 7:
+	{
+		double denom = fw + fh;
+		if (denom <= 0.0)
+			return 0.0;
+		return (fx + (fh - fy)) / denom;
+	}
+	case 8:
+		if (fh <= 0.0)
+			return 0.0;
+		return fy / fh;
+	case 9:
+		if (fw <= 0.0)
+			return 0.0;
+		return fx / fw;
+	case 3:
+	{
+		double mid = fh / 2.0;
+		if (mid <= 0.0)
+			return 0.0;
+		double d = (fy > mid) ? (fy - mid) : (mid - fy);
+		double t = 1.0 - (d / mid);
+		return t < 0.0 ? 0.0 : t;
+	}
+	case 5:
+	{
+		double mid = fw / 2.0;
+		if (mid <= 0.0)
+			return 0.0;
+		double d = (fx > mid) ? (fx - mid) : (mid - fx);
+		double t = 1.0 - (d / mid);
+		return t < 0.0 ? 0.0 : t;
+	}
+	default:
+		return 0.0;
+	}
+}
+
+static uint32_t as_gradient_sample(const struct aswl_gradient *grad, double t)
+{
+	if (!aswl_gradient_is_valid(grad))
+		return 0;
+
+	if (t <= grad->offsets[0])
+		return grad->colors[0];
+	if (t >= grad->offsets[grad->count - 1])
+		return grad->colors[grad->count - 1];
+
+	for (size_t i = 0; i + 1 < grad->count; i++) {
+		double a = grad->offsets[i];
+		double b = grad->offsets[i + 1];
+		if (t > b)
+			continue;
+
+		double span = b - a;
+		if (span <= 0.0)
+			return grad->colors[i + 1];
+
+		double local = (t - a) / span;
+		if (local < 0.0)
+			local = 0.0;
+		if (local > 1.0)
+			local = 1.0;
+
+		uint8_t tt = (uint8_t)(local * 255.0 + 0.5);
+		return aswl_color_blend(grad->colors[i], grad->colors[i + 1], tt);
+	}
+
+	return grad->colors[grad->count - 1];
+}
+
+static void as_buffer_fill_style_rect(struct as_buffer *buf,
+                                      int x,
+                                      int y,
+                                      int w,
+                                      int h,
+                                      const struct aswl_gradient *grad,
+                                      uint32_t base_argb,
+                                      uint8_t nudge)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (w <= 0 || h <= 0)
+		return;
+
+	if (!aswl_gradient_is_valid(grad)) {
+		uint32_t c = base_argb;
+		if (nudge != 0)
+			c = aswl_color_nudge(c, nudge);
+		as_buffer_fill_rect(buf, x, y, w, h, c);
+		return;
+	}
+
+	int x1 = x;
+	int y1 = y;
+	int x2 = x + w;
+	int y2 = y + h;
+	if (x1 < 0)
+		x1 = 0;
+	if (y1 < 0)
+		y1 = 0;
+	if (x2 > buf->width)
+		x2 = buf->width;
+	if (y2 > buf->height)
+		y2 = buf->height;
+	if (x2 <= x1 || y2 <= y1)
+		return;
+
+	for (int yy = y1; yy < y2; yy++) {
+		uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)yy * (size_t)buf->stride);
+		for (int xx = x1; xx < x2; xx++) {
+			double t = as_gradient_t(grad->type, xx - x, yy - y, w, h);
+			uint32_t c = as_gradient_sample(grad, t);
+			if (nudge != 0)
+				c = aswl_color_nudge(c, nudge);
+			row[xx] = as_premul_argb(c);
+		}
+	}
+}
+
+static void as_buffer_blend_pixel(struct as_buffer *buf, int x, int y, uint32_t src_argb)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+
+	if (x < 0 || y < 0 || x >= buf->width || y >= buf->height)
+		return;
+
+	uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)y * (size_t)buf->stride);
+	uint32_t src = as_premul_argb(src_argb);
+	uint32_t sa = (src >> 24) & 0xFFu;
+	if (sa == 0)
+		return;
+	if (sa == 255u) {
+		row[x] = src;
+		return;
+	}
+
+	uint32_t dst = row[x];
+	uint32_t da = (dst >> 24) & 0xFFu;
+	uint32_t inv = 255u - sa;
+
+	uint32_t out_a = sa + (da * inv + 127u) / 255u;
+	uint32_t dr = (dst >> 16) & 0xFFu;
+	uint32_t dg = (dst >> 8) & 0xFFu;
+	uint32_t db = dst & 0xFFu;
+	uint32_t sr = (src >> 16) & 0xFFu;
+	uint32_t sg = (src >> 8) & 0xFFu;
+	uint32_t sb = src & 0xFFu;
+
+	uint32_t out_r = sr + (dr * inv + 127u) / 255u;
+	uint32_t out_g = sg + (dg * inv + 127u) / 255u;
+	uint32_t out_b = sb + (db * inv + 127u) / 255u;
+
+	row[x] = (out_a << 24) | (out_r << 16) | (out_g << 8) | out_b;
+}
+
+static uint32_t as_sample_image_bilinear_unpremul(const uint32_t *src_argb,
+                                                  int sw,
+                                                  int sh,
+                                                  double gx,
+                                                  double gy)
+{
+	if (src_argb == NULL || sw <= 0 || sh <= 0)
+		return 0;
+
+	if (gx < 0.0)
+		gx = 0.0;
+	if (gy < 0.0)
+		gy = 0.0;
+
+	double max_x = (double)(sw - 1);
+	double max_y = (double)(sh - 1);
+	if (gx > max_x)
+		gx = max_x;
+	if (gy > max_y)
+		gy = max_y;
+
+	int x0 = (int)gx;
+	int y0 = (int)gy;
+	int x1 = x0 + 1;
+	int y1 = y0 + 1;
+	if (x1 >= sw)
+		x1 = sw - 1;
+	if (y1 >= sh)
+		y1 = sh - 1;
+
+	double tx = gx - (double)x0;
+	double ty = gy - (double)y0;
+	if (tx < 0.0)
+		tx = 0.0;
+	if (ty < 0.0)
+		ty = 0.0;
+	if (tx > 1.0)
+		tx = 1.0;
+	if (ty > 1.0)
+		ty = 1.0;
+
+	uint32_t p00 = as_premul_argb(src_argb[(size_t)y0 * (size_t)sw + (size_t)x0]);
+	uint32_t p10 = as_premul_argb(src_argb[(size_t)y0 * (size_t)sw + (size_t)x1]);
+	uint32_t p01 = as_premul_argb(src_argb[(size_t)y1 * (size_t)sw + (size_t)x0]);
+	uint32_t p11 = as_premul_argb(src_argb[(size_t)y1 * (size_t)sw + (size_t)x1]);
+
+	double w00 = (1.0 - tx) * (1.0 - ty);
+	double w10 = tx * (1.0 - ty);
+	double w01 = (1.0 - tx) * ty;
+	double w11 = tx * ty;
+
+	double a = (double)((p00 >> 24) & 0xFFu) * w00 +
+	           (double)((p10 >> 24) & 0xFFu) * w10 +
+	           (double)((p01 >> 24) & 0xFFu) * w01 +
+	           (double)((p11 >> 24) & 0xFFu) * w11;
+	double r = (double)((p00 >> 16) & 0xFFu) * w00 +
+	           (double)((p10 >> 16) & 0xFFu) * w10 +
+	           (double)((p01 >> 16) & 0xFFu) * w01 +
+	           (double)((p11 >> 16) & 0xFFu) * w11;
+	double g = (double)((p00 >> 8) & 0xFFu) * w00 +
+	           (double)((p10 >> 8) & 0xFFu) * w10 +
+	           (double)((p01 >> 8) & 0xFFu) * w01 +
+	           (double)((p11 >> 8) & 0xFFu) * w11;
+	double b = (double)(p00 & 0xFFu) * w00 +
+	           (double)(p10 & 0xFFu) * w10 +
+	           (double)(p01 & 0xFFu) * w01 +
+	           (double)(p11 & 0xFFu) * w11;
+
+	uint32_t ia = (uint32_t)(a + 0.5);
+	uint32_t ir = (uint32_t)(r + 0.5);
+	uint32_t ig = (uint32_t)(g + 0.5);
+	uint32_t ib = (uint32_t)(b + 0.5);
+	if (ia > 255u)
+		ia = 255u;
+	if (ir > 255u)
+		ir = 255u;
+	if (ig > 255u)
+		ig = 255u;
+	if (ib > 255u)
+		ib = 255u;
+
+	uint32_t premul = (ia << 24) | (ir << 16) | (ig << 8) | ib;
+	return as_unpremul_argb(premul);
+}
+
+static void as_buffer_draw_image_bilinear(struct as_buffer *buf,
+                                          int dx,
+                                          int dy,
+                                          int dw,
+                                          int dh,
+                                          const uint32_t *src_argb,
+                                          int sw,
+                                          int sh)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (src_argb == NULL || sw <= 0 || sh <= 0)
+		return;
+	if (dw <= 0 || dh <= 0)
+		return;
+
+	double sx_scale = 0.0;
+	double sy_scale = 0.0;
+	if (dw > 1 && sw > 1)
+		sx_scale = (double)(sw - 1) / (double)(dw - 1);
+	if (dh > 1 && sh > 1)
+		sy_scale = (double)(sh - 1) / (double)(dh - 1);
+
+	for (int y = 0; y < dh; y++) {
+		double gy = (double)y * sy_scale;
+		for (int x = 0; x < dw; x++) {
+			double gx = (double)x * sx_scale;
+			uint32_t c = as_sample_image_bilinear_unpremul(src_argb, sw, sh, gx, gy);
+			as_buffer_blend_pixel(buf, dx + x, dy + y, c);
+		}
+	}
+}
+
+#if 0 /* legacy 5x7 font (replaced by aswlfont) */
 static const uint8_t *as_font5x7_rows(char c)
 {
 	if (c >= 'a' && c <= 'z')
@@ -709,6 +1170,8 @@ static void as_buffer_draw_text5x7(struct as_buffer *buf, int x, int y, const ch
 	}
 }
 
+#endif
+
 static void spawn_command(const char *command)
 {
 	if (command == NULL || command[0] == '\0')
@@ -723,10 +1186,33 @@ static void spawn_command(const char *command)
 	}
 }
 
+static bool menu_command_is_submenu(const char *command)
+{
+	if (command == NULL)
+		return false;
+	if (command[0] != '@')
+		return false;
+
+	const char *action = command + 1;
+	while (*action != '\0' && isspace((unsigned char)*action))
+		action++;
+
+	if (strncmp(action, "submenu", 6) != 0)
+		return false;
+
+	char c = action[6];
+	return c == '\0' || isspace((unsigned char)c) || c == ':' || c == '=';
+}
+
 static void as_state_launch_command(struct as_state *state, const char *command)
 {
 	if (command == NULL || command[0] == '\0')
 		return;
+
+	if (menu_command_is_submenu(command)) {
+		fprintf(stderr, "aswlmenu: submenu placeholder: %s\n", command);
+		return;
+	}
 
 	if (state != NULL && state->control != NULL) {
 		if (command[0] == '@') {
@@ -752,6 +1238,54 @@ static void as_state_launch_command(struct as_state *state, const char *command)
 			if (strcmp(action, "focus_prev") == 0 || strcmp(action, "prev") == 0) {
 				fprintf(stderr, "aswlmenu: compositor focus_prev\n");
 				afterstep_control_v1_focus_prev(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+
+			const char *id_arg = NULL;
+			if (strncmp(action, "focus_window", 11) == 0) {
+				id_arg = action + 11;
+			} else if (strncmp(action, "focus", 5) == 0) {
+				/* Avoid matching focus_next/focus_prev. */
+				if (action[5] != '_')
+					id_arg = action + 5;
+			}
+			if (id_arg != NULL) {
+				while (*id_arg == ':' || *id_arg == '=' || isspace((unsigned char)*id_arg))
+					id_arg++;
+
+				if (state->control_version < 4) {
+					fprintf(stderr, "aswlmenu: focus_window requires control protocol v4\n");
+					return;
+				}
+
+				char *end = NULL;
+				unsigned long id = strtoul(id_arg, &end, 10);
+				while (end != NULL && isspace((unsigned char)*end))
+					end++;
+
+				if (end != id_arg && end != NULL && *end == '\0' && id >= 1 && id <= UINT32_MAX) {
+					fprintf(stderr, "aswlmenu: compositor focus_window=%lu\n", id);
+					afterstep_control_v1_focus_window(state->control, (uint32_t)id);
+					(void)wl_display_flush(state->display);
+					return;
+				}
+
+				fprintf(stderr, "aswlmenu: invalid focus_window id: %s\n", id_arg);
+				return;
+			}
+			if ((strcmp(action, "fullscreen") == 0 || strcmp(action, "toggle_fullscreen") == 0) &&
+			    state->control_version >= 5) {
+				fprintf(stderr, "aswlmenu: compositor toggle_fullscreen\n");
+				afterstep_control_v1_toggle_fullscreen(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+			if ((strcmp(action, "maximize") == 0 || strcmp(action, "maximized") == 0 ||
+			     strcmp(action, "toggle_maximized") == 0 || strcmp(action, "toggle_maximize") == 0) &&
+			    state->control_version >= 5) {
+				fprintf(stderr, "aswlmenu: compositor toggle_maximized\n");
+				afterstep_control_v1_toggle_maximized(state->control);
 				(void)wl_display_flush(state->display);
 				return;
 			}
@@ -846,13 +1380,50 @@ static bool str_case_contains(const char *haystack, const char *needle)
 	return false;
 }
 
+static void as_menu_entry_destroy_icon(struct as_menu_entry *e)
+{
+	if (e == NULL)
+		return;
+	free(e->icon_argb);
+	e->icon_argb = NULL;
+	e->icon_w = 0;
+	e->icon_h = 0;
+	e->icon_tried = false;
+}
+
+static void as_menu_entry_try_load_icon(struct as_menu_entry *e)
+{
+	if (e == NULL)
+		return;
+
+	if (e->icon_tried)
+		return;
+	e->icon_tried = true;
+
+	if (e->icon_spec == NULL || e->icon_spec[0] == '\0')
+		return;
+
+	uint32_t *pixels = NULL;
+	int w = 0;
+	int h = 0;
+	if (aswl_icon_load_argb(e->icon_spec, &pixels, &w, &h)) {
+		e->icon_argb = pixels;
+		e->icon_w = w;
+		e->icon_h = h;
+	} else {
+		free(pixels);
+	}
+}
+
 static void as_state_free_entries(struct as_state *state)
 {
 	if (state == NULL)
 		return;
 	for (size_t i = 0; i < state->entry_count; i++) {
 		free(state->entries[i].label);
+		free(state->entries[i].icon_spec);
 		free(state->entries[i].command);
+		as_menu_entry_destroy_icon(&state->entries[i]);
 	}
 	free(state->entries);
 	state->entries = NULL;
@@ -861,7 +1432,7 @@ static void as_state_free_entries(struct as_state *state)
 	state->pinned_count = 0;
 }
 
-static bool as_state_append_entry(struct as_state *state, const char *label, const char *command, bool pinned)
+static bool as_state_append_entry(struct as_state *state, const char *label, const char *command, const char *icon_spec, bool pinned)
 {
 	if (state == NULL || label == NULL || label[0] == '\0' || command == NULL || command[0] == '\0')
 		return false;
@@ -878,9 +1449,14 @@ static bool as_state_append_entry(struct as_state *state, const char *label, con
 	state->entries[state->entry_count] = (struct as_menu_entry){ 0 };
 	state->entries[state->entry_count].label = strdup(label);
 	state->entries[state->entry_count].command = strdup(command);
+	if (icon_spec != NULL && icon_spec[0] != '\0')
+		state->entries[state->entry_count].icon_spec = strdup(icon_spec);
 	state->entries[state->entry_count].pinned = pinned;
-	if (state->entries[state->entry_count].label == NULL || state->entries[state->entry_count].command == NULL) {
+	if (state->entries[state->entry_count].label == NULL ||
+	    state->entries[state->entry_count].command == NULL ||
+	    (icon_spec != NULL && icon_spec[0] != '\0' && state->entries[state->entry_count].icon_spec == NULL)) {
 		free(state->entries[state->entry_count].label);
+		free(state->entries[state->entry_count].icon_spec);
 		free(state->entries[state->entry_count].command);
 		state->entries[state->entry_count] = (struct as_menu_entry){ 0 };
 		return false;
@@ -1074,6 +1650,8 @@ struct as_menu_layout {
 	int row_h;
 	int text_scale;
 	int help_scale;
+	int icon_size;
+	int icon_col_w;
 };
 
 static bool as_state_get_layout(struct as_state *state, struct as_menu_layout *layout)
@@ -1083,15 +1661,85 @@ static bool as_state_get_layout(struct as_state *state, struct as_menu_layout *l
 
 	layout->pad = 10;
 	layout->text_scale = 2;
+	if (state->font.use_freetype && state->font.base_px > 0)
+		layout->text_scale = 1;
 	layout->help_scale = 1;
 
-	int text_h = as_font5x7_glyph_h(layout->text_scale);
+	(void)aswl_font_set_scale(&state->font, layout->text_scale);
+	int text_h = aswl_font_height(&state->font);
 	layout->header_h = text_h + 2 * 8;
 	layout->row_h = text_h + 2 * 6;
 	if (layout->row_h < text_h + 4)
 		layout->row_h = text_h + 4;
 
+	layout->icon_size = layout->row_h - 8;
+	if (layout->icon_size < 0)
+		layout->icon_size = 0;
+	if (layout->icon_size > 64)
+		layout->icon_size = 64;
+	layout->icon_col_w = layout->icon_size > 0 ? layout->icon_size + 10 : 0;
+
 	return true;
+}
+
+static void as_state_autosize(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+
+	struct as_menu_layout layout;
+	if (!as_state_get_layout(state, &layout))
+		return;
+
+	(void)aswl_font_set_scale(&state->font, layout.text_scale);
+
+	/* Size to fit the menu content, similar to AfterStep's classic root menu. */
+	size_t max_rows = (size_t)env_int("ASWLMENU_ROWS", 12, 1, 64);
+	size_t rows = state->filtered_count;
+	if (rows < 1)
+		rows = 1;
+	if (rows > max_rows)
+		rows = max_rows;
+
+	int min_h = layout.header_h + layout.pad * 2 + layout.row_h;
+	int desired_h = layout.header_h + layout.pad * 2 + (int)rows * layout.row_h;
+	desired_h = clamp_int(desired_h, min_h, 4096);
+
+	int max_label_w = 0;
+	bool any_submenu = false;
+	size_t sample = state->filtered_count;
+	if (sample > 512)
+		sample = 512;
+	for (size_t i = 0; i < sample; i++) {
+		size_t idx = state->filtered[i];
+		if (idx >= state->entry_count)
+			continue;
+		const struct as_menu_entry *e = &state->entries[idx];
+		const char *label = e->label;
+		if (label == NULL)
+			continue;
+		int w = aswl_font_text_width(&state->font, label);
+		if (w > max_label_w)
+			max_label_w = w;
+		if (!any_submenu && menu_command_is_submenu(e->command))
+			any_submenu = true;
+	}
+
+	const char *header = state->title != NULL ? state->title : "AfterStep";
+	int header_w = aswl_font_text_width(&state->font, header);
+
+	int arrow_w = aswl_font_text_width(&state->font, ">");
+	int list_w = 8 + layout.icon_col_w + max_label_w + 8;
+	if (any_submenu && arrow_w > 0)
+		list_w += arrow_w + 8;
+	int desired_w = layout.pad * 2 + header_w;
+	int desired_list_w = layout.pad * 2 + list_w;
+	if (desired_list_w > desired_w)
+		desired_w = desired_list_w;
+	desired_w = clamp_int(desired_w, 240, 640);
+
+	state->width = env_int("ASWLMENU_WIDTH", desired_w, 120, 4096);
+	state->height = env_int("ASWLMENU_HEIGHT", desired_h, 120, 4096);
 }
 
 static size_t as_state_visible_rows(struct as_state *state, const struct as_menu_layout *layout)
@@ -1188,28 +1836,63 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
-	as_buffer_paint_solid(buf, state->theme.menu_bg);
+	if (aswl_gradient_is_valid(&state->theme.menu_item_gradient)) {
+		as_buffer_fill_style_rect(buf,
+		                          0,
+		                          0,
+		                          buf->width,
+		                          buf->height,
+		                          &state->theme.menu_item_gradient,
+		                          state->theme.menu_bg,
+		                          0);
+	} else {
+		as_buffer_paint_solid(buf, state->theme.menu_bg);
+	}
 
 	struct as_menu_layout layout;
 	if (!as_state_get_layout(state, &layout))
 		return;
 
-	/* Border */
-	as_buffer_fill_rect(buf, 0, 0, buf->width, 1, state->theme.menu_border);
-	as_buffer_fill_rect(buf, 0, buf->height - 1, buf->width, 1, state->theme.menu_border);
-	as_buffer_fill_rect(buf, 0, 0, 1, buf->height, state->theme.menu_border);
-	as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, state->theme.menu_border);
+	uint32_t *pixels = (uint32_t *)buf->data;
+	int stride_px = buf->stride / 4;
 
 	/* Header/filter bar */
-	as_buffer_fill_rect(buf, 0, 0, buf->width, layout.header_h, state->theme.menu_header_bg);
+	as_buffer_fill_style_rect(buf,
+	                          0,
+	                          0,
+	                          buf->width,
+	                          layout.header_h,
+	                          &state->theme.menu_header_gradient,
+	                          state->theme.menu_header_bg,
+	                          0);
 	as_buffer_fill_rect(buf, 0, layout.header_h - 1, buf->width, 1, state->theme.menu_border);
 
 	char header[512];
 	const char *filter = state->filter != NULL ? state->filter : "";
-	(void)snprintf(header, sizeof(header), "> %s", filter);
+	if (filter[0] != '\0') {
+		(void)snprintf(header,
+		               sizeof(header),
+		               "%s%s",
+		               state->keyboard != NULL ? "> " : "",
+		               filter);
+	} else if (state->title != NULL && state->title[0] != '\0') {
+		(void)snprintf(header, sizeof(header), "%s", state->title);
+	} else {
+		(void)snprintf(header, sizeof(header), "AfterStep");
+	}
 	int tx = layout.pad;
-	int ty = (layout.header_h - as_font5x7_glyph_h(layout.text_scale)) / 2;
-	as_buffer_draw_text5x7(buf, tx, ty, header, buf->width - 2 * layout.pad, layout.text_scale, state->theme.menu_header_fg);
+	(void)aswl_font_set_scale(&state->font, layout.text_scale);
+	int ty = (layout.header_h - aswl_font_height(&state->font)) / 2;
+	aswl_font_draw_text(&state->font,
+	                    pixels,
+	                    buf->width,
+	                    buf->height,
+	                    stride_px,
+	                    tx,
+	                    ty,
+	                    header,
+	                    buf->width - 2 * layout.pad,
+	                    state->theme.menu_header_fg);
 
 	/* List */
 	size_t rows = as_state_visible_rows(state, &layout);
@@ -1225,44 +1908,135 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		size_t entry_idx = state->filtered[idx];
 		if (entry_idx >= state->entry_count)
 			continue;
-		const struct as_menu_entry *e = &state->entries[entry_idx];
+		struct as_menu_entry *e = &state->entries[entry_idx];
 
 		int y = row_y0 + (int)row * layout.row_h;
 
+		bool submenu = menu_command_is_submenu(e->command);
+
 		uint32_t bg = state->theme.menu_item_bg;
 		uint32_t fg = state->theme.menu_item_fg;
+		const struct aswl_gradient *grad = &state->theme.menu_item_gradient;
+		uint8_t nudge = 0;
 		if (idx == state->selected_index) {
 			bg = state->theme.menu_item_sel_bg;
 			fg = state->theme.menu_item_sel_fg;
+			grad = &state->theme.menu_item_sel_gradient;
 		} else if (idx == state->pressed_index) {
-			bg = aswl_color_nudge(bg, 48);
+			nudge = 48;
 		} else if (idx == state->hover_index) {
-			bg = aswl_color_nudge(bg, 24);
+			nudge = 24;
 		}
 
-		as_buffer_fill_rect(buf, list_x, y, list_w, layout.row_h, bg);
+		as_buffer_fill_style_rect(buf, list_x, y, list_w, layout.row_h, grad, bg, nudge);
 		as_buffer_fill_rect(buf, list_x, y + layout.row_h - 1, list_w, 1, state->theme.menu_border);
 
-		char line[512];
-		if (e->pinned)
-			(void)snprintf(line, sizeof(line), "* %s", e->label);
-		else
-			(void)snprintf(line, sizeof(line), "  %s", e->label);
+			if (layout.icon_size > 0) {
+				as_menu_entry_try_load_icon(e);
+				if (e->icon_argb != NULL && e->icon_w > 0 && e->icon_h > 0) {
+					int ix = list_x + 8;
+					int iy = y + (layout.row_h - layout.icon_size) / 2;
+					int box = layout.icon_size;
+					int dw = e->icon_w;
+					int dh = e->icon_h;
+					if (box > 0 && dw > 0 && dh > 0) {
+						if (dw > box || dh > box) {
+							double sx = (double)box / (double)dw;
+							double sy = (double)box / (double)dh;
+							double s = sx < sy ? sx : sy;
+							dw = (int)((double)dw * s + 0.5);
+							dh = (int)((double)dh * s + 0.5);
+							if (dw < 1)
+								dw = 1;
+							if (dh < 1)
+								dh = 1;
+						}
 
-		int ly = y + (layout.row_h - as_font5x7_glyph_h(layout.text_scale)) / 2;
-		as_buffer_draw_text5x7(buf, list_x + 8, ly, line, list_w - 16, layout.text_scale, fg);
+						int px = ix + (box - dw) / 2;
+						int py = iy + (box - dh) / 2;
+						as_buffer_draw_image_bilinear(buf, px, py, dw, dh, e->icon_argb, e->icon_w, e->icon_h);
+					}
+				}
+				}
+
+			char line[512];
+			(void)snprintf(line, sizeof(line), "%s", e->label);
+
+		int text_x = list_x + 8 + layout.icon_col_w;
+		int arrow_w = submenu ? aswl_font_text_width(&state->font, ">") : 0;
+		int text_w = list_w - (text_x - list_x) - 8;
+		if (submenu)
+			text_w -= arrow_w + 8;
+		if (text_w < 0)
+			text_w = 0;
+		int ly = y + (layout.row_h - aswl_font_height(&state->font)) / 2;
+		aswl_font_draw_text(&state->font,
+		                    pixels,
+		                    buf->width,
+		                    buf->height,
+		                    stride_px,
+		                    text_x,
+		                    ly,
+		                    line,
+		                    text_w,
+		                    fg);
+
+		if (submenu && arrow_w > 0) {
+			int ax = list_x + list_w - 8 - arrow_w;
+			int aw = arrow_w;
+			if (ax < text_x) {
+				ax = text_x;
+				aw = list_x + list_w - 8 - ax;
+			}
+			if (aw > 0) {
+				aswl_font_draw_text(&state->font,
+				                    pixels,
+				                    buf->width,
+				                    buf->height,
+				                    stride_px,
+				                    ax,
+				                    ly,
+				                    ">",
+				                    aw,
+				                    fg);
+			}
+		}
 	}
 
-	/* Footer/help (small) */
-	char footer[256];
-	(void)snprintf(footer, sizeof(footer), "Enter: run   Esc: clear/close   Up/Down: select   Backspace: delete   (%zu items)",
-	               state->filtered_count);
-	int fh = as_font5x7_glyph_h(layout.help_scale);
-	int fy = buf->height - fh - 6;
-	if (fy > layout.header_h) {
-		as_buffer_fill_rect(buf, 0, fy - 6, buf->width, fh + 12, state->theme.menu_footer_bg);
-		as_buffer_draw_text5x7(buf, layout.pad, fy, footer, buf->width - 2 * layout.pad, layout.help_scale, state->theme.menu_footer_fg);
+	/* Footer/help (small). */
+	if (state->show_help && state->keyboard != NULL) {
+		char footer[256];
+		(void)snprintf(footer,
+		               sizeof(footer),
+		               "Enter: run   Esc: clear/close   Up/Down: select   Backspace: delete   (%zu items)",
+		               state->filtered_count);
+		(void)aswl_font_set_scale(&state->font, layout.help_scale);
+		int fh = aswl_font_height(&state->font);
+		int fy = buf->height - fh - 6;
+		if (fy > layout.header_h) {
+			as_buffer_fill_rect(buf, 0, fy - 6, buf->width, fh + 12, state->theme.menu_footer_bg);
+			aswl_font_draw_text(&state->font,
+			                    pixels,
+			                    buf->width,
+			                    buf->height,
+			                    stride_px,
+			                    layout.pad,
+			                    fy,
+			                    footer,
+			                    buf->width - 2 * layout.pad,
+				                    state->theme.menu_footer_fg);
+		}
 	}
+
+	/* Border + inner bevel (AfterStep-ish). Draw last so fills don't overwrite edges. */
+	if (buf->width >= 2 && buf->height >= 2) {
+		as_buffer_fill_rect(buf, 0, 0, buf->width, 1, state->theme.menu_border);
+		as_buffer_fill_rect(buf, 0, buf->height - 1, buf->width, 1, state->theme.menu_border);
+		as_buffer_fill_rect(buf, 0, 0, 1, buf->height, state->theme.menu_border);
+		as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, state->theme.menu_border);
+	}
+	if (buf->width >= 4 && buf->height >= 4)
+		as_buffer_draw_bevel_rect(buf, 1, 1, buf->width - 2, buf->height - 2, state->theme.menu_bg, false);
 }
 
 static void draw_and_commit(struct as_state *state)
@@ -1471,7 +2245,8 @@ static void pointer_button(void *data,
 	        state->entries[entry_idx].label,
 	        state->entries[entry_idx].command);
 	as_state_launch_command(state, state->entries[entry_idx].command);
-	state->running = false;
+	if (!menu_command_is_submenu(state->entries[entry_idx].command))
+		state->running = false;
 }
 
 static void pointer_axis(void *data,
@@ -1657,7 +2432,8 @@ static void keyboard_key(void *data,
 		        state->entries[entry_idx].label,
 		        state->entries[entry_idx].command);
 		as_state_launch_command(state, state->entries[entry_idx].command);
-		state->running = false;
+		if (!menu_command_is_submenu(state->entries[entry_idx].command))
+			state->running = false;
 		return;
 	}
 
@@ -1854,6 +2630,7 @@ struct desktop_tmp_entry {
 	bool in_entry;
 	char *name;
 	char *exec;
+	char *icon;
 	char *type;
 	bool hidden;
 	bool nodisplay;
@@ -1871,7 +2648,7 @@ static void desktop_tmp_finalize(struct as_state *state, const struct desktop_tm
 		return;
 	if (tmp->type != NULL && tmp->type[0] != '\0' && strcasecmp(tmp->type, "Application") != 0)
 		return;
-	(void)as_state_append_entry(state, tmp->name, tmp->exec, false);
+	(void)as_state_append_entry(state, tmp->name, tmp->exec, tmp->icon, false);
 }
 
 static void desktop_tmp_reset(struct desktop_tmp_entry *tmp)
@@ -1880,6 +2657,7 @@ static void desktop_tmp_reset(struct desktop_tmp_entry *tmp)
 		return;
 	free(tmp->name);
 	free(tmp->exec);
+	free(tmp->icon);
 	free(tmp->type);
 	*tmp = (struct desktop_tmp_entry){ 0 };
 }
@@ -1932,6 +2710,7 @@ static void as_state_add_desktop_file(struct as_state *state, const char *path)
 		char *val = eq + 1;
 		rstrip(key);
 		val = lstrip(val);
+		rstrip(val);
 
 		if (strcmp(key, "Name") == 0) {
 			free(tmp.name);
@@ -1946,6 +2725,11 @@ static void as_state_add_desktop_file(struct as_state *state, const char *path)
 		if (strcmp(key, "Type") == 0) {
 			free(tmp.type);
 			tmp.type = strdup(val);
+			continue;
+		}
+		if (strcmp(key, "Icon") == 0) {
+			free(tmp.icon);
+			tmp.icon = strdup(val);
 			continue;
 		}
 		if (strcmp(key, "Hidden") == 0) {
@@ -2088,6 +2872,13 @@ static bool load_menu_from_file(struct as_state *state, const char *path)
 
 		if (*s == '@') {
 			s++;
+			char *arg = strchr(s, ' ');
+			if (arg != NULL) {
+				*arg = '\0';
+				arg = lstrip(arg + 1);
+				rstrip(arg);
+			}
+
 			if (strcmp(s, "desktop_entries") == 0 || strcmp(s, "desktop") == 0) {
 				state->include_desktop_entries = true;
 				any = true;
@@ -2096,6 +2887,24 @@ static bool load_menu_from_file(struct as_state *state, const char *path)
 			if (strcmp(s, "no_desktop_entries") == 0 || strcmp(s, "no_desktop") == 0) {
 				state->include_desktop_entries = false;
 				any = true;
+				continue;
+			}
+			if (strcmp(s, "show_help") == 0 || strcmp(s, "help") == 0) {
+				state->show_help = true;
+				any = true;
+				continue;
+			}
+			if (strcmp(s, "no_help") == 0 || strcmp(s, "hide_help") == 0) {
+				state->show_help = false;
+				any = true;
+				continue;
+			}
+			if (strcmp(s, "title") == 0) {
+				if (arg != NULL && arg[0] != '\0') {
+					free(state->title);
+					state->title = strdup(arg);
+					any = true;
+				}
 				continue;
 			}
 		}
@@ -2107,14 +2916,26 @@ static bool load_menu_from_file(struct as_state *state, const char *path)
 
 		char *label = s;
 		char *command = eq + 1;
+		char *icon_spec = NULL;
 		rstrip(label);
 		label = lstrip(label);
 		command = lstrip(command);
 		rstrip(command);
+
+		char *bar = strchr(label, '|');
+		if (bar != NULL) {
+			*bar = '\0';
+			icon_spec = lstrip(bar + 1);
+			rstrip(icon_spec);
+			rstrip(label);
+			if (icon_spec[0] == '\0')
+				icon_spec = NULL;
+		}
+
 		if (label[0] == '\0' || command[0] == '\0')
 			continue;
 
-		any |= as_state_append_entry(state, label, command, true);
+		any |= as_state_append_entry(state, label, command, icon_spec, true);
 	}
 
 	free(line);
@@ -2161,9 +2982,9 @@ static void as_state_load_menu(struct as_state *state)
 	}
 
 	/* Defaults if no config exists. */
-	(void)as_state_append_entry(state, "Terminal", "${TERMINAL:-foot}", true);
-	(void)as_state_append_entry(state, "Close focused", "@close", true);
-	(void)as_state_append_entry(state, "Quit compositor", "@quit", true);
+	(void)as_state_append_entry(state, "Terminal", "${TERMINAL:-foot}", NULL, true);
+	(void)as_state_append_entry(state, "Close focused", "@close", NULL, true);
+	(void)as_state_append_entry(state, "Quit compositor", "@quit", NULL, true);
 }
 
 static void as_state_finalize_menu(struct as_state *state)
@@ -2183,6 +3004,166 @@ static void as_state_finalize_menu(struct as_state *state)
 
 	as_state_rebuild_filtered(state);
 }
+
+static void update_window_list_title(struct as_state *state)
+{
+	if (state == NULL)
+		return;
+	if (!state->window_list_mode)
+		return;
+	if (state->title_fixed)
+		return;
+
+	uint32_t desk = state->current_workspace > 0 ? state->current_workspace - 1 : 0;
+	char *t = NULL;
+	if (asprintf(&t, "Windows on Desktop %u", desk) < 0)
+		return;
+	free(state->title);
+	state->title = t;
+}
+
+static void control_workspace_state(void *data,
+                                    struct afterstep_control_v1 *control,
+                                    uint32_t current,
+                                    uint32_t count)
+{
+	(void)control;
+	(void)count;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	state->current_workspace = current;
+	update_window_list_title(state);
+	if (state->window_list_mode) {
+		as_state_autosize(state);
+		schedule_redraw(state);
+	}
+}
+
+static void control_window_list_begin(void *data, struct afterstep_control_v1 *control)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+	if (!state->window_list_mode)
+		return;
+
+	state->window_list_in_progress = true;
+	as_state_free_entries(state);
+	as_state_free_filtered(state);
+	state->selected_index = 0;
+	state->hover_index = -1;
+	state->pressed_index = -1;
+	state->scroll = 0;
+}
+
+static void control_window(void *data,
+                           struct afterstep_control_v1 *control,
+                           uint32_t id,
+                           uint32_t workspace,
+                           uint32_t flags,
+                           const char *title,
+                           const char *app_id)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+	if (!state->window_list_mode)
+		return;
+	if (!state->window_list_in_progress)
+		return;
+
+	if ((flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
+		return;
+	if (state->current_workspace != 0 && workspace != state->current_workspace)
+		return;
+	if (app_id != NULL && strcmp(app_id, "afterstep.aswlmenu") == 0)
+		return;
+
+	const char *label = NULL;
+	if (title != NULL && title[0] != '\0')
+		label = title;
+	else if (app_id != NULL && app_id[0] != '\0')
+		label = app_id;
+
+	char fallback[64];
+	if (label == NULL) {
+		(void)snprintf(fallback, sizeof(fallback), "Window %u", id);
+		label = fallback;
+	}
+
+	char *cmd = NULL;
+	if (asprintf(&cmd, "@focus_window %u", id) < 0)
+		return;
+	(void)as_state_append_entry(state, label, cmd, NULL, true);
+	free(cmd);
+}
+
+static void control_window_list_end(void *data, struct afterstep_control_v1 *control)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+	if (!state->window_list_mode)
+		return;
+
+	state->window_list_in_progress = false;
+	as_state_finalize_menu(state);
+	as_state_autosize(state);
+	schedule_redraw(state);
+}
+
+static void control_window_closed(void *data, struct afterstep_control_v1 *control, uint32_t id)
+{
+	(void)control;
+	(void)id;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+	/* TODO: dynamic updates for window-list mode (not needed for screenshots). */
+}
+
+static void control_output_state(void *data,
+                                 struct afterstep_control_v1 *control,
+                                 uint32_t width,
+                                 uint32_t height)
+{
+	(void)data;
+	(void)control;
+	(void)width;
+	(void)height;
+}
+
+static void control_window_geometry(void *data,
+                                    struct afterstep_control_v1 *control,
+                                    uint32_t id,
+                                    int32_t x,
+                                    int32_t y,
+                                    int32_t width,
+                                    int32_t height)
+{
+	(void)data;
+	(void)control;
+	(void)id;
+	(void)x;
+	(void)y;
+	(void)width;
+	(void)height;
+}
+
+static const struct afterstep_control_v1_listener control_listener = {
+	.workspace_state = control_workspace_state,
+	.output_state = control_output_state,
+	.window_list_begin = control_window_list_begin,
+	.window = control_window,
+	.window_geometry = control_window_geometry,
+	.window_list_end = control_window_list_end,
+	.window_closed = control_window_closed,
+};
 
 static void registry_global(void *data,
                             struct wl_registry *registry,
@@ -2204,11 +3185,13 @@ static void registry_global(void *data,
 	}
 
 	if (strcmp(interface, afterstep_control_v1_interface.name) == 0) {
-		uint32_t bind_version = version < 3 ? version : 3;
+		uint32_t bind_version = version < 5 ? version : 5;
 		if (bind_version < 1)
 			bind_version = 1;
 		state->control_version = bind_version;
 		state->control = wl_registry_bind(registry, name, &afterstep_control_v1_interface, bind_version);
+		if (state->control != NULL && state->window_list_mode && bind_version >= 3)
+			afterstep_control_v1_add_listener(state->control, &control_listener, state);
 		return;
 	}
 
@@ -2273,10 +3256,14 @@ static void cleanup(struct as_state *state)
 	as_state_free_entries(state);
 	free(state->menu_config_path);
 	state->menu_config_path = NULL;
+	free(state->title);
+	state->title = NULL;
 	free(state->filter);
 	state->filter = NULL;
 	state->filter_len = 0;
 	state->filter_cap = 0;
+	aswl_font_destroy(&state->font);
+	aswl_theme_destroy(&state->theme);
 
 #ifdef HAVE_XKBCOMMON
 	if (state->xkb_state != NULL)
@@ -2318,7 +3305,16 @@ static void cleanup(struct as_state *state)
 		wl_display_disconnect(state->display);
 }
 
-int main(void)
+static void usage(const char *prog)
+{
+	fprintf(stderr, "Usage: %s [--windows]\n", prog);
+	fprintf(stderr, "\n");
+	fprintf(stderr, "Options:\n");
+	fprintf(stderr, "  --windows, --window-list   Show a simple window list (focus on selection)\n");
+	fprintf(stderr, "  --help, -h                 Show this help\n");
+}
+
+int main(int argc, char **argv)
 {
 	struct as_state state = {
 		.width = 640,
@@ -2330,11 +3326,53 @@ int main(void)
 		.scroll = 0,
 	};
 
+	for (int i = 1; i < argc; i++) {
+		const char *arg = argv[i];
+		if (strcmp(arg, "--windows") == 0 || strcmp(arg, "--window-list") == 0) {
+			state.window_list_mode = true;
+			continue;
+		}
+		if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+			usage(argv[0]);
+			return 0;
+		}
+
+		fprintf(stderr, "aswlmenu: unknown argument: %s\n", arg);
+		usage(argv[0]);
+		return 2;
+	}
+
 	aswl_theme_init_default(&state.theme);
 	(void)aswl_theme_load(&state.theme);
 
-	as_state_load_menu(&state);
-	as_state_finalize_menu(&state);
+	const char *title_env = getenv("ASWLMENU_TITLE");
+	if (title_env != NULL && title_env[0] != '\0') {
+		state.title = strdup(title_env);
+		state.title_fixed = true;
+	} else if (state.window_list_mode) {
+		state.title = strdup("Windows");
+	} else {
+		state.title = strdup("AfterStep");
+	}
+
+	const char *show_help = getenv("ASWLMENU_SHOW_HELP");
+	if (show_help != NULL && show_help[0] != '\0' && strcmp(show_help, "0") != 0)
+		state.show_help = true;
+
+	aswl_font_init(&state.font);
+	const char *font_spec = getenv("ASWLMENU_FONT");
+	if (font_spec == NULL || font_spec[0] == '\0')
+		font_spec = getenv("ASWL_FONT");
+	if ((font_spec == NULL || font_spec[0] == '\0') && state.theme.menu_font != NULL && state.theme.menu_font[0] != '\0')
+		font_spec = state.theme.menu_font;
+	if (!aswl_font_load(&state.font, font_spec) && font_spec != NULL && font_spec[0] != '\0')
+		fprintf(stderr, "aswlmenu: failed to load font '%s', using builtin 5x7\n", font_spec);
+
+	if (!state.window_list_mode) {
+		as_state_load_menu(&state);
+		as_state_finalize_menu(&state);
+		as_state_autosize(&state);
+	}
 
 	state.display = wl_display_connect(NULL);
 	if (state.display == NULL) {
@@ -2359,6 +3397,12 @@ int main(void)
 		        (void *)state.shm);
 		cleanup(&state);
 		return 1;
+	}
+
+	if (state.window_list_mode) {
+		update_window_list_title(&state);
+		as_state_finalize_menu(&state);
+		as_state_autosize(&state);
 	}
 
 	state.surface = wl_compositor_create_surface(state.compositor);

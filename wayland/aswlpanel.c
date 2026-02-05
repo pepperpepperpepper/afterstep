@@ -9,14 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
-
-#ifdef HAVE_LIBPNG
-#include <png.h>
-#endif
 
 #include <wayland-client.h>
 
@@ -27,6 +25,8 @@
 #endif
 
 #include "aswltheme.h"
+#include "aswlicon.h"
+#include "aswlfont.h"
 
 /* Avoid pulling in linux headers just for BTN_LEFT. */
 #ifndef BTN_LEFT
@@ -39,10 +39,31 @@
 #define BTN_MIDDLE 0x112
 #endif
 
+enum as_panel_edge {
+	ASWL_PANEL_EDGE_TOP = 0,
+	ASWL_PANEL_EDGE_BOTTOM,
+	ASWL_PANEL_EDGE_LEFT,
+	ASWL_PANEL_EDGE_RIGHT,
+};
+
 enum {
 	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
 	ASWL_WINDOW_FLAG_FOCUSED = 1u << 1,
 	ASWL_WINDOW_FLAG_XWAYLAND = 1u << 2,
+};
+
+enum {
+	ASWL_ANCHOR_TOP = 1u << 0,
+	ASWL_ANCHOR_BOTTOM = 1u << 1,
+	ASWL_ANCHOR_LEFT = 1u << 2,
+	ASWL_ANCHOR_RIGHT = 1u << 3,
+};
+
+struct as_margins {
+	int top;
+	int right;
+	int bottom;
+	int left;
 };
 
 struct as_button {
@@ -58,6 +79,10 @@ struct as_window {
 	uint32_t id;
 	uint32_t workspace;
 	uint32_t flags;
+	int x;
+	int y;
+	int w;
+	int h;
 	char *title;
 	char *app_id;
 };
@@ -86,6 +111,8 @@ struct as_state {
 	uint32_t control_version;
 	uint32_t current_workspace;
 	uint32_t workspace_count;
+	int output_width;
+	int output_height;
 
 #if HAVE_WLR_LAYER_SHELL
 	struct zwlr_layer_shell_v1 *layer_shell;
@@ -105,6 +132,12 @@ struct as_state {
 
 	int width;
 	int height;
+	int item_height;
+	bool width_override_set;
+	bool height_override_set;
+	bool item_height_override_set;
+	bool exclusive_zone_override_set;
+	int exclusive_zone_override;
 	bool configured;
 	bool running;
 
@@ -121,6 +154,15 @@ struct as_state {
 	bool buttons_owned;
 	char *buttons_config_path;
 	bool buttons_has_workspaces_directive;
+	bool dock_mode;
+	bool pager_mode;
+	bool window_list_focused_only;
+	enum as_panel_edge edge;
+	struct as_margins margins;
+	bool anchor_override_set;
+	uint32_t anchor_override;
+	int pager_columns;
+	int pager_rows;
 
 	struct as_window *windows;
 	size_t window_count;
@@ -128,6 +170,7 @@ struct as_state {
 	bool window_list_in_progress;
 
 	struct aswl_theme theme;
+	struct aswl_font font;
 };
 
 static void schedule_redraw(struct as_state *state);
@@ -220,7 +263,7 @@ static struct as_buffer *as_buffer_create(struct as_state *state, int width, int
 	                                           width,
 	                                           height,
 	                                           buf->stride,
-	                                           WL_SHM_FORMAT_XRGB8888);
+	                                           WL_SHM_FORMAT_ARGB8888);
 	wl_shm_pool_destroy(pool);
 	close(fd);
 
@@ -237,15 +280,226 @@ static struct as_buffer *as_buffer_create(struct as_state *state, int width, int
 	return buf;
 }
 
-static void as_buffer_paint_solid(struct as_buffer *buf, uint32_t argb)
+static uint32_t as_premul_argb(uint32_t argb)
+{
+	uint32_t a = (argb >> 24) & 0xFFu;
+	if (a == 0)
+		return 0;
+	if (a == 255u)
+		return argb;
+
+	uint32_t r = (argb >> 16) & 0xFFu;
+	uint32_t g = (argb >> 8) & 0xFFu;
+	uint32_t b = argb & 0xFFu;
+
+	r = (r * a + 127u) / 255u;
+	g = (g * a + 127u) / 255u;
+	b = (b * a + 127u) / 255u;
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+static uint32_t as_unpremul_argb(uint32_t argb)
+{
+	uint32_t a = (argb >> 24) & 0xFFu;
+	if (a == 0)
+		return 0;
+	if (a == 255u)
+		return argb;
+
+	uint32_t r = (argb >> 16) & 0xFFu;
+	uint32_t g = (argb >> 8) & 0xFFu;
+	uint32_t b = argb & 0xFFu;
+
+	r = (r * 255u + a / 2u) / a;
+	g = (g * 255u + a / 2u) / a;
+	b = (b * 255u + a / 2u) / a;
+
+	if (r > 255u)
+		r = 255u;
+	if (g > 255u)
+		g = 255u;
+	if (b > 255u)
+		b = 255u;
+
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t argb);
+
+static void as_buffer_paint_vertical_gradient(struct as_buffer *buf, uint32_t top_argb, uint32_t bottom_argb)
 {
 	if (buf == NULL || buf->data == NULL)
 		return;
 
-	uint32_t *pixels = buf->data;
-	size_t count = (size_t)buf->width * (size_t)buf->height;
-	for (size_t i = 0; i < count; i++)
-		pixels[i] = argb;
+	if (buf->height <= 0 || buf->width <= 0)
+		return;
+
+	for (int y = 0; y < buf->height; y++) {
+		uint8_t t = 0;
+		if (buf->height > 1) {
+			t = (uint8_t)((uint32_t)y * 255u / (uint32_t)(buf->height - 1));
+		}
+		uint32_t c = as_premul_argb(aswl_color_blend(top_argb, bottom_argb, t));
+		uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)y * (size_t)buf->stride);
+		for (int x = 0; x < buf->width; x++)
+			row[x] = c;
+	}
+}
+
+static double as_gradient_t(int type, int x, int y, int w, int h)
+{
+	if (w <= 1)
+		w = 1;
+	if (h <= 1)
+		h = 1;
+
+	/* Normalize the legacy aliases AfterStep documents. */
+	switch (type) {
+	case 1:
+		type = 6;
+		break;
+	case 2:
+		type = 8;
+		break;
+	case 4:
+		type = 9;
+		break;
+	default:
+		break;
+	}
+
+	double fx = (double)x;
+	double fy = (double)y;
+	double fw = (double)(w - 1);
+	double fh = (double)(h - 1);
+
+	switch (type) {
+	case 6: /* Top-left -> bottom-right */
+	{
+		double denom = fw + fh;
+		if (denom <= 0.0)
+			return 0.0;
+		return (fx + fy) / denom;
+	}
+	case 7: /* Bottom-left -> top-right */
+	{
+		double denom = fw + fh;
+		if (denom <= 0.0)
+			return 0.0;
+		return (fx + (fh - fy)) / denom;
+	}
+	case 8: /* Top -> bottom */
+		if (fh <= 0.0)
+			return 0.0;
+		return fy / fh;
+	case 9: /* Left -> right */
+		if (fw <= 0.0)
+			return 0.0;
+		return fx / fw;
+	case 3: /* Top/bottom -> center */
+	{
+		double mid = fh / 2.0;
+		if (mid <= 0.0)
+			return 0.0;
+		double d = (fy > mid) ? (fy - mid) : (mid - fy);
+		double t = 1.0 - (d / mid);
+		return t < 0.0 ? 0.0 : t;
+	}
+	case 5: /* Left/right -> center */
+	{
+		double mid = fw / 2.0;
+		if (mid <= 0.0)
+			return 0.0;
+		double d = (fx > mid) ? (fx - mid) : (mid - fx);
+		double t = 1.0 - (d / mid);
+		return t < 0.0 ? 0.0 : t;
+	}
+	default:
+		/* Unknown type: treat as a solid fill using the first stop. */
+		return 0.0;
+	}
+}
+
+static uint32_t as_gradient_sample(const struct aswl_gradient *grad, double t)
+{
+	if (!aswl_gradient_is_valid(grad))
+		return 0;
+
+	if (t <= grad->offsets[0])
+		return grad->colors[0];
+	if (t >= grad->offsets[grad->count - 1])
+		return grad->colors[grad->count - 1];
+
+	for (size_t i = 0; i + 1 < grad->count; i++) {
+		double a = grad->offsets[i];
+		double b = grad->offsets[i + 1];
+		if (t > b)
+			continue;
+
+		double span = b - a;
+		if (span <= 0.0)
+			return grad->colors[i + 1];
+
+		double local = (t - a) / span;
+		if (local < 0.0)
+			local = 0.0;
+		if (local > 1.0)
+			local = 1.0;
+
+		uint8_t tt = (uint8_t)(local * 255.0 + 0.5);
+		return aswl_color_blend(grad->colors[i], grad->colors[i + 1], tt);
+	}
+
+	return grad->colors[grad->count - 1];
+}
+
+static void as_buffer_fill_style_rect(struct as_buffer *buf,
+                                      int x,
+                                      int y,
+                                      int w,
+                                      int h,
+                                      const struct aswl_gradient *grad,
+                                      uint32_t base_argb,
+                                      uint8_t nudge)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (w <= 0 || h <= 0)
+		return;
+
+	if (!aswl_gradient_is_valid(grad)) {
+		uint32_t c = base_argb;
+		if (nudge != 0)
+			c = aswl_color_nudge(c, nudge);
+		as_buffer_fill_rect(buf, x, y, w, h, c);
+		return;
+	}
+
+	int x1 = x;
+	int y1 = y;
+	int x2 = x + w;
+	int y2 = y + h;
+	if (x1 < 0)
+		x1 = 0;
+	if (y1 < 0)
+		y1 = 0;
+	if (x2 > buf->width)
+		x2 = buf->width;
+	if (y2 > buf->height)
+		y2 = buf->height;
+	if (x2 <= x1 || y2 <= y1)
+		return;
+
+	for (int yy = y1; yy < y2; yy++) {
+		uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)yy * (size_t)buf->stride);
+		for (int xx = x1; xx < x2; xx++) {
+			double t = as_gradient_t(grad->type, xx - x, yy - y, w, h);
+			uint32_t c = as_gradient_sample(grad, t);
+			if (nudge != 0)
+				c = aswl_color_nudge(c, nudge);
+			row[xx] = as_premul_argb(c);
+		}
+	}
 }
 
 static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t argb)
@@ -273,10 +527,76 @@ static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int 
 	if (x2 <= x1 || y2 <= y1)
 		return;
 
+	uint32_t premul = as_premul_argb(argb);
+
 	for (int yy = y1; yy < y2; yy++) {
 		uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)yy * (size_t)buf->stride);
 		for (int xx = x1; xx < x2; xx++)
-			row[xx] = argb;
+			row[xx] = premul;
+	}
+}
+
+static void as_buffer_draw_bevel_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t base_argb, bool sunken)
+{
+	if (buf == NULL || buf->data == NULL)
+		return;
+	if (w <= 1 || h <= 1)
+		return;
+
+	(void)base_argb;
+
+	int x1 = x;
+	int y1 = y;
+	int x2 = x + w;
+	int y2 = y + h;
+	if (x1 < 0)
+		x1 = 0;
+	if (y1 < 0)
+		y1 = 0;
+	if (x2 > buf->width)
+		x2 = buf->width;
+	if (y2 > buf->height)
+		y2 = buf->height;
+	if (x2 - x1 <= 1 || y2 - y1 <= 1)
+		return;
+
+	uint32_t *pixels = (uint32_t *)buf->data;
+	int stride_px = buf->stride / 4;
+
+	int top = y1;
+	int bottom = y2 - 1;
+	int left = x1;
+	int right = x2 - 1;
+
+	/* Top edge */
+	{
+		uint32_t *row = pixels + (size_t)top * (size_t)stride_px;
+		for (int xx = left; xx <= right; xx++) {
+			uint32_t base = as_unpremul_argb(row[xx]);
+			uint32_t c = sunken ? aswl_color_darken(base, 120) : aswl_color_lighten(base, 64);
+			row[xx] = as_premul_argb(c);
+		}
+	}
+
+	/* Bottom edge */
+	{
+		uint32_t *row = pixels + (size_t)bottom * (size_t)stride_px;
+		for (int xx = left; xx <= right; xx++) {
+			uint32_t base = as_unpremul_argb(row[xx]);
+			uint32_t c = sunken ? aswl_color_lighten(base, 64) : aswl_color_darken(base, 120);
+			row[xx] = as_premul_argb(c);
+		}
+	}
+
+	/* Left/right edges (excluding corners to avoid double-darkening). */
+	for (int yy = top + 1; yy <= bottom - 1; yy++) {
+		uint32_t *row = pixels + (size_t)yy * (size_t)stride_px;
+		uint32_t base_l = as_unpremul_argb(row[left]);
+		uint32_t base_r = as_unpremul_argb(row[right]);
+		uint32_t c_l = sunken ? aswl_color_darken(base_l, 120) : aswl_color_lighten(base_l, 64);
+		uint32_t c_r = sunken ? aswl_color_lighten(base_r, 64) : aswl_color_darken(base_r, 120);
+		row[left] = as_premul_argb(c_l);
+		row[right] = as_premul_argb(c_r);
 	}
 }
 
@@ -288,42 +608,128 @@ static void as_buffer_blend_pixel(struct as_buffer *buf, int x, int y, uint32_t 
 	if (x < 0 || y < 0 || x >= buf->width || y >= buf->height)
 		return;
 
-	uint8_t sa = (uint8_t)(src_argb >> 24);
+	uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)y * (size_t)buf->stride);
+	uint32_t src = as_premul_argb(src_argb);
+	uint32_t sa = (src >> 24) & 0xFFu;
 	if (sa == 0)
 		return;
-
-	uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)y * (size_t)buf->stride);
-
-	if (sa == 255) {
-		row[x] = 0xFF000000u | (src_argb & 0x00FFFFFFu);
+	if (sa == 255u) {
+		row[x] = src;
 		return;
 	}
 
 	uint32_t dst = row[x];
-	uint8_t dr = (uint8_t)(dst >> 16);
-	uint8_t dg = (uint8_t)(dst >> 8);
-	uint8_t db = (uint8_t)dst;
+	uint32_t da = (dst >> 24) & 0xFFu;
+	uint32_t inv = 255u - sa;
 
-	uint8_t sr = (uint8_t)(src_argb >> 16);
-	uint8_t sg = (uint8_t)(src_argb >> 8);
-	uint8_t sb = (uint8_t)src_argb;
+	uint32_t out_a = sa + (da * inv + 127u) / 255u;
+	uint32_t dr = (dst >> 16) & 0xFFu;
+	uint32_t dg = (dst >> 8) & 0xFFu;
+	uint32_t db = dst & 0xFFu;
+	uint32_t sr = (src >> 16) & 0xFFu;
+	uint32_t sg = (src >> 8) & 0xFFu;
+	uint32_t sb = src & 0xFFu;
 
-	uint16_t inv = (uint16_t)(255 - sa);
-	uint8_t or_ = (uint8_t)((sa * sr + inv * dr) / 255);
-	uint8_t og = (uint8_t)((sa * sg + inv * dg) / 255);
-	uint8_t ob = (uint8_t)((sa * sb + inv * db) / 255);
+	uint32_t out_r = sr + (dr * inv + 127u) / 255u;
+	uint32_t out_g = sg + (dg * inv + 127u) / 255u;
+	uint32_t out_b = sb + (db * inv + 127u) / 255u;
 
-	row[x] = 0xFF000000u | ((uint32_t)or_ << 16) | ((uint32_t)og << 8) | (uint32_t)ob;
+	row[x] = (out_a << 24) | (out_r << 16) | (out_g << 8) | out_b;
 }
 
-static void as_buffer_draw_image_nearest(struct as_buffer *buf,
-                                         int dx,
-                                         int dy,
-                                         int dw,
-                                         int dh,
-                                         const uint32_t *src_argb,
-                                         int sw,
-                                         int sh)
+static uint32_t as_sample_image_bilinear_unpremul(const uint32_t *src_argb,
+                                                  int sw,
+                                                  int sh,
+                                                  double gx,
+                                                  double gy)
+{
+	if (src_argb == NULL || sw <= 0 || sh <= 0)
+		return 0;
+
+	if (gx < 0.0)
+		gx = 0.0;
+	if (gy < 0.0)
+		gy = 0.0;
+
+	double max_x = (double)(sw - 1);
+	double max_y = (double)(sh - 1);
+	if (gx > max_x)
+		gx = max_x;
+	if (gy > max_y)
+		gy = max_y;
+
+	int x0 = (int)gx;
+	int y0 = (int)gy;
+	int x1 = x0 + 1;
+	int y1 = y0 + 1;
+	if (x1 >= sw)
+		x1 = sw - 1;
+	if (y1 >= sh)
+		y1 = sh - 1;
+
+	double tx = gx - (double)x0;
+	double ty = gy - (double)y0;
+	if (tx < 0.0)
+		tx = 0.0;
+	if (ty < 0.0)
+		ty = 0.0;
+	if (tx > 1.0)
+		tx = 1.0;
+	if (ty > 1.0)
+		ty = 1.0;
+
+	uint32_t p00 = as_premul_argb(src_argb[(size_t)y0 * (size_t)sw + (size_t)x0]);
+	uint32_t p10 = as_premul_argb(src_argb[(size_t)y0 * (size_t)sw + (size_t)x1]);
+	uint32_t p01 = as_premul_argb(src_argb[(size_t)y1 * (size_t)sw + (size_t)x0]);
+	uint32_t p11 = as_premul_argb(src_argb[(size_t)y1 * (size_t)sw + (size_t)x1]);
+
+	double w00 = (1.0 - tx) * (1.0 - ty);
+	double w10 = tx * (1.0 - ty);
+	double w01 = (1.0 - tx) * ty;
+	double w11 = tx * ty;
+
+	double a = (double)((p00 >> 24) & 0xFFu) * w00 +
+	           (double)((p10 >> 24) & 0xFFu) * w10 +
+	           (double)((p01 >> 24) & 0xFFu) * w01 +
+	           (double)((p11 >> 24) & 0xFFu) * w11;
+	double r = (double)((p00 >> 16) & 0xFFu) * w00 +
+	           (double)((p10 >> 16) & 0xFFu) * w10 +
+	           (double)((p01 >> 16) & 0xFFu) * w01 +
+	           (double)((p11 >> 16) & 0xFFu) * w11;
+	double g = (double)((p00 >> 8) & 0xFFu) * w00 +
+	           (double)((p10 >> 8) & 0xFFu) * w10 +
+	           (double)((p01 >> 8) & 0xFFu) * w01 +
+	           (double)((p11 >> 8) & 0xFFu) * w11;
+	double b = (double)(p00 & 0xFFu) * w00 +
+	           (double)(p10 & 0xFFu) * w10 +
+	           (double)(p01 & 0xFFu) * w01 +
+	           (double)(p11 & 0xFFu) * w11;
+
+	uint32_t ia = (uint32_t)(a + 0.5);
+	uint32_t ir = (uint32_t)(r + 0.5);
+	uint32_t ig = (uint32_t)(g + 0.5);
+	uint32_t ib = (uint32_t)(b + 0.5);
+	if (ia > 255u)
+		ia = 255u;
+	if (ir > 255u)
+		ir = 255u;
+	if (ig > 255u)
+		ig = 255u;
+	if (ib > 255u)
+		ib = 255u;
+
+	uint32_t premul = (ia << 24) | (ir << 16) | (ig << 8) | ib;
+	return as_unpremul_argb(premul);
+}
+
+static void as_buffer_draw_image_bilinear(struct as_buffer *buf,
+                                          int dx,
+                                          int dy,
+                                          int dw,
+                                          int dh,
+                                          const uint32_t *src_argb,
+                                          int sw,
+                                          int sh)
 {
 	if (buf == NULL || buf->data == NULL)
 		return;
@@ -332,22 +738,19 @@ static void as_buffer_draw_image_nearest(struct as_buffer *buf,
 	if (dw <= 0 || dh <= 0)
 		return;
 
+	double sx_scale = 0.0;
+	double sy_scale = 0.0;
+	if (dw > 1 && sw > 1)
+		sx_scale = (double)(sw - 1) / (double)(dw - 1);
+	if (dh > 1 && sh > 1)
+		sy_scale = (double)(sh - 1) / (double)(dh - 1);
+
 	for (int y = 0; y < dh; y++) {
-		int sy = (int)((int64_t)y * sh / dh);
-		if (sy < 0)
-			sy = 0;
-		if (sy >= sh)
-			sy = sh - 1;
+		double gy = (double)y * sy_scale;
 		for (int x = 0; x < dw; x++) {
-			int sx = (int)((int64_t)x * sw / dw);
-			if (sx < 0)
-				sx = 0;
-			if (sx >= sw)
-				sx = sw - 1;
-			as_buffer_blend_pixel(buf,
-			                      dx + x,
-			                      dy + y,
-			                      src_argb[(size_t)sy * (size_t)sw + (size_t)sx]);
+			double gx = (double)x * sx_scale;
+			uint32_t c = as_sample_image_bilinear_unpremul(src_argb, sw, sh, gx, gy);
+			as_buffer_blend_pixel(buf, dx + x, dy + y, c);
 		}
 	}
 }
@@ -359,6 +762,341 @@ static int clamp_int(int v, int lo, int hi)
 	if (v > hi)
 		return hi;
 	return v;
+}
+
+static bool as_panel_edge_is_vertical(enum as_panel_edge edge)
+{
+	return edge == ASWL_PANEL_EDGE_LEFT || edge == ASWL_PANEL_EDGE_RIGHT;
+}
+
+static uint32_t as_state_default_anchor_flags(const struct as_state *state)
+{
+	if (state == NULL)
+		return ASWL_ANCHOR_TOP | ASWL_ANCHOR_LEFT | ASWL_ANCHOR_RIGHT;
+
+	switch (state->edge) {
+	case ASWL_PANEL_EDGE_BOTTOM:
+		if (state->dock_mode)
+			return ASWL_ANCHOR_BOTTOM | ASWL_ANCHOR_LEFT;
+		return ASWL_ANCHOR_BOTTOM | ASWL_ANCHOR_LEFT | ASWL_ANCHOR_RIGHT;
+	case ASWL_PANEL_EDGE_LEFT:
+		return ASWL_ANCHOR_LEFT | ASWL_ANCHOR_TOP | ASWL_ANCHOR_BOTTOM;
+	case ASWL_PANEL_EDGE_RIGHT:
+		return ASWL_ANCHOR_RIGHT | ASWL_ANCHOR_TOP | ASWL_ANCHOR_BOTTOM;
+	case ASWL_PANEL_EDGE_TOP:
+	default:
+		if (state->dock_mode)
+			return ASWL_ANCHOR_TOP | ASWL_ANCHOR_LEFT;
+		return ASWL_ANCHOR_TOP | ASWL_ANCHOR_LEFT | ASWL_ANCHOR_RIGHT;
+	}
+}
+
+static uint32_t as_state_anchor_flags(const struct as_state *state)
+{
+	if (state == NULL)
+		return ASWL_ANCHOR_TOP | ASWL_ANCHOR_LEFT | ASWL_ANCHOR_RIGHT;
+	if (state->anchor_override_set)
+		return state->anchor_override;
+	return as_state_default_anchor_flags(state);
+}
+
+static bool as_anchor_spans_horizontal(uint32_t anchor)
+{
+	return (anchor & ASWL_ANCHOR_LEFT) != 0 && (anchor & ASWL_ANCHOR_RIGHT) != 0;
+}
+
+static bool as_anchor_spans_vertical(uint32_t anchor)
+{
+	return (anchor & ASWL_ANCHOR_TOP) != 0 && (anchor & ASWL_ANCHOR_BOTTOM) != 0;
+}
+
+static int as_clamp_margin(int v)
+{
+	if (v < 0)
+		return 0;
+	if (v > 8192)
+		return 8192;
+	return v;
+}
+
+static enum as_panel_edge as_panel_edge_parse(const char *s, enum as_panel_edge fallback)
+{
+	if (s == NULL)
+		return fallback;
+
+	while (*s != '\0' && isspace((unsigned char)*s))
+		s++;
+
+	char token[16];
+	size_t n = 0;
+	while (*s != '\0' && !isspace((unsigned char)*s) && n + 1 < sizeof(token)) {
+		token[n++] = (char)tolower((unsigned char)*s);
+		s++;
+	}
+	token[n] = '\0';
+
+	if (strcmp(token, "top") == 0)
+		return ASWL_PANEL_EDGE_TOP;
+	if (strcmp(token, "bottom") == 0)
+		return ASWL_PANEL_EDGE_BOTTOM;
+	if (strcmp(token, "left") == 0)
+		return ASWL_PANEL_EDGE_LEFT;
+	if (strcmp(token, "right") == 0)
+		return ASWL_PANEL_EDGE_RIGHT;
+
+	return fallback;
+}
+
+static uint32_t as_anchor_parse(const char *s, uint32_t fallback)
+{
+	if (s == NULL)
+		return fallback;
+
+	while (*s != '\0' && isspace((unsigned char)*s))
+		s++;
+
+	if (*s == '\0')
+		return fallback;
+
+	uint32_t out = 0;
+	bool any = false;
+
+	while (*s != '\0') {
+		while (*s != '\0' && (isspace((unsigned char)*s) || *s == ',' || *s == ';'))
+			s++;
+		if (*s == '\0')
+			break;
+
+		char token[16];
+		size_t n = 0;
+		while (*s != '\0' && !isspace((unsigned char)*s) && *s != ',' && *s != ';' && n + 1 < sizeof(token)) {
+			token[n++] = (char)tolower((unsigned char)*s);
+			s++;
+		}
+		token[n] = '\0';
+		if (token[0] == '\0')
+			continue;
+
+		if (strcmp(token, "none") == 0) {
+			out = 0;
+			any = true;
+			continue;
+		}
+		if (strcmp(token, "top") == 0) {
+			out |= ASWL_ANCHOR_TOP;
+			any = true;
+			continue;
+		}
+		if (strcmp(token, "bottom") == 0) {
+			out |= ASWL_ANCHOR_BOTTOM;
+			any = true;
+			continue;
+		}
+		if (strcmp(token, "left") == 0) {
+			out |= ASWL_ANCHOR_LEFT;
+			any = true;
+			continue;
+		}
+		if (strcmp(token, "right") == 0) {
+			out |= ASWL_ANCHOR_RIGHT;
+			any = true;
+			continue;
+		}
+	}
+
+	if (!any)
+		return fallback;
+	return out;
+}
+
+static int as_state_exclusive_zone(const struct as_state *state)
+{
+	if (state == NULL)
+		return 0;
+	if (state->exclusive_zone_override_set)
+		return state->exclusive_zone_override;
+	return as_panel_edge_is_vertical(state->edge) ? state->width : state->height;
+}
+
+static int as_state_calc_dock_main_axis_size(const struct as_state *state)
+{
+	if (state == NULL)
+		return 0;
+	if (!state->dock_mode)
+		return 0;
+	if (state->button_count == 0)
+		return 0;
+
+	/* Keep in sync with as_state_get_layout() for dock mode. */
+	const int pad = 2;
+	const int spacing = 2;
+
+	int cross = 0;
+	if (as_panel_edge_is_vertical(state->edge)) {
+		cross = state->width - 2 * pad;
+	} else {
+		cross = state->height - 2 * pad;
+	}
+
+	if (cross < 0)
+		cross = 0;
+
+	return 2 * pad + (int)state->button_count * cross + (int)(state->button_count - 1) * spacing;
+}
+
+static bool as_parse_long_token(const char *s, const char **end_out, long *value_out)
+{
+	if (end_out != NULL)
+		*end_out = s;
+	if (value_out != NULL)
+		*value_out = 0;
+
+	if (s == NULL || s[0] == '\0')
+		return false;
+
+	char *end = NULL;
+	long v = strtol(s, &end, 10);
+	if (end == s)
+		return false;
+
+	if (end_out != NULL)
+		*end_out = end;
+	if (value_out != NULL)
+		*value_out = v;
+	return true;
+}
+
+static void as_margins_apply_css_shorthand(struct as_margins *m, int v1, int v2, int v3, int v4, int count)
+{
+	if (m == NULL || count <= 0)
+		return;
+
+	if (count == 1) {
+		m->top = v1;
+		m->right = v1;
+		m->bottom = v1;
+		m->left = v1;
+		return;
+	}
+
+	if (count == 2) {
+		m->top = v1;
+		m->bottom = v1;
+		m->left = v2;
+		m->right = v2;
+		return;
+	}
+
+	if (count == 3) {
+		m->top = v1;
+		m->left = v2;
+		m->right = v2;
+		m->bottom = v3;
+		return;
+	}
+
+	m->top = v1;
+	m->right = v2;
+	m->bottom = v3;
+	m->left = v4;
+}
+
+static void as_margins_parse_and_apply(struct as_margins *m, const char *spec)
+{
+	if (m == NULL || spec == NULL)
+		return;
+
+	const char *s = spec;
+	while (*s != '\0') {
+		while (*s != '\0' && (isspace((unsigned char)*s) || *s == ','))
+			s++;
+		if (*s == '\0')
+			break;
+
+		const char *token_start = s;
+		while (*s != '\0' && !isspace((unsigned char)*s) && *s != ',')
+			s++;
+		size_t tok_len = (size_t)(s - token_start);
+		if (tok_len == 0)
+			continue;
+
+		char tok[64];
+		if (tok_len >= sizeof(tok))
+			tok_len = sizeof(tok) - 1;
+		memcpy(tok, token_start, tok_len);
+		tok[tok_len] = '\0';
+
+		/* key=value */
+		char *eq = strchr(tok, '=');
+		if (eq != NULL) {
+			*eq = '\0';
+			const char *key = tok;
+			const char *val_s = eq + 1;
+			long v = 0;
+			if (as_parse_long_token(val_s, NULL, &v)) {
+				int mv = as_clamp_margin((int)v);
+				if (strcasecmp(key, "top") == 0)
+					m->top = mv;
+				else if (strcasecmp(key, "right") == 0)
+					m->right = mv;
+				else if (strcasecmp(key, "bottom") == 0)
+					m->bottom = mv;
+				else if (strcasecmp(key, "left") == 0)
+					m->left = mv;
+				else if (strcasecmp(key, "all") == 0)
+					as_margins_apply_css_shorthand(m, mv, mv, mv, mv, 1);
+			}
+			continue;
+		}
+
+		/* key value */
+		if (strcasecmp(tok, "top") == 0 || strcasecmp(tok, "right") == 0 || strcasecmp(tok, "bottom") == 0 ||
+		    strcasecmp(tok, "left") == 0 || strcasecmp(tok, "all") == 0) {
+			while (*s != '\0' && (isspace((unsigned char)*s) || *s == ','))
+				s++;
+			long v = 0;
+			const char *next = NULL;
+			if (as_parse_long_token(s, &next, &v)) {
+				int mv = as_clamp_margin((int)v);
+				if (strcasecmp(tok, "top") == 0)
+					m->top = mv;
+				else if (strcasecmp(tok, "right") == 0)
+					m->right = mv;
+				else if (strcasecmp(tok, "bottom") == 0)
+					m->bottom = mv;
+				else if (strcasecmp(tok, "left") == 0)
+					m->left = mv;
+				else
+					as_margins_apply_css_shorthand(m, mv, mv, mv, mv, 1);
+				s = next;
+			}
+			continue;
+		}
+
+		/* Positional integers; parse up to 4 starting from this token. */
+		long v[4] = { 0, 0, 0, 0 };
+		int n = 0;
+
+		const char *scan = token_start;
+		while (*scan != '\0' && n < 4) {
+			while (*scan != '\0' && (isspace((unsigned char)*scan) || *scan == ','))
+				scan++;
+			if (*scan == '\0')
+				break;
+
+			const char *next = NULL;
+			long tmp = 0;
+			if (!as_parse_long_token(scan, &next, &tmp))
+				break;
+			v[n++] = (long)as_clamp_margin((int)tmp);
+			scan = next;
+		}
+
+		if (n > 0) {
+			as_margins_apply_css_shorthand(m, (int)v[0], (int)v[1], (int)v[2], (int)v[3], n);
+			s = scan;
+		}
+	}
 }
 
 static void as_button_destroy_icon(struct as_button *button)
@@ -382,154 +1120,6 @@ static void as_button_destroy(struct as_button *button)
 	memset(button, 0, sizeof(*button));
 }
 
-static char *as_expand_tilde(const char *path)
-{
-	if (path == NULL)
-		return NULL;
-	if (path[0] != '~' || path[1] != '/')
-		return strdup(path);
-
-	const char *home = getenv("HOME");
-	if (home == NULL || home[0] == '\0')
-		return strdup(path);
-
-	char *out = NULL;
-	if (asprintf(&out, "%s/%s", home, path + 2) < 0)
-		return NULL;
-	return out;
-}
-
-#ifdef HAVE_LIBPNG
-static bool as_load_png_argb(const char *path, uint32_t **out_argb, int *out_w, int *out_h)
-{
-	if (out_argb == NULL || out_w == NULL || out_h == NULL)
-		return false;
-
-	*out_argb = NULL;
-	*out_w = 0;
-	*out_h = 0;
-
-	if (path == NULL || path[0] == '\0')
-		return false;
-
-	FILE *fp = fopen(path, "rb");
-	if (fp == NULL)
-		return false;
-
-	uint8_t header[8];
-	if (fread(header, 1, sizeof(header), fp) != sizeof(header)) {
-		fclose(fp);
-		return false;
-	}
-	if (png_sig_cmp(header, 0, sizeof(header)) != 0) {
-		fclose(fp);
-		return false;
-	}
-
-	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	if (png == NULL) {
-		fclose(fp);
-		return false;
-	}
-
-	png_infop info = png_create_info_struct(png);
-	if (info == NULL) {
-		png_destroy_read_struct(&png, NULL, NULL);
-		fclose(fp);
-		return false;
-	}
-
-	uint32_t *argb = NULL;
-	uint8_t *rgba = NULL;
-	png_bytep *rows = NULL;
-
-	if (setjmp(png_jmpbuf(png)) != 0)
-		goto fail;
-
-	png_init_io(png, fp);
-	png_set_sig_bytes(png, sizeof(header));
-	png_read_info(png, info);
-
-	png_uint_32 w = png_get_image_width(png, info);
-	png_uint_32 h = png_get_image_height(png, info);
-	int color_type = png_get_color_type(png, info);
-	int bit_depth = png_get_bit_depth(png, info);
-
-	if (w == 0 || h == 0)
-		goto fail;
-	if (w > 4096 || h > 4096)
-		goto fail;
-
-	if (bit_depth == 16)
-		png_set_strip_16(png);
-	if (color_type == PNG_COLOR_TYPE_PALETTE)
-		png_set_palette_to_rgb(png);
-	if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
-		png_set_expand_gray_1_2_4_to_8(png);
-	if (png_get_valid(png, info, PNG_INFO_tRNS))
-		png_set_tRNS_to_alpha(png);
-	if (color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
-		png_set_gray_to_rgb(png);
-	if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_GRAY || color_type == PNG_COLOR_TYPE_PALETTE)
-		png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
-
-	png_read_update_info(png, info);
-
-	png_size_t rowbytes = png_get_rowbytes(png, info);
-	if (rowbytes == 0)
-		goto fail;
-	if (rowbytes / 4 != w)
-		goto fail;
-
-	rgba = malloc((size_t)rowbytes * (size_t)h);
-	rows = malloc(sizeof(*rows) * (size_t)h);
-	if (rgba == NULL || rows == NULL)
-		goto fail;
-
-	for (png_uint_32 y = 0; y < h; y++)
-		rows[y] = (png_bytep)(rgba + (size_t)y * (size_t)rowbytes);
-
-	png_read_image(png, rows);
-	png_read_end(png, NULL);
-
-	argb = malloc((size_t)w * (size_t)h * sizeof(*argb));
-	if (argb == NULL)
-		goto fail;
-
-	for (png_uint_32 y = 0; y < h; y++) {
-		const uint8_t *src = rgba + (size_t)y * (size_t)rowbytes;
-		for (png_uint_32 x = 0; x < w; x++) {
-			uint8_t r = src[x * 4 + 0];
-			uint8_t g = src[x * 4 + 1];
-			uint8_t b = src[x * 4 + 2];
-			uint8_t a = src[x * 4 + 3];
-			argb[y * (size_t)w + x] = ((uint32_t)a << 24) |
-			                         ((uint32_t)r << 16) |
-			                         ((uint32_t)g << 8) |
-			                         (uint32_t)b;
-		}
-	}
-
-	free(rgba);
-	free(rows);
-	png_destroy_read_struct(&png, &info, NULL);
-	fclose(fp);
-
-	*out_argb = argb;
-	*out_w = (int)w;
-	*out_h = (int)h;
-	return true;
-
-fail:
-	free(argb);
-	free(rgba);
-	free(rows);
-	png_destroy_read_struct(&png, &info, NULL);
-	fclose(fp);
-	return false;
-}
-#endif
-
 static void as_button_try_load_icon(struct as_button *button)
 {
 	if (button == NULL)
@@ -540,386 +1130,15 @@ static void as_button_try_load_icon(struct as_button *button)
 	if (button->icon_path == NULL || button->icon_path[0] == '\0')
 		return;
 
-#ifdef HAVE_LIBPNG
-	char *path = as_expand_tilde(button->icon_path);
-	if (path == NULL)
-		return;
-
 	uint32_t *pixels = NULL;
 	int w = 0;
 	int h = 0;
-	if (as_load_png_argb(path, &pixels, &w, &h)) {
+	if (aswl_icon_load_argb(button->icon_path, &pixels, &w, &h)) {
 		button->icon_argb = pixels;
 		button->icon_w = w;
 		button->icon_h = h;
 	} else {
 		free(pixels);
-	}
-	free(path);
-#endif
-}
-
-static const uint8_t *as_font5x7_rows(char c)
-{
-	if (c >= 'a' && c <= 'z')
-		c = (char)('A' + (c - 'a'));
-
-	switch (c) {
-	case ' ':
-	{
-		static const uint8_t rows[7] = { 0, 0, 0, 0, 0, 0, 0 };
-		return rows;
-	}
-	case '-':
-	{
-		static const uint8_t rows[7] = { 0, 0, 0, 0x1F, 0, 0, 0 };
-		return rows;
-	}
-	case '_':
-	{
-		static const uint8_t rows[7] = { 0, 0, 0, 0, 0, 0, 0x1F };
-		return rows;
-	}
-	case '.':
-	{
-		static const uint8_t rows[7] = { 0, 0, 0, 0, 0, 0, 0x04 };
-		return rows;
-	}
-	case ':':
-	{
-		static const uint8_t rows[7] = { 0, 0x04, 0, 0, 0x04, 0, 0 };
-		return rows;
-	}
-	case '+':
-	{
-		static const uint8_t rows[7] = { 0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0 };
-		return rows;
-	}
-	case '/':
-	{
-		static const uint8_t rows[7] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0, 0 };
-		return rows;
-	}
-	case '?':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x01, 0x02, 0x04, 0, 0x04 };
-		return rows;
-	}
-	case '0':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E };
-		return rows;
-	}
-	case '1':
-	{
-		static const uint8_t rows[7] = { 0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E };
-		return rows;
-	}
-	case '2':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F };
-		return rows;
-	}
-	case '3':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x01, 0x06, 0x01, 0x11, 0x0E };
-		return rows;
-	}
-	case '4':
-	{
-		static const uint8_t rows[7] = { 0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02 };
-		return rows;
-	}
-	case '5':
-	{
-		static const uint8_t rows[7] = { 0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E };
-		return rows;
-	}
-	case '6':
-	{
-		static const uint8_t rows[7] = { 0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E };
-		return rows;
-	}
-	case '7':
-	{
-		static const uint8_t rows[7] = { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08 };
-		return rows;
-	}
-	case '8':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E };
-		return rows;
-	}
-	case '9':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C };
-		return rows;
-	}
-	case 'A':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 };
-		return rows;
-	}
-	case 'B':
-	{
-		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E };
-		return rows;
-	}
-	case 'C':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E };
-		return rows;
-	}
-	case 'D':
-	{
-		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E };
-		return rows;
-	}
-	case 'E':
-	{
-		static const uint8_t rows[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F };
-		return rows;
-	}
-	case 'F':
-	{
-		static const uint8_t rows[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10 };
-		return rows;
-	}
-	case 'G':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x10, 0x10, 0x13, 0x11, 0x0E };
-		return rows;
-	}
-	case 'H':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 };
-		return rows;
-	}
-	case 'I':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E };
-		return rows;
-	}
-	case 'J':
-	{
-		static const uint8_t rows[7] = { 0x01, 0x01, 0x01, 0x01, 0x11, 0x11, 0x0E };
-		return rows;
-	}
-	case 'K':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11 };
-		return rows;
-	}
-	case 'L':
-	{
-		static const uint8_t rows[7] = { 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F };
-		return rows;
-	}
-	case 'M':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11 };
-		return rows;
-	}
-	case 'N':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11 };
-		return rows;
-	}
-	case 'O':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E };
-		return rows;
-	}
-	case 'P':
-	{
-		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10 };
-		return rows;
-	}
-	case 'Q':
-	{
-		static const uint8_t rows[7] = { 0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D };
-		return rows;
-	}
-	case 'R':
-	{
-		static const uint8_t rows[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11 };
-		return rows;
-	}
-	case 'S':
-	{
-		static const uint8_t rows[7] = { 0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E };
-		return rows;
-	}
-	case 'T':
-	{
-		static const uint8_t rows[7] = { 0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 };
-		return rows;
-	}
-	case 'U':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E };
-		return rows;
-	}
-	case 'V':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04 };
-		return rows;
-	}
-	case 'W':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11 };
-		return rows;
-	}
-	case 'X':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11 };
-		return rows;
-	}
-	case 'Y':
-	{
-		static const uint8_t rows[7] = { 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04 };
-		return rows;
-	}
-	case 'Z':
-	{
-		static const uint8_t rows[7] = { 0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F };
-		return rows;
-	}
-	default:
-		return as_font5x7_rows('?');
-	}
-}
-
-static int as_font5x7_glyph_w(int scale)
-{
-	return 5 * scale;
-}
-
-static int as_font5x7_glyph_h(int scale)
-{
-	return 7 * scale;
-}
-
-static int as_font5x7_spacing(int scale)
-{
-	return scale;
-}
-
-static int as_font5x7_text_width_n(const char *s, size_t n, int scale)
-{
-	if (s == NULL || n == 0)
-		return 0;
-
-	int w = 0;
-	int glyph_w = as_font5x7_glyph_w(scale);
-	int spacing = as_font5x7_spacing(scale);
-	for (size_t i = 0; i < n; i++) {
-		if (s[i] == '\0')
-			break;
-		if (w > 0)
-			w += spacing;
-		w += glyph_w;
-	}
-	return w;
-}
-
-static int as_font5x7_text_width(const char *s, int scale)
-{
-	if (s == NULL)
-		return 0;
-	return as_font5x7_text_width_n(s, strlen(s), scale);
-}
-
-static void as_buffer_draw_glyph5x7(struct as_buffer *buf, int x, int y, char c, int scale, uint32_t argb)
-{
-	if (buf == NULL || buf->data == NULL)
-		return;
-	if (scale <= 0)
-		return;
-
-	const uint8_t *rows = as_font5x7_rows(c);
-	int gw = as_font5x7_glyph_w(scale);
-	int gh = as_font5x7_glyph_h(scale);
-
-	for (int row = 0; row < 7; row++) {
-		uint8_t bits = rows[row] & 0x1F;
-		for (int col = 0; col < 5; col++) {
-			bool on = ((bits >> (4 - col)) & 0x1) != 0;
-			if (!on)
-				continue;
-			as_buffer_fill_rect(buf,
-			                    x + col * scale,
-			                    y + row * scale,
-			                    scale,
-			                    scale,
-			                    argb);
-		}
-	}
-
-	(void)gw;
-	(void)gh;
-}
-
-static size_t as_font5x7_fit_chars(const char *s, int scale, int max_w)
-{
-	if (s == NULL || max_w <= 0)
-		return 0;
-
-	int glyph_w = as_font5x7_glyph_w(scale);
-	int spacing = as_font5x7_spacing(scale);
-
-	size_t count = 0;
-	int w = 0;
-	for (; s[count] != '\0'; count++) {
-		int add = glyph_w;
-		if (w > 0)
-			add += spacing;
-		if (w + add > max_w)
-			break;
-		w += add;
-	}
-	return count;
-}
-
-static void as_buffer_draw_text5x7(struct as_buffer *buf, int x, int y, const char *s, int max_w, int scale, uint32_t argb)
-{
-	if (buf == NULL || buf->data == NULL)
-		return;
-	if (s == NULL || s[0] == '\0')
-		return;
-	if (scale <= 0)
-		return;
-
-	size_t n = strlen(s);
-
-	size_t draw_n = n;
-	bool need_ellipsis = false;
-	int full_w = as_font5x7_text_width_n(s, n, scale);
-	if (max_w > 0 && full_w > max_w) {
-		int ell_w = as_font5x7_text_width_n("...", 3, scale);
-		if (ell_w < max_w) {
-			draw_n = as_font5x7_fit_chars(s, scale, max_w - ell_w);
-			need_ellipsis = true;
-		} else {
-			draw_n = as_font5x7_fit_chars(s, scale, max_w);
-		}
-	}
-
-	int cx = x;
-	int glyph_w = as_font5x7_glyph_w(scale);
-	int spacing = as_font5x7_spacing(scale);
-
-	for (size_t i = 0; i < draw_n; i++) {
-		if (i > 0)
-			cx += spacing;
-		as_buffer_draw_glyph5x7(buf, cx, y, s[i], scale, argb);
-		cx += glyph_w;
-	}
-
-	if (need_ellipsis) {
-		if (draw_n > 0)
-			cx += spacing;
-		as_buffer_draw_text5x7(buf, cx, y, "...", max_w > 0 ? max_w - (cx - x) : 0, scale, argb);
 	}
 }
 
@@ -1020,6 +1239,50 @@ static bool as_state_upsert_window(struct as_state *state,
 	return true;
 }
 
+static bool as_state_upsert_window_geometry(struct as_state *state,
+                                           uint32_t id,
+                                           int x,
+                                           int y,
+                                           int w,
+                                           int h)
+{
+	if (state == NULL || id == 0)
+		return false;
+
+	struct as_window *win = as_state_find_window(state, id);
+	if (win == NULL) {
+		if (state->window_count == state->window_cap) {
+			size_t next = state->window_cap == 0 ? 16 : state->window_cap * 2;
+			struct as_window *tmp = realloc(state->windows, next * sizeof(*tmp));
+			if (tmp == NULL)
+				return false;
+			state->windows = tmp;
+			state->window_cap = next;
+		}
+
+		win = &state->windows[state->window_count++];
+		*win = (struct as_window){ 0 };
+		win->id = id;
+
+		win->title = strdup("");
+		win->app_id = strdup("");
+		if (win->title == NULL || win->app_id == NULL) {
+			free(win->title);
+			free(win->app_id);
+			win->title = NULL;
+			win->app_id = NULL;
+			state->window_count--;
+			return false;
+		}
+	}
+
+	win->x = x;
+	win->y = y;
+	win->w = w;
+	win->h = h;
+	return true;
+}
+
 static bool as_state_remove_window(struct as_state *state, uint32_t id)
 {
 	if (state == NULL || id == 0)
@@ -1078,14 +1341,19 @@ static bool append_button(struct as_button **buttons,
 }
 
 static bool handle_button_directive(struct as_state *state,
+                                   bool *dock_mode_io,
+                                   bool *pager_mode_io,
                                    struct as_button **buttons,
                                    size_t *count,
                                    size_t *cap,
                                    const char *line,
-                                   bool *handled_out)
+                                   bool *handled_out,
+                                   bool *workspaces_out)
 {
 	if (handled_out != NULL)
 		*handled_out = false;
+	if (workspaces_out != NULL)
+		*workspaces_out = false;
 
 	if (state == NULL || buttons == NULL || count == NULL || cap == NULL || line == NULL)
 		return true;
@@ -1096,16 +1364,153 @@ static bool handle_button_directive(struct as_state *state,
 	s++;
 
 	const char *arg = NULL;
-	if (strncmp(s, "workspaces", 10) == 0) {
+	if (strncmp(s, "workspaces", 10) == 0 && (s[10] == '\0' || isspace((unsigned char)s[10]) || s[10] == ':' || s[10] == '=')) {
 		arg = s + 10;
-	} else if (strncmp(s, "pager", 5) == 0) {
+	} else if (strncmp(s, "pager", 5) == 0 && (s[5] == '\0' || isspace((unsigned char)s[5]) || s[5] == ':' || s[5] == '=')) {
 		arg = s + 5;
+	} else if (strncmp(s, "mode", 4) == 0 && (s[4] == '\0' || isspace((unsigned char)s[4]) || s[4] == ':' || s[4] == '=')) {
+		arg = s + 4;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+
+		char token[16];
+		size_t n = 0;
+		while (*arg != '\0' && !isspace((unsigned char)*arg) && n + 1 < sizeof(token)) {
+			token[n++] = (char)tolower((unsigned char)*arg);
+			arg++;
+		}
+		token[n] = '\0';
+
+		if (strcmp(token, "dock") == 0) {
+			if (dock_mode_io != NULL)
+				*dock_mode_io = true;
+			if (pager_mode_io != NULL)
+				*pager_mode_io = false;
+		} else if (strcmp(token, "panel") == 0) {
+			if (dock_mode_io != NULL)
+				*dock_mode_io = false;
+			if (pager_mode_io != NULL)
+				*pager_mode_io = false;
+		} else if (strcmp(token, "pager") == 0) {
+			if (dock_mode_io != NULL)
+				*dock_mode_io = false;
+			if (pager_mode_io != NULL)
+				*pager_mode_io = true;
+		}
+
+		return true;
+	} else if (strncmp(s, "margin", 6) == 0 && (s[6] == '\0' || isspace((unsigned char)s[6]) || s[6] == ':' || s[6] == '=')) {
+		arg = s + 6;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+		as_margins_parse_and_apply(&state->margins, arg);
+		return true;
+	} else if (strncmp(s, "edge", 4) == 0 && (s[4] == '\0' || isspace((unsigned char)s[4]) || s[4] == ':' || s[4] == '=')) {
+		arg = s + 4;
+		if (handled_out != NULL)
+			*handled_out = true;
+
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+
+		if (state != NULL && arg[0] != '\0')
+			state->edge = as_panel_edge_parse(arg, state->edge);
+
+		return true;
+	} else if (strncmp(s, "anchor", 6) == 0 && (s[6] == '\0' || isspace((unsigned char)s[6]) || s[6] == ':' || s[6] == '=')) {
+		arg = s + 6;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+		state->anchor_override = as_anchor_parse(arg, state->anchor_override);
+		state->anchor_override_set = true;
+		return true;
+	} else if (strncmp(s, "width", 5) == 0 && (s[5] == '\0' || isspace((unsigned char)s[5]) || s[5] == ':' || s[5] == '=')) {
+		arg = s + 5;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+		long v = 0;
+		if (as_parse_long_token(arg, NULL, &v) && v >= 64 && v <= 8192) {
+			state->width = (int)v;
+			state->width_override_set = true;
+		}
+		return true;
+	} else if (strncmp(s, "height", 6) == 0 && (s[6] == '\0' || isspace((unsigned char)s[6]) || s[6] == ':' || s[6] == '=')) {
+		arg = s + 6;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+		long v = 0;
+		if (as_parse_long_token(arg, NULL, &v) && v >= 16 && v <= 8192) {
+			state->height = (int)v;
+			state->height_override_set = true;
+		}
+		return true;
+	} else if (strncmp(s, "item_height", 11) == 0 &&
+	           (s[11] == '\0' || isspace((unsigned char)s[11]) || s[11] == ':' || s[11] == '=')) {
+		arg = s + 11;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+		long v = 0;
+		if (as_parse_long_token(arg, NULL, &v) && v >= 16 && v <= 512) {
+			state->item_height = (int)v;
+			state->item_height_override_set = true;
+		}
+		return true;
+	} else if (strncmp(s, "pager_columns", 13) == 0 &&
+	           (s[13] == '\0' || isspace((unsigned char)s[13]) || s[13] == ':' || s[13] == '=')) {
+		arg = s + 13;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+		long v = 0;
+		if (as_parse_long_token(arg, NULL, &v) && v >= 1 && v <= 16)
+			state->pager_columns = (int)v;
+		return true;
+	} else if (strncmp(s, "pager_rows", 10) == 0 &&
+	           (s[10] == '\0' || isspace((unsigned char)s[10]) || s[10] == ':' || s[10] == '=')) {
+		arg = s + 10;
+		if (handled_out != NULL)
+			*handled_out = true;
+		while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
+			arg++;
+		long v = 0;
+		if (as_parse_long_token(arg, NULL, &v) && v >= 1 && v <= 16)
+			state->pager_rows = (int)v;
+		return true;
+	} else if (strncmp(s, "dock", 4) == 0 && (s[4] == '\0' || isspace((unsigned char)s[4]) || s[4] == ':' || s[4] == '=')) {
+		if (dock_mode_io != NULL)
+			*dock_mode_io = true;
+		if (pager_mode_io != NULL)
+			*pager_mode_io = false;
+		if (handled_out != NULL)
+			*handled_out = true;
+		return true;
+	} else if (strncmp(s, "nodock", 6) == 0 && (s[6] == '\0' || isspace((unsigned char)s[6]) || s[6] == ':' || s[6] == '=')) {
+		if (dock_mode_io != NULL)
+			*dock_mode_io = false;
+		if (handled_out != NULL)
+			*handled_out = true;
+		return true;
 	} else {
 		return true;
 	}
 
 	if (handled_out != NULL)
 		*handled_out = true;
+	if (workspaces_out != NULL)
+		*workspaces_out = true;
 
 	while (*arg == ':' || *arg == '=' || isspace((unsigned char)*arg))
 		arg++;
@@ -1145,6 +1550,8 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 	size_t count = 0;
 	size_t cap = 0;
 	bool has_workspaces_directive = false;
+	bool dock_mode = state->dock_mode;
+	bool pager_mode = state->pager_mode;
 
 	char *line = NULL;
 	size_t line_cap = 0;
@@ -1163,10 +1570,12 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 
 		if (*s == '@') {
 			bool handled = false;
-			if (!handle_button_directive(state, &buttons, &count, &cap, s, &handled))
+			bool workspaces = false;
+			if (!handle_button_directive(state, &dock_mode, &pager_mode, &buttons, &count, &cap, s, &handled, &workspaces))
 				goto fail;
 			if (handled) {
-				has_workspaces_directive = true;
+				if (workspaces)
+					has_workspaces_directive = true;
 				continue;
 			}
 		}
@@ -1218,16 +1627,13 @@ static bool load_buttons_from_file(struct as_state *state, const char *path)
 	free(line);
 	fclose(fp);
 
-	if (count == 0) {
-		free(buttons);
-		return false;
-	}
-
 	as_state_free_buttons(state);
 	state->buttons = buttons;
 	state->button_count = count;
 	state->buttons_owned = true;
 	state->buttons_has_workspaces_directive = has_workspaces_directive;
+	state->dock_mode = dock_mode;
+	state->pager_mode = pager_mode;
 	return true;
 
 fail:
@@ -1245,35 +1651,91 @@ static void as_state_load_buttons(struct as_state *state)
 	state->buttons_has_workspaces_directive = false;
 	free(state->buttons_config_path);
 	state->buttons_config_path = NULL;
+	state->dock_mode = false;
+	state->pager_mode = false;
+	state->edge = ASWL_PANEL_EDGE_TOP;
+	state->margins = (struct as_margins){ 0 };
+	state->anchor_override_set = false;
+	state->anchor_override = 0;
+	state->width_override_set = false;
+	state->height_override_set = false;
+	state->item_height_override_set = false;
+	state->pager_columns = 2;
+	state->pager_rows = 1;
+
+	const char *mode = getenv("ASWLPANEL_MODE");
+	if (mode != NULL && mode[0] != '\0') {
+		if (strcasecmp(mode, "dock") == 0)
+			state->dock_mode = true;
+		else if (strcasecmp(mode, "panel") == 0)
+			state->dock_mode = false;
+		else if (strcasecmp(mode, "pager") == 0)
+			state->pager_mode = true;
+	}
+
+	const char *dock = getenv("ASWLPANEL_DOCK");
+	if (dock != NULL && dock[0] != '\0') {
+		if (dock[0] == '1' || strcasecmp(dock, "true") == 0 || strcasecmp(dock, "yes") == 0)
+			state->dock_mode = true;
+	}
+	if (state->dock_mode)
+		state->pager_mode = false;
+
+	const char *edge = getenv("ASWLPANEL_EDGE");
+	if (edge != NULL && edge[0] != '\0')
+		state->edge = as_panel_edge_parse(edge, state->edge);
+
+	bool loaded = false;
 
 	const char *path = getenv("ASWLPANEL_CONFIG");
 	if (path != NULL && load_buttons_from_file(state, path)) {
 		state->buttons_config_path = strdup(path);
-		return;
+		loaded = true;
 	}
 
-	const char *home = getenv("HOME");
-	if (home != NULL && home[0] != '\0') {
-		char *xdg_path = NULL;
-		if (asprintf(&xdg_path, "%s/.config/afterstep/aswlpanel.conf", home) >= 0) {
-			bool ok = load_buttons_from_file(state, xdg_path);
-			if (ok)
-				state->buttons_config_path = strdup(xdg_path);
-			free(xdg_path);
-			if (ok)
-				return;
+	if (!loaded) {
+		const char *home = getenv("HOME");
+		if (home != NULL && home[0] != '\0') {
+			char *xdg_path = NULL;
+			if (asprintf(&xdg_path, "%s/.config/afterstep/aswlpanel.conf", home) >= 0) {
+				bool ok = load_buttons_from_file(state, xdg_path);
+				if (ok)
+					state->buttons_config_path = strdup(xdg_path);
+				free(xdg_path);
+				loaded = ok;
+			}
 		}
 	}
 
-	static struct as_button defaults[] = {
-		{ .label = "Terminal", .command = "foot" },
-		{ .label = "Browser", .command = "firefox" },
-	};
+	if (!loaded) {
+		static struct as_button defaults[] = {
+			{ .label = "Terminal", .command = "foot" },
+			{ .label = "Browser", .command = "firefox" },
+		};
 
-	as_state_free_buttons(state);
-	state->buttons = defaults;
-	state->button_count = sizeof(defaults) / sizeof(defaults[0]);
-	state->buttons_owned = false;
+		as_state_free_buttons(state);
+		state->buttons = defaults;
+		state->button_count = sizeof(defaults) / sizeof(defaults[0]);
+		state->buttons_owned = false;
+	}
+
+	const char *margin_all = getenv("ASWLPANEL_MARGIN");
+	if (margin_all != NULL && margin_all[0] != '\0')
+		as_margins_parse_and_apply(&state->margins, margin_all);
+
+	const char *margin_top = getenv("ASWLPANEL_MARGIN_TOP");
+	const char *margin_right = getenv("ASWLPANEL_MARGIN_RIGHT");
+	const char *margin_bottom = getenv("ASWLPANEL_MARGIN_BOTTOM");
+	const char *margin_left = getenv("ASWLPANEL_MARGIN_LEFT");
+	long mv = 0;
+	if (margin_top != NULL && margin_top[0] != '\0' && as_parse_long_token(margin_top, NULL, &mv))
+		state->margins.top = as_clamp_margin((int)mv);
+	if (margin_right != NULL && margin_right[0] != '\0' && as_parse_long_token(margin_right, NULL, &mv))
+		state->margins.right = as_clamp_margin((int)mv);
+	if (margin_bottom != NULL && margin_bottom[0] != '\0' && as_parse_long_token(margin_bottom, NULL, &mv))
+		state->margins.bottom = as_clamp_margin((int)mv);
+	if (margin_left != NULL && margin_left[0] != '\0' && as_parse_long_token(margin_left, NULL, &mv))
+		state->margins.left = as_clamp_margin((int)mv);
 }
 
 static void as_state_destroy_buffers(struct as_state *state)
@@ -1322,13 +1784,16 @@ static struct as_buffer *as_state_acquire_buffer(struct as_state *state)
 struct as_layout {
 	int pad;
 	int spacing;
-	int btn_h;
+	int cross;
+	int row;
 	int icon_pad;
 	int icon_size;
 	int text_gap;
 	int text_scale;
 	int icon_scale;
-	int max_btn_w;
+	int max_main;
+	int text_h;
+	bool vertical;
 };
 
 static bool as_state_get_layout(struct as_state *state, struct as_layout *layout)
@@ -1336,21 +1801,55 @@ static bool as_state_get_layout(struct as_state *state, struct as_layout *layout
 	if (state == NULL || layout == NULL)
 		return false;
 
-	layout->pad = 6;
-	layout->spacing = 6;
-	layout->btn_h = state->height - 2 * layout->pad;
-	if (layout->btn_h <= 0)
+	layout->vertical = as_panel_edge_is_vertical(state->edge);
+
+	if (state->dock_mode) {
+		layout->pad = 0;
+		layout->spacing = 0;
+	} else {
+		layout->pad = 6;
+		layout->spacing = 6;
+	}
+	layout->cross = layout->vertical ? (state->width - 2 * layout->pad) : (state->height - 2 * layout->pad);
+	if (layout->cross <= 0)
 		return false;
 
-	layout->icon_pad = 4;
-	layout->icon_size = layout->btn_h - 2 * layout->icon_pad;
+	layout->row = layout->cross;
+	if (layout->vertical && !state->dock_mode) {
+		int row = state->item_height > 0 ? state->item_height : 48;
+		layout->row = clamp_int(row, 24, 256);
+	}
+
+	/* AfterStep Wharf tiles generally render ~48px icons inside ~64px buttons. */
+	layout->icon_pad = state->dock_mode ? 8 : 4;
+	int icon_dim = layout->cross;
+	if (layout->vertical && !state->dock_mode)
+		icon_dim = layout->row;
+	layout->icon_size = icon_dim - 2 * layout->icon_pad;
+	int max_icon = layout->cross - 2 * layout->icon_pad;
+	if (layout->icon_size > max_icon)
+		layout->icon_size = max_icon;
 	if (layout->icon_size < 0)
 		layout->icon_size = 0;
 
-	layout->text_gap = 8;
-	layout->text_scale = clamp_int((layout->btn_h - 12) / 7, 1, 4);
+	layout->text_gap = state->dock_mode ? 0 : 8;
+	int text_dim = layout->cross;
+	if (layout->vertical && !state->dock_mode)
+		text_dim = layout->row;
+	if (state->font.use_freetype && state->font.base_px > 0)
+		layout->text_scale = 1;
+	else
+		layout->text_scale = clamp_int((text_dim - 24) / 7, 1, 3);
 	layout->icon_scale = clamp_int((layout->icon_size - 2) / 7, 1, 6);
-	layout->max_btn_w = 260;
+	layout->max_main = state->dock_mode ? layout->cross : 260;
+	if (!state->dock_mode && !layout->vertical && state->button_count == 0 && state->window_list_focused_only) {
+		int max = state->width - 2 * layout->pad;
+		if (max > layout->cross)
+			layout->max_main = max;
+	}
+
+	(void)aswl_font_set_scale(&state->font, layout->text_scale);
+	layout->text_h = aswl_font_height(&state->font);
 	return true;
 }
 
@@ -1393,25 +1892,33 @@ static bool as_command_parse_workspace_target(const char *command, uint32_t *wor
 	return true;
 }
 
-static int as_state_button_width(struct as_state *state, const struct as_layout *layout, size_t idx)
+static int as_state_button_main_size(struct as_state *state, const struct as_layout *layout, size_t idx)
 {
 	if (state == NULL || layout == NULL)
 		return 0;
 	if (idx >= state->button_count)
 		return 0;
 
-	int w = layout->btn_h;
+	if (state->dock_mode)
+		return layout->cross;
 
-	int label_w = as_font5x7_text_width(state->buttons[idx].label, layout->text_scale);
+	if (layout->vertical) {
+		return layout->row;
+	}
+
+	int w = layout->cross;
+
+	(void)aswl_font_set_scale(&state->font, layout->text_scale);
+	int label_w = aswl_font_text_width(&state->font, state->buttons[idx].label);
 	if (label_w > 0)
 		w = layout->icon_pad + layout->icon_size + layout->text_gap + label_w + layout->icon_pad;
 	else
 		w = layout->icon_pad + layout->icon_size + layout->icon_pad;
 
-	if (w < layout->btn_h)
-		w = layout->btn_h;
-	if (w > layout->max_btn_w)
-		w = layout->max_btn_w;
+	if (w < layout->cross)
+		w = layout->cross;
+	if (w > layout->max_main)
+		w = layout->max_main;
 
 	return w;
 }
@@ -1421,6 +1928,8 @@ static bool as_window_visible(const struct as_state *state, const struct as_wind
 	if (state == NULL || win == NULL)
 		return false;
 	if ((win->flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
+		return false;
+	if (state->window_list_focused_only && (win->flags & ASWL_WINDOW_FLAG_FOCUSED) == 0)
 		return false;
 	return win->workspace == state->current_workspace;
 }
@@ -1436,19 +1945,23 @@ static const char *as_window_label(const struct as_window *win)
 	return "Window";
 }
 
-static int as_state_window_width(struct as_state *state, const struct as_layout *layout, const struct as_window *win)
+static int as_state_window_main_size(struct as_state *state, const struct as_layout *layout, const struct as_window *win)
 {
 	if (state == NULL || layout == NULL || win == NULL)
 		return 0;
 
+	if (layout->vertical)
+		return layout->text_h + 2 * layout->icon_pad;
+
 	const char *label = as_window_label(win);
-	int label_w = as_font5x7_text_width(label, layout->text_scale);
+	(void)aswl_font_set_scale(&state->font, layout->text_scale);
+	int label_w = aswl_font_text_width(&state->font, label);
 	int w = layout->icon_pad + label_w + layout->icon_pad;
 
-	if (w < layout->btn_h)
-		w = layout->btn_h;
-	if (w > layout->max_btn_w)
-		w = layout->max_btn_w;
+	if (w < layout->cross)
+		w = layout->cross;
+	if (w > layout->max_main)
+		w = layout->max_main;
 
 	return w;
 }
@@ -1479,32 +1992,111 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 	int rx = layout.pad;
 	int ry = layout.pad;
 
+	if (state->pager_mode && layout.vertical && !state->dock_mode) {
+		size_t ws_count = 0;
+		size_t nav_count = 0;
+		for (size_t i = 0; i < state->button_count; i++) {
+			if (as_command_parse_workspace_target(state->buttons[i].command, NULL))
+				ws_count++;
+			else
+				nav_count++;
+		}
+
+		int nav_h = clamp_int(state->item_height > 0 ? state->item_height : 48, 24, 128);
+		int nav_total = (int)nav_count * nav_h + (nav_count > 0 ? (int)(nav_count - 1) * layout.spacing : 0);
+		int nav_y0 = state->height - layout.pad - nav_total;
+
+		int workspace_area_h = nav_y0 - layout.pad;
+		if (ws_count > 0 && nav_count > 0)
+			workspace_area_h -= layout.spacing;
+
+		int tile_h = 0;
+		if (ws_count > 0)
+			tile_h = (workspace_area_h - (int)(ws_count - 1) * layout.spacing) / (int)ws_count;
+		if (tile_h < 24)
+			tile_h = 24;
+
+		for (size_t i = 0; i < state->button_count; i++) {
+			bool is_ws = as_command_parse_workspace_target(state->buttons[i].command, NULL);
+			int bx = layout.pad;
+			int by = layout.pad;
+			int bw = layout.cross;
+			int bh = nav_h;
+
+			if (is_ws && tile_h > 0) {
+				size_t pos = 0;
+				for (size_t j = 0; j < i; j++) {
+					if (as_command_parse_workspace_target(state->buttons[j].command, NULL))
+						pos++;
+				}
+				by = layout.pad + (int)pos * (tile_h + layout.spacing);
+				bh = tile_h;
+			} else if (!is_ws) {
+				size_t pos = 0;
+				for (size_t j = 0; j < i; j++) {
+					if (!as_command_parse_workspace_target(state->buttons[j].command, NULL))
+						pos++;
+				}
+				by = nav_y0 + (int)pos * (nav_h + layout.spacing);
+				bh = nav_h;
+			} else {
+				bh = nav_h;
+			}
+
+			if (x >= bx && x < bx + bw && y >= by && y < by + bh)
+				return (int)i;
+		}
+
+		return -1;
+	}
+
 	for (size_t i = 0; i < state->button_count; i++) {
-		int rw = as_state_button_width(state, &layout, i);
-		int rh = layout.btn_h;
+		int main = as_state_button_main_size(state, &layout, i);
+		int rw = layout.vertical ? layout.cross : main;
+		int rh = layout.vertical ? main : layout.cross;
 
 		if (x >= rx && x < rx + rw && y >= ry && y < ry + rh)
 			return (int)i;
 
-		rx += rw + layout.spacing;
+		if (layout.vertical)
+			ry += rh + layout.spacing;
+		else
+			rx += rw + layout.spacing;
 	}
 
-	int wy = layout.pad;
-	int wh = layout.btn_h;
+	if (state->dock_mode)
+		return -1;
+
+	int wx = layout.vertical ? layout.pad : rx;
+	int wy = layout.vertical ? (ry + layout.spacing) : layout.pad;
+	int ww = 0;
+	int wh = 0;
 	size_t vis_idx = 0;
 	for (;;) {
 		struct as_window *win = as_state_visible_window_nth(state, vis_idx);
 		if (win == NULL)
 			break;
 
-		int ww = as_state_window_width(state, &layout, win);
-		if (rx + ww > state->width - layout.pad)
-			break;
+		int main = as_state_window_main_size(state, &layout, win);
+		if (layout.vertical) {
+			ww = layout.cross;
+			wh = main;
+			if (wy + wh > state->height - layout.pad)
+				break;
+		} else {
+			ww = main;
+			wh = layout.cross;
+			if (wx + ww > state->width - layout.pad)
+				break;
+		}
 
-		if (x >= rx && x < rx + ww && y >= wy && y < wy + wh)
+		if (x >= wx && x < wx + ww && y >= wy && y < wy + wh)
 			return (int)state->button_count + (int)vis_idx;
 
-		rx += ww + layout.spacing;
+		if (layout.vertical)
+			wy += wh + layout.spacing;
+		else
+			wx += ww + layout.spacing;
 		vis_idx++;
 	}
 
@@ -1513,14 +2105,383 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
-	as_buffer_paint_solid(buf, state->theme.panel_bg);
+	bool winlist_strip = (!state->dock_mode && state->button_count == 0 && state->window_list_focused_only);
+	bool winlist_has_window = winlist_strip && (as_state_visible_window_nth(state, 0) != NULL);
+	const struct aswl_gradient *bg_grad = &state->theme.panel_bg_gradient;
+	uint32_t bg_color = state->theme.panel_bg;
+	if (winlist_has_window) {
+		/* WinList uses window styles by default; match that look when we're a WinList-only strip. */
+		bg_grad = &state->theme.frame_inactive_gradient;
+		bg_color = state->theme.frame_inactive_bg;
+	}
+
+	if (aswl_gradient_is_valid(bg_grad)) {
+		as_buffer_fill_style_rect(buf,
+		                          0,
+		                          0,
+		                          buf->width,
+		                          buf->height,
+		                          bg_grad,
+		                          bg_color,
+		                          0);
+	} else {
+		uint32_t grad_top = aswl_color_lighten(bg_color, 24);
+		uint32_t grad_bot = aswl_color_darken(bg_color, 24);
+		as_buffer_paint_vertical_gradient(buf, grad_top, grad_bot);
+	}
 
 	struct as_layout layout;
 	if (!as_state_get_layout(state, &layout))
 		return;
 
+	uint32_t *pixels = (uint32_t *)buf->data;
+	int stride_px = buf->stride / 4;
+	(void)aswl_font_set_scale(&state->font, layout.text_scale);
+	int text_h = layout.text_h;
+
 	int rx = layout.pad;
 	int ry = layout.pad;
+
+	if (state->pager_mode && layout.vertical && !state->dock_mode) {
+		size_t ws_count = 0;
+		size_t nav_count = 0;
+		for (size_t i = 0; i < state->button_count; i++) {
+			if (as_command_parse_workspace_target(state->buttons[i].command, NULL))
+				ws_count++;
+			else
+				nav_count++;
+		}
+
+		int nav_h = clamp_int(state->item_height > 0 ? state->item_height : 48, 24, 128);
+		int nav_total = (int)nav_count * nav_h + (nav_count > 0 ? (int)(nav_count - 1) * layout.spacing : 0);
+		int nav_y0 = state->height - layout.pad - nav_total;
+
+		int workspace_area_h = nav_y0 - layout.pad;
+		if (ws_count > 0 && nav_count > 0)
+			workspace_area_h -= layout.spacing;
+
+		int tile_h = 0;
+		if (ws_count > 0)
+			tile_h = (workspace_area_h - (int)(ws_count - 1) * layout.spacing) / (int)ws_count;
+		if (tile_h < 24)
+			tile_h = 24;
+
+		for (size_t i = 0; i < state->button_count; i++) {
+			int idx = (int)i;
+			uint32_t ws_target = 0;
+			bool is_ws = as_command_parse_workspace_target(state->buttons[i].command, &ws_target);
+			bool active_ws = is_ws && ws_target == state->current_workspace;
+
+			uint32_t base_bg = state->theme.panel_button_bg;
+			uint32_t base_fg = state->theme.panel_button_fg;
+			if (is_ws) {
+				if (active_ws) {
+					base_bg = state->theme.panel_ws_active_bg;
+					base_fg = state->theme.panel_ws_active_fg;
+				} else {
+					base_bg = state->theme.panel_ws_inactive_bg;
+					base_fg = state->theme.panel_ws_inactive_fg;
+				}
+			}
+
+			uint8_t nudge = 0;
+			if (idx == state->pressed_index)
+				nudge = 48;
+			else if (idx == state->hover_index)
+				nudge = 24;
+
+			int bx = layout.pad;
+			int by = layout.pad;
+			int bw = layout.cross;
+			int bh = nav_h;
+
+			if (is_ws && tile_h > 0) {
+				size_t pos = 0;
+				for (size_t j = 0; j < i; j++) {
+					if (as_command_parse_workspace_target(state->buttons[j].command, NULL))
+						pos++;
+				}
+				by = layout.pad + (int)pos * (tile_h + layout.spacing);
+				bh = tile_h;
+			} else if (!is_ws) {
+				size_t pos = 0;
+				for (size_t j = 0; j < i; j++) {
+					if (!as_command_parse_workspace_target(state->buttons[j].command, NULL))
+						pos++;
+				}
+				by = nav_y0 + (int)pos * (nav_h + layout.spacing);
+				bh = nav_h;
+			} else {
+				bh = nav_h;
+			}
+
+			const struct aswl_gradient *grad = &state->theme.panel_button_gradient;
+			if (is_ws) {
+				grad = active_ws ? &state->theme.panel_ws_active_gradient : &state->theme.panel_ws_inactive_gradient;
+			}
+
+			as_buffer_fill_style_rect(buf, bx, by, bw, bh, grad, base_bg, nudge);
+			uint32_t bevel_bg = nudge != 0 ? aswl_color_nudge(base_bg, nudge) : base_bg;
+			as_buffer_draw_bevel_rect(buf, bx, by, bw, bh, bevel_bg, idx == state->pressed_index);
+
+			if (is_ws && bh >= 80) {
+				int header_h = clamp_int(text_h + 2 * layout.icon_pad, 18, 48);
+				uint32_t header_bg = aswl_color_darken(bevel_bg, 24);
+				as_buffer_fill_rect(buf, bx, by, bw, header_h, header_bg);
+				as_buffer_draw_bevel_rect(buf, bx, by, bw, header_h, header_bg, true);
+
+				int tx_pad = layout.icon_pad;
+				int label_tw = bw - 2 * tx_pad;
+				int tx = bx + tx_pad;
+				int tw = label_tw;
+				int label_w = aswl_font_text_width(&state->font, state->buttons[i].label);
+				if (label_w > 0 && label_w < label_tw) {
+					tx = bx + bw - tx_pad - label_w;
+					tw = label_w;
+					}
+					int ty = by + (header_h - text_h) / 2;
+					if (tw > 0) {
+						aswl_font_draw_text(&state->font,
+						                    pixels,
+						                    buf->width,
+						                    buf->height,
+					                    stride_px,
+					                    tx,
+					                    ty,
+						                    state->buttons[i].label,
+						                    tw,
+						                    base_fg);
+					}
+
+					int px = bx + layout.icon_pad;
+					int py = by + header_h + layout.icon_pad;
+					int pw = bw - 2 * layout.icon_pad;
+					int ph = bh - header_h - 2 * layout.icon_pad;
+					if (pw > 0 && ph > 0) {
+						const struct aswl_gradient *desk_grad =
+							aswl_gradient_is_valid(&state->theme.desk_gradient) ? &state->theme.desk_gradient : NULL;
+						uint32_t pane_bg = state->theme.desk_bg != 0 ? state->theme.desk_bg :
+						                                             aswl_color_darken(state->theme.panel_bg, 16);
+						as_buffer_fill_style_rect(buf, px, py, pw, ph, desk_grad, pane_bg, 0);
+						as_buffer_draw_bevel_rect(buf, px, py, pw, ph, pane_bg, true);
+
+						if (state->pager_columns > 1 || state->pager_rows > 1) {
+						uint32_t grid = aswl_color_darken(pane_bg, 90);
+						if (state->pager_columns > 1) {
+							for (int c = 1; c < state->pager_columns; c++) {
+								int gx = px + (int)((int64_t)c * pw / state->pager_columns);
+								as_buffer_fill_rect(buf, gx, py, 1, ph, grid);
+							}
+						}
+						if (state->pager_rows > 1) {
+							for (int r = 1; r < state->pager_rows; r++) {
+								int gy = py + (int)((int64_t)r * ph / state->pager_rows);
+								as_buffer_fill_rect(buf, px, gy, pw, 1, grid);
+							}
+						}
+					}
+
+					int ow = state->output_width;
+					int oh = state->output_height;
+
+					if (ow > 0 && oh > 0) {
+						for (size_t widx = 0; widx < state->window_count; widx++) {
+							const struct as_window *win = &state->windows[widx];
+							if ((win->flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
+								continue;
+							if (win->workspace != ws_target)
+								continue;
+							if (win->w <= 0 || win->h <= 0)
+								continue;
+
+							int sx = px + (int)((int64_t)win->x * pw / ow);
+							int sy = py + (int)((int64_t)win->y * ph / oh);
+							int sw = (int)((int64_t)win->w * pw / ow);
+							int sh = (int)((int64_t)win->h * ph / oh);
+							if (sw < 4)
+								sw = 4;
+							if (sh < 4)
+								sh = 4;
+
+							int x0 = sx;
+							int y0 = sy;
+							int x1 = sx + sw;
+							int y1 = sy + sh;
+
+							int cx0 = x0 < px ? px : x0;
+							int cy0 = y0 < py ? py : y0;
+							int cx1 = x1 > px + pw ? px + pw : x1;
+							int cy1 = y1 > py + ph ? py + ph : y1;
+							if (cx1 <= cx0 || cy1 <= cy0)
+								continue;
+
+							uint32_t win_bg = aswl_color_lighten(pane_bg, 22);
+							if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0)
+								win_bg = aswl_color_blend(win_bg, state->theme.panel_ws_active_bg, 80);
+
+							int rw = cx1 - cx0;
+							int rh = cy1 - cy0;
+							as_buffer_fill_rect(buf, cx0, cy0, rw, rh, win_bg);
+							as_buffer_draw_bevel_rect(buf, cx0, cy0, rw, rh, win_bg, false);
+
+							if (rh >= 8) {
+								int th = 3;
+								if (th > rh)
+									th = rh;
+								uint32_t title_bg = aswl_color_darken(win_bg, 48);
+								as_buffer_fill_rect(buf, cx0, cy0, rw, th, title_bg);
+							}
+						}
+					} else {
+						/* Fallback: show up to 9 markers per workspace. */
+						size_t win_count = 0;
+						for (size_t widx = 0; widx < state->window_count; widx++) {
+							const struct as_window *win = &state->windows[widx];
+							if ((win->flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
+								continue;
+							if (win->workspace != ws_target)
+								continue;
+							win_count++;
+						}
+
+						int marker_w = 14;
+						int marker_h = 10;
+						int marker_gap = 4;
+						int max_markers = 9;
+						if (win_count > (size_t)max_markers)
+							win_count = (size_t)max_markers;
+
+						for (size_t m = 0; m < win_count; m++) {
+							int col = (int)(m % 3);
+							int row = (int)(m / 3);
+							int mx = px + layout.icon_pad + col * (marker_w + marker_gap);
+							int my = py + layout.icon_pad + row * (marker_h + marker_gap);
+							if (mx + marker_w > px + pw - layout.icon_pad)
+								break;
+							if (my + marker_h > py + ph - layout.icon_pad)
+								break;
+
+							uint32_t marker_bg = aswl_color_lighten(pane_bg, 18);
+							as_buffer_fill_rect(buf, mx, my, marker_w, marker_h, marker_bg);
+							as_buffer_draw_bevel_rect(buf, mx, my, marker_w, marker_h, marker_bg, false);
+						}
+					}
+				}
+			} else if (is_ws && !state->dock_mode) {
+				/* Compact workspace row: pager preview + right-aligned label. */
+				int tx_pad = layout.icon_pad;
+				int label_w = aswl_font_text_width(&state->font, state->buttons[i].label);
+				int label_area = label_w > 0 ? (label_w + 2 * tx_pad) : 0;
+				int preview_gap = layout.text_gap > 0 ? layout.text_gap : 8;
+
+				int px = bx + layout.icon_pad;
+				int py = by + layout.icon_pad;
+				int ph = bh - 2 * layout.icon_pad;
+				int pw = bw - 2 * layout.icon_pad - (label_area > 0 ? (label_area + preview_gap) : 0);
+
+					if (pw > 0 && ph > 0) {
+						const struct aswl_gradient *desk_grad =
+							aswl_gradient_is_valid(&state->theme.desk_gradient) ? &state->theme.desk_gradient : NULL;
+						uint32_t pane_bg = state->theme.desk_bg != 0 ? state->theme.desk_bg : aswl_color_darken(bevel_bg, 18);
+						as_buffer_fill_style_rect(buf, px, py, pw, ph, desk_grad, pane_bg, 0);
+						as_buffer_draw_bevel_rect(buf, px, py, pw, ph, pane_bg, true);
+
+						int cols = state->pager_columns > 0 ? state->pager_columns : 2;
+					int rows = state->pager_rows > 0 ? state->pager_rows : 1;
+					uint32_t grid = aswl_color_darken(pane_bg, 90);
+					if (cols > 1) {
+						for (int c = 1; c < cols; c++) {
+							int gx = px + (int)((int64_t)c * pw / cols);
+							as_buffer_fill_rect(buf, gx, py, 1, ph, grid);
+						}
+					}
+					if (rows > 1) {
+						for (int r = 1; r < rows; r++) {
+							int gy = py + (int)((int64_t)r * ph / rows);
+							as_buffer_fill_rect(buf, px, gy, pw, 1, grid);
+						}
+					}
+				}
+
+				if (label_w > 0) {
+					int tx = bx + bw - tx_pad - label_w;
+					int ty = by + (bh - text_h) / 2;
+					aswl_font_draw_text(&state->font,
+					                    pixels,
+					                    buf->width,
+					                    buf->height,
+					                    stride_px,
+					                    tx,
+					                    ty,
+					                    state->buttons[i].label,
+					                    label_w,
+					                    base_fg);
+				}
+			} else if (!state->dock_mode) {
+				/* Compact button row (icon + label), reused for non-workspace controls. */
+				int is = bh - 2 * layout.icon_pad;
+				if (is > bw - 2 * layout.icon_pad)
+					is = bw - 2 * layout.icon_pad;
+				if (is < 0)
+					is = 0;
+
+				int ix = bx + layout.icon_pad;
+				int iy = by + (bh - is) / 2;
+
+				if (is > 0) {
+					uint32_t icon_bg = aswl_color_darken(bevel_bg, 32);
+					as_buffer_fill_rect(buf, ix, iy, is, is, icon_bg);
+					as_buffer_draw_bevel_rect(buf, ix, iy, is, is, icon_bg, idx == state->pressed_index);
+					if (state->buttons[i].icon_argb != NULL) {
+						int box = is - 4;
+						int dw = state->buttons[i].icon_w;
+						int dh = state->buttons[i].icon_h;
+						if (box > 0 && dw > 0 && dh > 0) {
+							if (dw > box || dh > box) {
+								double sx = (double)box / (double)dw;
+								double sy = (double)box / (double)dh;
+								double s = sx < sy ? sx : sy;
+								dw = (int)((double)dw * s + 0.5);
+								dh = (int)((double)dh * s + 0.5);
+								if (dw < 1)
+									dw = 1;
+								if (dh < 1)
+									dh = 1;
+							}
+
+							int px = ix + 2 + (box - dw) / 2;
+							int py = iy + 2 + (box - dh) / 2;
+							as_buffer_draw_image_bilinear(buf,
+							                             px,
+							                             py,
+							                             dw,
+							                             dh,
+							                             state->buttons[i].icon_argb,
+							                             state->buttons[i].icon_w,
+							                             state->buttons[i].icon_h);
+						}
+					}
+				}
+
+				int tx = bx + layout.icon_pad + is + layout.text_gap;
+				int tw = bw - (layout.icon_pad + is + layout.text_gap + layout.icon_pad);
+				int ty = by + (bh - text_h) / 2;
+				if (tw > 0)
+					aswl_font_draw_text(&state->font,
+					                    pixels,
+					                    buf->width,
+					                    buf->height,
+					                    stride_px,
+					                    tx,
+					                    ty,
+					                    state->buttons[i].label,
+					                    tw,
+					                    base_fg);
+			}
+		}
+
+		return;
+	}
 
 	for (size_t i = 0; i < state->button_count; i++) {
 		int idx = (int)i;
@@ -1540,50 +2501,127 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 			}
 		}
 
-		uint32_t btn_bg = base_bg;
+		uint8_t nudge = 0;
 		if (idx == state->pressed_index)
-			btn_bg = aswl_color_nudge(base_bg, 48);
+			nudge = 48;
 		else if (idx == state->hover_index)
-			btn_bg = aswl_color_nudge(base_bg, 24);
+			nudge = 24;
 
-		int rw = as_state_button_width(state, &layout, i);
-		int rh = layout.btn_h;
+		int main = as_state_button_main_size(state, &layout, i);
+		int rw = layout.vertical ? layout.cross : main;
+		int rh = layout.vertical ? main : layout.cross;
 
-		as_buffer_fill_rect(buf, rx, ry, rw, rh, btn_bg);
+		const struct aswl_gradient *grad = &state->theme.panel_button_gradient;
+		if (is_ws)
+			grad = active_ws ? &state->theme.panel_ws_active_gradient : &state->theme.panel_ws_inactive_gradient;
 
-		/* Cheap border. */
-		as_buffer_fill_rect(buf, rx, ry, rw, 1, state->theme.panel_border);
-		as_buffer_fill_rect(buf, rx, ry + rh - 1, rw, 1, state->theme.panel_border);
-		as_buffer_fill_rect(buf, rx, ry, 1, rh, state->theme.panel_border);
-		as_buffer_fill_rect(buf, rx + rw - 1, ry, 1, rh, state->theme.panel_border);
+		as_buffer_fill_style_rect(buf, rx, ry, rw, rh, grad, base_bg, nudge);
+		uint32_t bevel_bg = nudge != 0 ? aswl_color_nudge(base_bg, nudge) : base_bg;
+		as_buffer_draw_bevel_rect(buf, rx, ry, rw, rh, bevel_bg, idx == state->pressed_index);
 
 		/* Icon box (placeholder): big initial + small index digit. */
-		int ix = rx + layout.icon_pad;
-		int iy = ry + layout.icon_pad;
 		int is = layout.icon_size;
 		int max_is = rw - 2 * layout.icon_pad;
 		if (is > max_is)
 			is = max_is;
+		if (is > rh - 2 * layout.icon_pad)
+			is = rh - 2 * layout.icon_pad;
+		if (is < 0)
+			is = 0;
+
+		int ix = rx + layout.icon_pad;
+		int iy = ry + layout.icon_pad;
 		if (is > 0) {
-			uint32_t icon_bg = aswl_color_darken(btn_bg, 32);
+			if (state->dock_mode) {
+				ix = rx + (rw - is) / 2;
+				iy = ry + (rh - is) / 2;
+			} else if (layout.vertical) {
+				ix = rx + layout.icon_pad;
+				iy = ry + (rh - is) / 2;
+			}
+		}
 
-			as_buffer_fill_rect(buf, ix, iy, is, is, icon_bg);
-			as_buffer_fill_rect(buf, ix, iy, is, 1, state->theme.panel_border);
-			as_buffer_fill_rect(buf, ix, iy + is - 1, is, 1, state->theme.panel_border);
-			as_buffer_fill_rect(buf, ix, iy, 1, is, state->theme.panel_border);
-			as_buffer_fill_rect(buf, ix + is - 1, iy, 1, is, state->theme.panel_border);
+		if (is > 0) {
+			const bool draw_icon_frame = !state->dock_mode;
+			if (draw_icon_frame) {
+				uint32_t icon_bg = aswl_color_darken(bevel_bg, 32);
 
-			bool drew_image = false;
-			if (state->buttons[i].icon_argb != NULL && state->buttons[i].icon_w > 0 && state->buttons[i].icon_h > 0) {
-				int px = ix + 1;
-				int py = iy + 1;
-				int ps = is - 2;
-				if (ps > 0) {
-					as_buffer_draw_image_nearest(buf,
+				as_buffer_fill_rect(buf, ix, iy, is, is, icon_bg);
+				as_buffer_draw_bevel_rect(buf, ix, iy, is, is, icon_bg, idx == state->pressed_index);
+			}
+
+				bool drew_image = false;
+				const char *cmd = state->buttons[i].command;
+				if (state->dock_mode && cmd != NULL && cmd[0] == '@' && strncasecmp(cmd + 1, "clock", 5) == 0) {
+					char time_buf[16] = { 0 };
+					const char *clock_override = getenv("ASWLPANEL_CLOCK_OVERRIDE");
+					if (clock_override != NULL && clock_override[0] != '\0') {
+						snprintf(time_buf, sizeof(time_buf), "%s", clock_override);
+					} else {
+						time_t now = time(NULL);
+						struct tm tm_now;
+						if (localtime_r(&now, &tm_now) != NULL)
+							(void)strftime(time_buf, sizeof(time_buf), "%H:%M", &tm_now);
+					}
+
+					if (time_buf[0] == '\0')
+						strcpy(time_buf, "--:--");
+
+					/*
+					 * In classic AfterStep MonitorWharf, the clock is typically a
+					 * swallowed xclock (dark background + cyan digits). Mimic that
+					 * by drawing a dark inner rect inside the dock button.
+					 */
+					uint32_t clock_bg = 0xFF1A1A1A;
+					as_buffer_fill_rect(buf, ix, iy, is, is, clock_bg);
+					as_buffer_draw_bevel_rect(buf, ix, iy, is, is, clock_bg, idx == state->pressed_index);
+
+					(void)aswl_font_set_scale(&state->font, layout.text_scale);
+					int tw = aswl_font_text_width(&state->font, time_buf);
+					int maxw = is - 4;
+					if (maxw < 1)
+					maxw = is;
+				int draw_w = tw;
+				if (draw_w < 1 || draw_w > maxw)
+					draw_w = maxw;
+				int tx = ix + (is - draw_w) / 2;
+				int ty = iy + (is - text_h) / 2;
+				aswl_font_draw_text(&state->font,
+				                    pixels,
+				                    buf->width,
+				                    buf->height,
+				                    stride_px,
+				                    tx,
+				                    ty,
+				                    time_buf,
+				                    draw_w,
+				                    base_fg);
+				drew_image = true;
+			} else if (state->buttons[i].icon_argb != NULL && state->buttons[i].icon_w > 0 && state->buttons[i].icon_h > 0) {
+				int box = is - (draw_icon_frame ? 2 : 0);
+				int dw = state->buttons[i].icon_w;
+				int dh = state->buttons[i].icon_h;
+
+				if (box > 0 && dw > 0 && dh > 0) {
+					if (dw > box || dh > box) {
+						double sx = (double)box / (double)dw;
+						double sy = (double)box / (double)dh;
+						double s = sx < sy ? sx : sy;
+						dw = (int)((double)dw * s + 0.5);
+						dh = (int)((double)dh * s + 0.5);
+						if (dw < 1)
+							dw = 1;
+						if (dh < 1)
+							dh = 1;
+					}
+
+					int px = ix + (draw_icon_frame ? 1 : 0) + (box - dw) / 2;
+					int py = iy + (draw_icon_frame ? 1 : 0) + (box - dh) / 2;
+					as_buffer_draw_image_bilinear(buf,
 					                             px,
 					                             py,
-					                             ps,
-					                             ps,
+					                             dw,
+					                             dh,
 					                             state->buttons[i].icon_argb,
 					                             state->buttons[i].icon_w,
 					                             state->buttons[i].icon_h);
@@ -1602,30 +2640,77 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 				}
 
 				int icon_scale = clamp_int((is - 4) / 7, 1, layout.icon_scale);
-				int gw = as_font5x7_glyph_w(icon_scale);
-				int gh = as_font5x7_glyph_h(icon_scale);
+				int gw = aswl_font5x7_glyph_w(icon_scale);
+				int gh = aswl_font5x7_glyph_h(icon_scale);
 				int gx = ix + (is - gw) / 2;
 				int gy = iy + (is - gh) / 2;
-				as_buffer_draw_glyph5x7(buf, gx, gy, icon_c, icon_scale, base_fg);
+				aswl_font5x7_draw_glyph(pixels, buf->width, buf->height, stride_px, gx, gy, icon_c, icon_scale, base_fg);
+				if (!state->dock_mode) {
+					int number = (int)i + 1;
+					int digit = number % 10;
+					char digit_c = (char)('0' + digit);
+					int badge_scale = clamp_int(is / 16, 1, 2);
+					aswl_font5x7_draw_glyph(pixels,
+					                        buf->width,
+					                        buf->height,
+					                        stride_px,
+					                        ix + 2,
+					                        iy + 2,
+					                        digit_c,
+					                        badge_scale,
+					                        aswl_color_nudge(base_fg, 64));
+				}
 			}
-
-			int number = (int)i + 1;
-			int digit = number % 10;
-			char digit_c = (char)('0' + digit);
-			int badge_scale = clamp_int(is / 16, 1, 2);
-			as_buffer_draw_glyph5x7(buf, ix + 2, iy + 2, digit_c, badge_scale, aswl_color_nudge(base_fg, 64));
 		}
 
-		/* Text label to the right of the icon. */
-		int text_h = as_font5x7_glyph_h(layout.text_scale);
-		int tx = rx + layout.icon_pad + layout.icon_size + layout.text_gap;
-		int tw = rw - (layout.icon_pad + layout.icon_size + layout.text_gap + layout.icon_pad);
-		int ty = ry + (rh - text_h) / 2;
-		if (tw > 0)
-			as_buffer_draw_text5x7(buf, tx, ty, state->buttons[i].label, tw, layout.text_scale, base_fg);
+		/* Text label. */
+		if (!state->dock_mode) {
+			if (layout.vertical) {
+				int tx = rx + layout.icon_pad + is + layout.text_gap;
+				int tw = rw - (layout.icon_pad + is + layout.text_gap + layout.icon_pad);
+				if (tw > 0) {
+					int ty = ry + (rh - text_h) / 2;
+					aswl_font_draw_text(&state->font,
+					                    pixels,
+					                    buf->width,
+					                    buf->height,
+					                    stride_px,
+					                    tx,
+					                    ty,
+					                    state->buttons[i].label,
+					                    tw,
+					                    base_fg);
+				}
+			} else {
+				int tx = rx + layout.icon_pad + layout.icon_size + layout.text_gap;
+				int tw = rw - (layout.icon_pad + layout.icon_size + layout.text_gap + layout.icon_pad);
+				int ty = ry + (rh - text_h) / 2;
+				if (tw > 0)
+					aswl_font_draw_text(&state->font,
+					                    pixels,
+					                    buf->width,
+					                    buf->height,
+					                    stride_px,
+					                    tx,
+					                    ty,
+					                    state->buttons[i].label,
+					                    tw,
+					                    base_fg);
+			}
+		}
 
-		rx += rw + layout.spacing;
+		if (layout.vertical)
+			ry += rh + layout.spacing;
+		else
+			rx += rw + layout.spacing;
 	}
+
+	if (state->dock_mode)
+		goto draw_border;
+
+	int win_x = layout.pad;
+	int win_y = layout.vertical ? (ry + layout.spacing) : layout.pad;
+	bool winlist_frame_style = winlist_has_window;
 
 	for (size_t vis_idx = 0;; vis_idx++) {
 		struct as_window *win = as_state_visible_window_nth(state, vis_idx);
@@ -1634,40 +2719,72 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 
 		int idx = (int)state->button_count + (int)vis_idx;
 
-		uint32_t base_bg = state->theme.panel_button_bg;
-		uint32_t base_fg = state->theme.panel_button_fg;
+		uint32_t base_bg = winlist_frame_style ? state->theme.frame_inactive_bg : state->theme.panel_button_bg;
+		uint32_t base_fg = winlist_frame_style ? state->theme.frame_inactive_fg : state->theme.panel_button_fg;
 		if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0) {
-			base_bg = state->theme.panel_ws_active_bg;
-			base_fg = state->theme.panel_ws_active_fg;
+			base_bg = winlist_frame_style ? state->theme.frame_active_bg : state->theme.panel_ws_active_bg;
+			base_fg = winlist_frame_style ? state->theme.frame_active_fg : state->theme.panel_ws_active_fg;
 		}
 
-		uint32_t btn_bg = base_bg;
+		uint8_t nudge = 0;
 		if (idx == state->pressed_index)
-			btn_bg = aswl_color_nudge(base_bg, 48);
+			nudge = 48;
 		else if (idx == state->hover_index)
-			btn_bg = aswl_color_nudge(base_bg, 24);
+			nudge = 24;
 
-		int rw = as_state_window_width(state, &layout, win);
-		int rh = layout.btn_h;
-		if (rx + rw > state->width - layout.pad)
-			break;
+		int main = as_state_window_main_size(state, &layout, win);
+		int rw = layout.vertical ? layout.cross : main;
+		int rh = layout.vertical ? main : layout.cross;
+		if (layout.vertical) {
+			if (win_y + rh > state->height - layout.pad)
+				break;
+		} else {
+			if (rx + rw > state->width - layout.pad)
+				break;
+		}
 
-		as_buffer_fill_rect(buf, rx, ry, rw, rh, btn_bg);
+		int wx = layout.vertical ? win_x : rx;
+		int wy = layout.vertical ? win_y : ry;
 
-		/* Cheap border. */
-		as_buffer_fill_rect(buf, rx, ry, rw, 1, state->theme.panel_border);
-		as_buffer_fill_rect(buf, rx, ry + rh - 1, rw, 1, state->theme.panel_border);
-		as_buffer_fill_rect(buf, rx, ry, 1, rh, state->theme.panel_border);
-		as_buffer_fill_rect(buf, rx + rw - 1, ry, 1, rh, state->theme.panel_border);
+		const struct aswl_gradient *grad = winlist_frame_style ? &state->theme.frame_inactive_gradient : &state->theme.panel_button_gradient;
+		if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0)
+			grad = winlist_frame_style ? &state->theme.frame_active_gradient : &state->theme.panel_ws_active_gradient;
 
-		int text_h = as_font5x7_glyph_h(layout.text_scale);
-		int tx = rx + layout.icon_pad;
+		as_buffer_fill_style_rect(buf, wx, wy, rw, rh, grad, base_bg, nudge);
+		uint32_t bevel_bg = nudge != 0 ? aswl_color_nudge(base_bg, nudge) : base_bg;
+		as_buffer_draw_bevel_rect(buf, wx, wy, rw, rh, bevel_bg, idx == state->pressed_index);
+
+		int tx = wx + layout.icon_pad;
 		int tw = rw - 2 * layout.icon_pad;
-		int ty = ry + (rh - text_h) / 2;
+		const char *label = as_window_label(win);
+		if (state->window_list_focused_only && !layout.vertical && state->button_count == 0) {
+			int label_w = aswl_font_text_width(&state->font, label);
+			if (label_w > 0 && label_w < tw) {
+				tx = wx + rw - layout.icon_pad - label_w;
+				tw = label_w;
+			}
+		}
+		int ty = wy + (rh - text_h) / 2;
 		if (tw > 0)
-			as_buffer_draw_text5x7(buf, tx, ty, as_window_label(win), tw, layout.text_scale, base_fg);
+			aswl_font_draw_text(&state->font, pixels, buf->width, buf->height, stride_px, tx, ty, label, tw, base_fg);
 
-		rx += rw + layout.spacing;
+		if (layout.vertical)
+			win_y += rh + layout.spacing;
+		else
+			rx += rw + layout.spacing;
+	}
+
+draw_border:
+	{
+		uint32_t border_argb = winlist_has_window ? state->theme.frame_border : state->theme.panel_border;
+		if (buf->width >= 2 && buf->height >= 2) {
+			as_buffer_fill_rect(buf, 0, 0, buf->width, 1, border_argb);
+			as_buffer_fill_rect(buf, 0, buf->height - 1, buf->width, 1, border_argb);
+			as_buffer_fill_rect(buf, 0, 0, 1, buf->height, border_argb);
+			as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, border_argb);
+		}
+		if (buf->width >= 4 && buf->height >= 4)
+			as_buffer_draw_bevel_rect(buf, 1, 1, buf->width - 2, buf->height - 2, bg_color, false);
 	}
 }
 
@@ -1796,7 +2913,7 @@ static void layer_surface_configure(void *data,
 	if ((int)height > 0)
 		state->height = (int)height;
 
-	zwlr_layer_surface_v1_set_exclusive_zone(surface, state->height);
+	zwlr_layer_surface_v1_set_exclusive_zone(surface, as_state_exclusive_zone(state));
 	schedule_redraw(state);
 }
 
@@ -1917,6 +3034,21 @@ static void as_state_launch_command(struct as_state *state, const char *command)
 			if (strcmp(action, "focus_prev") == 0 || strcmp(action, "prev") == 0) {
 				fprintf(stderr, "aswlpanel: compositor focus_prev\n");
 				afterstep_control_v1_focus_prev(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+			if ((strcmp(action, "fullscreen") == 0 || strcmp(action, "toggle_fullscreen") == 0) &&
+			    state->control_version >= 5) {
+				fprintf(stderr, "aswlpanel: compositor toggle_fullscreen\n");
+				afterstep_control_v1_toggle_fullscreen(state->control);
+				(void)wl_display_flush(state->display);
+				return;
+			}
+			if ((strcmp(action, "maximize") == 0 || strcmp(action, "maximized") == 0 ||
+			     strcmp(action, "toggle_maximized") == 0 || strcmp(action, "toggle_maximize") == 0) &&
+			    state->control_version >= 5) {
+				fprintf(stderr, "aswlpanel: compositor toggle_maximized\n");
+				afterstep_control_v1_toggle_maximized(state->control);
 				(void)wl_display_flush(state->display);
 				return;
 			}
@@ -2189,6 +3321,39 @@ static void control_window_list_end(void *data, struct afterstep_control_v1 *con
 	schedule_redraw(state);
 }
 
+static void control_output_state(void *data,
+                                 struct afterstep_control_v1 *control,
+                                 uint32_t width,
+                                 uint32_t height)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	state->output_width = (int)width;
+	state->output_height = (int)height;
+	schedule_redraw(state);
+}
+
+static void control_window_geometry(void *data,
+                                    struct afterstep_control_v1 *control,
+                                    uint32_t id,
+                                    int32_t x,
+                                    int32_t y,
+                                    int32_t width,
+                                    int32_t height)
+{
+	(void)control;
+	struct as_state *state = data;
+	if (state == NULL)
+		return;
+
+	(void)as_state_upsert_window_geometry(state, id, (int)x, (int)y, (int)width, (int)height);
+	if (!state->window_list_in_progress)
+		schedule_redraw(state);
+}
+
 static void control_window_closed(void *data,
                                   struct afterstep_control_v1 *control,
                                   uint32_t id)
@@ -2204,8 +3369,10 @@ static void control_window_closed(void *data,
 
 static const struct afterstep_control_v1_listener control_listener = {
 	.workspace_state = control_workspace_state,
+	.output_state = control_output_state,
 	.window_list_begin = control_window_list_begin,
 	.window = control_window,
+	.window_geometry = control_window_geometry,
 	.window_list_end = control_window_list_end,
 	.window_closed = control_window_closed,
 };
@@ -2230,7 +3397,7 @@ static void registry_global(void *data,
 	}
 
 	if (strcmp(interface, afterstep_control_v1_interface.name) == 0) {
-		uint32_t bind_version = version < 4 ? version : 4;
+		uint32_t bind_version = version < 6 ? version : 6;
 		if (bind_version < 1)
 			bind_version = 1;
 		state->control_version = bind_version;
@@ -2318,12 +3485,29 @@ static bool setup_layer_shell(struct as_state *state)
 	zwlr_layer_surface_v1_add_listener(state->layer_surface, &layer_surface_listener, state);
 
 	/* Initial size request; compositor may override in configure. */
-	zwlr_layer_surface_v1_set_size(state->layer_surface, 0, (uint32_t)state->height);
-	zwlr_layer_surface_v1_set_anchor(state->layer_surface,
-	                                 ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
-	                                 ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
-	                                 ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
-	zwlr_layer_surface_v1_set_exclusive_zone(state->layer_surface, state->height);
+	uint32_t anchor_flags = as_state_anchor_flags(state);
+
+	uint32_t anchor = 0;
+	if ((anchor_flags & ASWL_ANCHOR_TOP) != 0)
+		anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP;
+	if ((anchor_flags & ASWL_ANCHOR_BOTTOM) != 0)
+		anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM;
+	if ((anchor_flags & ASWL_ANCHOR_LEFT) != 0)
+		anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT;
+	if ((anchor_flags & ASWL_ANCHOR_RIGHT) != 0)
+		anchor |= ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT;
+
+	uint32_t w = as_anchor_spans_horizontal(anchor_flags) ? 0u : (uint32_t)state->width;
+	uint32_t h = as_anchor_spans_vertical(anchor_flags) ? 0u : (uint32_t)state->height;
+
+	zwlr_layer_surface_v1_set_size(state->layer_surface, w, h);
+	zwlr_layer_surface_v1_set_anchor(state->layer_surface, anchor);
+	zwlr_layer_surface_v1_set_margin(state->layer_surface,
+	                                 (uint32_t)state->margins.top,
+	                                 (uint32_t)state->margins.right,
+	                                 (uint32_t)state->margins.bottom,
+	                                 (uint32_t)state->margins.left);
+	zwlr_layer_surface_v1_set_exclusive_zone(state->layer_surface, as_state_exclusive_zone(state));
 
 	wl_surface_commit(state->surface);
 	return true;
@@ -2340,6 +3524,8 @@ static void cleanup(struct as_state *state)
 	as_state_destroy_windows(state);
 	free(state->buttons_config_path);
 	state->buttons_config_path = NULL;
+	aswl_font_destroy(&state->font);
+	aswl_theme_destroy(&state->theme);
 
 #if HAVE_WLR_LAYER_SHELL
 	if (state->layer_surface != NULL)
@@ -2379,17 +3565,126 @@ int main(void)
 	struct as_state state = {
 		.width = 360,
 		.height = 64,
+		.item_height = 0,
+		.pager_columns = 2,
+		.pager_rows = 1,
 		.running = true,
 		.hover_index = -1,
 		.pressed_index = -1,
 		.current_workspace = 1,
 		.workspace_count = 9,
+		.edge = ASWL_PANEL_EDGE_TOP,
 	};
 
 	aswl_theme_init_default(&state.theme);
 	(void)aswl_theme_load(&state.theme);
 
+	aswl_font_init(&state.font);
+	const char *font_spec = getenv("ASWLPANEL_FONT");
+	if (font_spec == NULL || font_spec[0] == '\0')
+		font_spec = getenv("ASWL_FONT");
+	if ((font_spec == NULL || font_spec[0] == '\0') && state.theme.panel_font != NULL && state.theme.panel_font[0] != '\0')
+		font_spec = state.theme.panel_font;
+	if (!aswl_font_load(&state.font, font_spec) && font_spec != NULL && font_spec[0] != '\0')
+		fprintf(stderr, "aswlpanel: failed to load font '%s', using builtin 5x7\n", font_spec);
+
 	as_state_load_buttons(&state);
+
+	const char *winlist_mode = getenv("ASWLPANEL_WINDOW_LIST");
+	if (winlist_mode != NULL && winlist_mode[0] != '\0') {
+		if (strcasecmp(winlist_mode, "focused") == 0 || strcasecmp(winlist_mode, "focused-only") == 0 ||
+		    strcasecmp(winlist_mode, "focus") == 0) {
+			state.window_list_focused_only = true;
+		} else if (winlist_mode[0] == '1' || strcasecmp(winlist_mode, "true") == 0 || strcasecmp(winlist_mode, "yes") == 0) {
+			state.window_list_focused_only = true;
+		}
+	}
+
+	const char *excl_env = getenv("ASWLPANEL_EXCLUSIVE_ZONE");
+	if (excl_env != NULL && excl_env[0] != '\0') {
+		char *end = NULL;
+		long v = strtol(excl_env, &end, 10);
+		if (end != excl_env && end != NULL && *end == '\0' && v >= 0 && v <= 8192) {
+			state.exclusive_zone_override_set = true;
+			state.exclusive_zone_override = (int)v;
+		}
+	}
+
+	const char *height_env = getenv("ASWLPANEL_HEIGHT");
+	if (height_env != NULL && height_env[0] != '\0') {
+		char *end = NULL;
+		long h = strtol(height_env, &end, 10);
+		if (end != height_env && end != NULL && *end == '\0' && h >= 16 && h <= 512) {
+			state.height = (int)h;
+			state.height_override_set = true;
+		}
+	} else if (!state.height_override_set && state.dock_mode && !as_panel_edge_is_vertical(state.edge)) {
+		state.height = 48;
+	}
+
+	if (as_panel_edge_is_vertical(state.edge) && !state.dock_mode && !state.item_height_override_set)
+		state.item_height = 48;
+
+	const char *item_height_env = getenv("ASWLPANEL_ITEM_HEIGHT");
+	if (item_height_env != NULL && item_height_env[0] != '\0') {
+		char *end = NULL;
+		long h = strtol(item_height_env, &end, 10);
+		if (end != item_height_env && end != NULL && *end == '\0' && h >= 16 && h <= 512) {
+			state.item_height = (int)h;
+			state.item_height_override_set = true;
+		}
+	}
+
+	const char *width_env = getenv("ASWLPANEL_WIDTH");
+	bool width_set = state.width_override_set;
+	if (width_env != NULL && width_env[0] != '\0') {
+		char *end = NULL;
+		long w = strtol(width_env, &end, 10);
+		if (end != width_env && end != NULL && *end == '\0' && w >= 64 && w <= 8192)
+			state.width = (int)w;
+		width_set = true;
+	}
+
+	const char *pager_cols_env = getenv("ASWLPANEL_PAGER_COLUMNS");
+	if (pager_cols_env != NULL && pager_cols_env[0] != '\0') {
+		char *end = NULL;
+		long v = strtol(pager_cols_env, &end, 10);
+		if (end != pager_cols_env && end != NULL && *end == '\0' && v >= 1 && v <= 16)
+			state.pager_columns = (int)v;
+	}
+
+	const char *pager_rows_env = getenv("ASWLPANEL_PAGER_ROWS");
+	if (pager_rows_env != NULL && pager_rows_env[0] != '\0') {
+		char *end = NULL;
+		long v = strtol(pager_rows_env, &end, 10);
+		if (end != pager_rows_env && end != NULL && *end == '\0' && v >= 1 && v <= 16)
+			state.pager_rows = (int)v;
+	}
+
+	if (!width_set && state.dock_mode && !as_panel_edge_is_vertical(state.edge)) {
+		int dock_w = as_state_calc_dock_main_axis_size(&state);
+		if (dock_w >= 64 && dock_w <= 8192)
+			state.width = dock_w;
+	}
+
+	if (!width_set && as_panel_edge_is_vertical(state.edge)) {
+		if (state.dock_mode)
+			state.width = 64;
+		else if (state.pager_mode)
+			state.width = 192;
+		else
+			state.width = 96;
+	}
+
+	uint32_t anchor_flags = as_state_anchor_flags(&state);
+	if (as_panel_edge_is_vertical(state.edge) && state.dock_mode && !as_anchor_spans_vertical(anchor_flags) &&
+	    !state.height_override_set) {
+		int dock_h = as_state_calc_dock_main_axis_size(&state);
+		if (dock_h >= 64 && dock_h <= 8192) {
+			state.height = dock_h;
+			state.height_override_set = true;
+		}
+	}
 
 	state.display = wl_display_connect(NULL);
 	if (state.display == NULL) {
