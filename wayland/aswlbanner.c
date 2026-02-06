@@ -288,7 +288,7 @@ static bool aswl_render_banner_afterimage(struct as_state *state, struct as_imag
 	 */
 	const char *tint = getenv("ASWLBANNER_TINT");
 	if (tint == NULL || tint[0] == '\0')
-		tint = "#0e7f7f7f";
+		tint = "#8f7f7f7f";
 
 	const char *beauty_src = beauty != NULL ? beauty : "tiles/AfterStepBeauty";
 	const char *logo_src = logo != NULL ? logo : "tiles/AfterStep";

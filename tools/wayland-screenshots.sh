@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat 1>&2 <<'EOF'
-Usage: tools/wayland-screenshots.sh [--out DIR] [--no-upload]
+Usage: tools/wayland-screenshots.sh [--out DIR] [--upload]
 
 Generates a Wayland screenshot gallery for the wlroots-based compositor scaffold (`wayland/aswlcomp`)
 by running it nested under Xvfb (WLR_BACKENDS=x11) and capturing key screens.
@@ -24,8 +24,8 @@ Outputs:
 
 Options:
   --out DIR   Output directory (default: screenshots/YYYY-MM-DD-wayland)
-  --upload    Upload a hosted gallery via `wtf-upload` (prints the index.html URL) (default)
-  --no-upload Skip upload (local files only)
+  --upload    Upload a hosted gallery via `wtf-upload` (prints the index.html URL)
+  --no-upload Skip upload (local files only) (default)
 EOF
 }
 
@@ -42,7 +42,7 @@ repo_root="$(cd -- "${script_dir}/.." && pwd -P)"
 host_home="${HOME:-}"
 
 out_dir=""
-do_upload=1
+do_upload=0
 as_pid=""
 upload_index=""
 
