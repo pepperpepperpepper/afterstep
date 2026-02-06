@@ -301,7 +301,7 @@ require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "./wayland/aswlbg" || true
 sleep 0.1
 require_comp_alive
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "./wayland/aswlbanner" || true
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLBANNER_TINT='#0e7f7f7f' ./wayland/aswlbanner" || true
 sleep 0.1
 
 get_comp_window_id() {
@@ -343,12 +343,44 @@ focus_window_by_app_id() {
   fi
 }
 
+window_ids_by_app_id() {
+  local app_id="$1"
+  WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v app="app_id=${app_id}" '$5 == app {print $1}'
+}
+
+close_windows_by_app_id() {
+  local app_id="$1"
+  local ids=()
+  mapfile -t ids < <(window_ids_by_app_id "${app_id}")
+  if [[ "${#ids[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  for id in "${ids[@]}"; do
+    require_comp_alive
+    WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl close_window "${id}" >/dev/null 2>&1 || true
+  done
+}
+
+wait_until_app_id_gone() {
+  local app_id="$1"
+  for _ in $(seq 1 200); do
+    require_comp_alive
+    if ! window_ids_by_app_id "${app_id}" | grep -q .; then
+      return 0
+    fi
+    sleep 0.05
+  done
+  return 1
+}
+
 open_menu_and_wait() {
   require_comp_alive
+  close_menu_if_open
   WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "./wayland/aswlmenu" || true
   for _ in $(seq 1 120); do
     require_comp_alive
-    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "app_id=afterstep\\.aswlmenu"; then
+    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "mapped.*app_id=afterstep\\.aswlmenu"; then
       break
     fi
     sleep 0.05
@@ -358,10 +390,11 @@ open_menu_and_wait() {
 
 open_window_list_menu_and_wait() {
   require_comp_alive
+  close_menu_if_open
   WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "./wayland/aswlmenu --windows" || true
   for _ in $(seq 1 120); do
     require_comp_alive
-    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "app_id=afterstep\\.aswlmenu"; then
+    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "mapped.*app_id=afterstep\\.aswlmenu"; then
       break
     fi
     sleep 0.05
@@ -370,10 +403,9 @@ open_window_list_menu_and_wait() {
 }
 
 close_menu_if_open() {
-  focus_window_by_app_id "afterstep.aswlmenu"
-  require_comp_alive
-  WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl close_focused || true
-  sleep 0.2
+  close_windows_by_app_id "afterstep.aswlmenu"
+  wait_until_app_id_gone "afterstep.aswlmenu" || true
+  sleep 0.05
 }
 
 # Give aswlbg (background XML compositor via libAfterImage) time to paint before
