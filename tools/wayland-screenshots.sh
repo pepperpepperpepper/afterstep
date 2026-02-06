@@ -337,7 +337,17 @@ snap() {
 focus_window_by_app_id() {
   local app_id="$1"
   local wid=""
-  wid="$(WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v app="app_id=${app_id}" '$5 == app {print $1; exit}')"
+  wid="$(WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v want="${app_id}" '
+    BEGIN { id = "" }
+    {
+      got = $5
+      sub(/^app_id=/, "", got)
+      if (tolower(got) == tolower(want) && id == "") {
+        id = $1
+      }
+    }
+    END { print id }
+  ')"
   if [[ -n "${wid}" ]]; then
     WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl focus_window "${wid}" >/dev/null 2>&1 || true
   fi
@@ -345,7 +355,15 @@ focus_window_by_app_id() {
 
 window_ids_by_app_id() {
   local app_id="$1"
-  WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v app="app_id=${app_id}" '$5 == app {print $1}'
+  WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v want="${app_id}" '
+    {
+      got = $5
+      sub(/^app_id=/, "", got)
+      if (tolower(got) == tolower(want)) {
+        print $1
+      }
+    }
+  '
 }
 
 close_windows_by_app_id() {
@@ -374,17 +392,37 @@ wait_until_app_id_gone() {
   return 1
 }
 
+wait_for_mapped_app_id() {
+  local app_id="$1"
+  for _ in $(seq 1 200); do
+    require_comp_alive
+    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v want="${app_id}" '
+      BEGIN { found = 0 }
+      {
+        got = $5
+        sub(/^app_id=/, "", got)
+        if (tolower(got) == tolower(want) && $4 ~ /mapped/) {
+          found = 1
+        }
+      }
+      END { exit found ? 0 : 1 }
+    ' >/dev/null; then
+      return 0
+    fi
+    sleep 0.05
+  done
+  return 1
+}
+
 open_menu_and_wait() {
   require_comp_alive
   close_menu_if_open
   WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "./wayland/aswlmenu" || true
-  for _ in $(seq 1 120); do
-    require_comp_alive
-    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "mapped.*app_id=afterstep\\.aswlmenu"; then
-      break
-    fi
-    sleep 0.05
-  done
+  if ! wait_for_mapped_app_id "afterstep.aswlmenu"; then
+    echo "Error: aswlmenu did not appear in time." >&2
+    WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null || true
+    return 1
+  fi
   sleep 0.2
 }
 
@@ -392,19 +430,24 @@ open_window_list_menu_and_wait() {
   require_comp_alive
   close_menu_if_open
   WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "./wayland/aswlmenu --windows" || true
-  for _ in $(seq 1 120); do
-    require_comp_alive
-    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "mapped.*app_id=afterstep\\.aswlmenu"; then
-      break
-    fi
-    sleep 0.05
-  done
+  if ! wait_for_mapped_app_id "afterstep.aswlmenu"; then
+    echo "Error: aswlmenu (window list) did not appear in time." >&2
+    WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null || true
+    return 1
+  fi
   sleep 0.2
 }
 
 close_menu_if_open() {
   close_windows_by_app_id "afterstep.aswlmenu"
-  wait_until_app_id_gone "afterstep.aswlmenu" || true
+  if ! wait_until_app_id_gone "afterstep.aswlmenu"; then
+    close_windows_by_app_id "afterstep.aswlmenu"
+    if ! wait_until_app_id_gone "afterstep.aswlmenu"; then
+      echo "Error: aswlmenu did not close in time." >&2
+      WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null || true
+      return 1
+    fi
+  fi
   sleep 0.05
 }
 
@@ -435,9 +478,19 @@ require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${terminal_cmd}" || true
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "xeyes" || true
-for _ in $(seq 1 200); do
-  require_comp_alive
-  if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "mapped.*app_id=XEyes"; then
+wait_for_mapped_app_id "XTerm"
+wait_for_mapped_app_id "XEyes"
+focus_window_by_app_id "XTerm"
+sleep 0.1
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl maximize >/dev/null 2>&1 || true
+sleep 0.1
+for _ in $(seq 1 30); do
+  focus_window_by_app_id "XEyes"
+  if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' '
+    BEGIN { found = 0 }
+    $5 == "app_id=XEyes" && $4 ~ /focused/ { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' >/dev/null; then
     break
   fi
   sleep 0.05
@@ -482,6 +535,9 @@ kill "${as_pid}" 2>/dev/null || true
 wait "${as_pid}" 2>/dev/null || true
 
 date_stamp="$(date +%Y-%m-%d)"
+if [[ "$(basename -- "${out_dir}")" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})-wayland$ ]]; then
+  date_stamp="${BASH_REMATCH[1]}"
+fi
 cat >"${out_dir}/index.html" <<EOF
 <!doctype html>
 <html lang="en">

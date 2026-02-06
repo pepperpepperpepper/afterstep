@@ -6490,8 +6490,51 @@ static void handle_xwayland_request_configure(struct wl_listener *listener, void
 	int ox = 0;
 	int oy = 0;
 	view_get_content_offset(view, &ox, &oy);
-	wlr_scene_node_set_position(&view->scene_tree->node, event->x - ox, event->y - oy);
-	wlr_xwayland_surface_configure(view->xwayland_surface, event->x, event->y, event->width, event->height);
+
+	/*
+	 * X11 ConfigureWindow requests may omit some fields; wlroots exposes a mask
+	 * so we can distinguish "not requested" from zero values. In particular,
+	 * some clients send move-only configures and wlroots may leave width/height
+	 * as 0 unless explicitly requested, so blindly applying 0×0 would collapse
+	 * the view to just its titlebar.
+	 */
+	int lx = 0;
+	int ly = 0;
+	(void)wlr_scene_node_coords(&view->scene_tree->node, &lx, &ly);
+
+	int cur_x = lx + ox;
+	int cur_y = ly + oy;
+
+	int x = cur_x;
+	int y = cur_y;
+	if (!view->placed) {
+		if ((event->mask & XCB_CONFIG_WINDOW_X) != 0)
+			x = event->x;
+		if ((event->mask & XCB_CONFIG_WINDOW_Y) != 0)
+			y = event->y;
+	}
+
+	int w = (int)view->xwayland_surface->width;
+	int h = (int)view->xwayland_surface->height;
+	if ((event->mask & XCB_CONFIG_WINDOW_WIDTH) != 0)
+		w = (int)event->width;
+	if ((event->mask & XCB_CONFIG_WINDOW_HEIGHT) != 0)
+		h = (int)event->height;
+	if (w < 1)
+		w = 1;
+	if (h < 1)
+		h = 1;
+
+	if (!view->placed && (x != cur_x || y != cur_y)) {
+		wlr_scene_node_set_position(&view->scene_tree->node, x - ox, y - oy);
+		view->placed = true;
+	}
+
+	wlr_xwayland_surface_configure(view->xwayland_surface,
+	                               clamp_i16(x),
+	                               clamp_i16(y),
+	                               (uint16_t)w,
+	                               (uint16_t)h);
 	view_update_decorations(view);
 }
 
