@@ -25,6 +25,9 @@ struct aswl_state {
 	uint32_t control_version;
 	bool got_control;
 
+	/* Whether we should capture/print the next window list snapshot. */
+	bool capture_window_list;
+
 	bool listing_windows;
 	bool list_done;
 };
@@ -232,6 +235,14 @@ static void handle_control_window_list_begin(void *data, struct afterstep_contro
 	if (st == NULL)
 		return;
 
+	/*
+	 * The compositor may emit an initial window list snapshot on bind. Only
+	 * print snapshots when explicitly requested by the user (list_windows).
+	 */
+	if (!st->capture_window_list)
+		return;
+
+	st->capture_window_list = false;
 	st->listing_windows = true;
 }
 
@@ -279,11 +290,12 @@ static void handle_control_window_geometry(void *data,
 	if (!st->listing_windows)
 		return;
 
-	(void)id;
-	(void)x;
-	(void)y;
-	(void)width;
-	(void)height;
+	printf("%u\tgeom\tx=%d\ty=%d\tw=%d\th=%d\n",
+	       id,
+	       (int)x,
+	       (int)y,
+	       (int)width,
+	       (int)height);
 }
 
 static void handle_control_window_list_end(void *data, struct afterstep_control_v1 *control)
@@ -292,6 +304,10 @@ static void handle_control_window_list_end(void *data, struct afterstep_control_
 	struct aswl_state *st = data;
 	if (st == NULL)
 		return;
+	if (!st->listing_windows)
+		return;
+
+	st->listing_windows = false;
 	st->list_done = true;
 }
 
@@ -559,6 +575,7 @@ int main(int argc, char **argv)
 			disconnect_control(&st);
 			return 1;
 		}
+		st.capture_window_list = true;
 		st.listing_windows = false;
 		st.list_done = false;
 		afterstep_control_v1_list_windows(st.control);

@@ -443,6 +443,8 @@ static char *aswl_resolve_icon_spec(const char *spec)
 		roots[root_count++] = home_icons;
 	if (home_buttons != NULL)
 		roots[root_count++] = home_buttons;
+	roots[root_count++] = "_install/share/afterstep/desktop/icons";
+	roots[root_count++] = "_install/share/afterstep/desktop/buttons";
 	roots[root_count++] = "afterstep/desktop/icons";
 	roots[root_count++] = "afterstep/desktop/buttons";
 	roots[root_count++] = "/usr/share/afterstep/desktop/icons";
@@ -1332,6 +1334,11 @@ static char *aswl_afterimage_apply_colorscheme_tokens(const char *xml)
 
 static void aswl_afterimage_reset_managers(void)
 {
+	if (aswl_ai.imman != NULL)
+		set_xml_image_manager(NULL);
+	if (aswl_ai.fontman != NULL)
+		set_xml_font_manager(NULL);
+
 	if (aswl_ai.imman != NULL) {
 		destroy_image_manager(aswl_ai.imman, False);
 		aswl_ai.imman = NULL;
@@ -1349,6 +1356,49 @@ static void aswl_afterimage_reset_managers(void)
 	aswl_colors_free(aswl_ai.colors, aswl_ai.color_count);
 	aswl_ai.colors = NULL;
 	aswl_ai.color_count = 0;
+}
+
+static void aswl_afterimage_seed_menu_folder_pixmap(void)
+{
+	if (aswl_ai.asv == NULL || aswl_ai.imman == NULL || aswl_ai.icon_root == NULL)
+		return;
+
+	if (query_asimage(aswl_ai.imman, "menu.folder_pixmap") != NULL)
+		return;
+
+	static const char *candidates[] = {
+		"large/FolderAquaBlue", "large/png/FolderAquaBlue",
+	};
+
+	const char *src = NULL;
+	for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
+		char *p = NULL;
+		if (asprintf(&p, "%s/%s", aswl_ai.icon_root, candidates[i]) >= 0 && aswl_is_file_readable(p)) {
+			src = candidates[i];
+			free(p);
+			break;
+		}
+		free(p);
+	}
+
+	if (src == NULL)
+		return;
+
+	char *xml = NULL;
+	if (asprintf(&xml, "<img id=\"menu.folder_pixmap\" src=\"%s\"/>", src) < 0)
+		return;
+
+	ASImage *im = compose_asimage_xml(aswl_ai.asv,
+	                                 aswl_ai.imman,
+	                                 aswl_ai.fontman,
+	                                 xml,
+	                                 ASFLAGS_EVERYTHING,
+	                                 0,
+	                                 None,
+	                                 aswl_ai.icon_root);
+	free(xml);
+	if (im != NULL)
+		safe_asimage_destroy(im);
 }
 
 static void aswl_afterimage_init(const char *xml_path)
@@ -1373,6 +1423,10 @@ static void aswl_afterimage_init(const char *xml_path)
 		return;
 
 	if (aswl_ai.icon_root != NULL && strcmp(aswl_ai.icon_root, icon_root) == 0) {
+		if (aswl_ai.imman != NULL)
+			set_xml_image_manager(aswl_ai.imman);
+		if (aswl_ai.fontman != NULL)
+			set_xml_font_manager(aswl_ai.fontman);
 		free(icon_root);
 		return;
 	}
@@ -1391,6 +1445,8 @@ static void aswl_afterimage_init(const char *xml_path)
 		aswl_ai.imman = create_image_manager(NULL, SCREEN_GAMMA, aswl_ai.icon_root, aswl_ai.alt_root, NULL);
 	else
 		aswl_ai.imman = create_image_manager(NULL, SCREEN_GAMMA, aswl_ai.icon_root, NULL);
+	if (aswl_ai.imman != NULL)
+		set_xml_image_manager(aswl_ai.imman);
 
 	aswl_afterimage_load_colorscheme_if_needed();
 
@@ -1398,6 +1454,8 @@ static void aswl_afterimage_init(const char *xml_path)
 	if (fonts_dir != NULL && aswl_is_dir_readable(fonts_dir))
 		aswl_ai.fontman = create_generic_fontman(aswl_ai.dpy, fonts_dir);
 	free(fonts_dir);
+	if (aswl_ai.fontman != NULL)
+		set_xml_font_manager(aswl_ai.fontman);
 }
 
 static bool aswl_icon_load_xml_afterimage(const char *xml_path, uint32_t **out_argb, int *out_w, int *out_h)
@@ -1423,6 +1481,8 @@ static bool aswl_icon_load_xml_afterimage(const char *xml_path, uint32_t **out_a
 
 	char *processed = aswl_afterimage_apply_colorscheme_tokens(xml);
 	char *xml_src = processed != NULL ? processed : xml;
+
+	aswl_afterimage_seed_menu_folder_pixmap();
 
 	ASImage *im = compose_asimage_xml(aswl_ai.asv,
 	                                 aswl_ai.imman,

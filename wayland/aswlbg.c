@@ -31,6 +31,28 @@ struct as_image {
 
 static void as_image_destroy(struct as_image *img);
 
+static unsigned aswl_env_uint_clamped(const char *name, unsigned def, unsigned max_inclusive)
+{
+	const char *v = getenv(name);
+	if (v == NULL || v[0] == '\0')
+		return def;
+
+	errno = 0;
+	char *end = NULL;
+	long parsed = strtol(v, &end, 10);
+	if (errno != 0 || end == v || (end != NULL && *end != '\0'))
+		return def;
+
+	if (parsed < 0)
+		return 0;
+
+	unsigned long u = (unsigned long)parsed;
+	if (u > max_inclusive)
+		return max_inclusive;
+
+	return (unsigned)u;
+}
+
 struct as_buffer {
 	struct wl_buffer *wl_buffer;
 	void *data;
@@ -209,19 +231,6 @@ struct aswl_color_entry {
 	char *name;
 	uint32_t argb;
 };
-
-static uint32_t aswl_unpremultiply_u8(uint32_t c, uint32_t a)
-{
-	if (a == 0)
-		return 0;
-	if (a >= 255)
-		return c & 0xFFu;
-
-	uint32_t v = (c * 255u + a / 2u) / a;
-	if (v > 255u)
-		v = 255u;
-	return v;
-}
 
 static void aswl_colors_free(struct aswl_color_entry *colors, size_t count)
 {
@@ -660,6 +669,12 @@ static void aswl_afterimage_init(struct as_state *state)
 		int screen = DefaultScreen(dpy);
 		int depth = DefaultDepth(dpy, screen);
 		state->asv = create_asvisual(dpy, screen, depth, NULL);
+		if (getenv("ASWLBG_DEBUG_SAMPLES") != NULL) {
+			fprintf(stderr, "aswlbg: X display=%s depth=%d screen=%d\n",
+			        DisplayString(dpy),
+			        depth,
+			        screen);
+		}
 	} else {
 		/* Match `ascompose`: build an offscreen 32bpp visual when no X display is available. */
 		state->asv = create_asvisual(NULL, 0, 32, NULL);
@@ -675,11 +690,19 @@ static bool aswl_render_background_afterimage(struct as_state *state, struct as_
 
 	const bool debug_samples = getenv("ASWLBG_DEBUG_SAMPLES") != NULL;
 	size_t alpha_not_ff = 0;
+	unsigned alpha_not_ff_min_x = 0, alpha_not_ff_min_y = 0, alpha_not_ff_max_x = 0, alpha_not_ff_max_y = 0;
+	bool alpha_not_ff_bbox_set = false;
+	unsigned alpha_not_ff_first_x = 0, alpha_not_ff_first_y = 0;
+	uint32_t alpha_not_ff_first_a = 0, alpha_not_ff_first_r = 0, alpha_not_ff_first_g = 0,
+	         alpha_not_ff_first_b = 0;
+	bool alpha_not_ff_first_set = false;
 	uint32_t sample_raw_a = 0, sample_raw_r = 0, sample_raw_g = 0, sample_raw_b = 0;
 	uint32_t sample_out_a = 0, sample_out_r = 0, sample_out_g = 0, sample_out_b = 0;
 	bool sample_set = false;
-	const unsigned sample_x = 800;
-	const unsigned sample_y = 450;
+	const unsigned max_x = width > 0 ? (unsigned)(width - 1) : 0;
+	const unsigned max_y = height > 0 ? (unsigned)(height - 1) : 0;
+	const unsigned sample_x = aswl_env_uint_clamped("ASWLBG_SAMPLE_X", 800, max_x);
+	const unsigned sample_y = aswl_env_uint_clamped("ASWLBG_SAMPLE_Y", 450, max_y);
 
 	const char *bg_env = getenv("ASWLBG_BACKGROUND");
 	const char *bg_path_raw = (bg_env != NULL && bg_env[0] != '\0') ? bg_env : aswl_default_background_xml();
@@ -780,6 +803,10 @@ static bool aswl_render_background_afterimage(struct as_state *state, struct as_
 	if (fonts_dir != NULL && fonts_dir[0] != '\0')
 		fontman = create_generic_fontman(state->x11_display, fonts_dir);
 
+	struct ASImageManager *imman = NULL;
+	if (share_root != NULL && share_root[0] != '\0')
+		imman = create_generic_imageman(share_root);
+
 	asxml_var_init();
 	asxml_var_insert("xroot.width", width);
 	asxml_var_insert("xroot.height", height);
@@ -789,7 +816,7 @@ static bool aswl_render_background_afterimage(struct as_state *state, struct as_
 		bg_dir = strdup(".");
 
 	ASImage *im = compose_asimage_xml_at_size(state->asv,
-	                                          NULL,
+	                                          imman,
 	                                          fontman,
 	                                          processed,
 	                                          ASFLAGS_EVERYTHING,
@@ -800,6 +827,8 @@ static bool aswl_render_background_afterimage(struct as_state *state, struct as_
 	                                          height);
 	if (fontman != NULL)
 		destroy_font_manager(fontman, False);
+	if (imman != NULL)
+		destroy_image_manager(imman, False);
 	free(bg_dir);
 	if (im == NULL)
 		goto fail;
@@ -846,10 +875,30 @@ static bool aswl_render_background_afterimage(struct as_state *state, struct as_
 				 */
 				if (a != 0xFFu) {
 					alpha_not_ff++;
-					if (a != 0u && r <= a && g <= a && b <= a) {
-						r = aswl_unpremultiply_u8(r, a);
-						g = aswl_unpremultiply_u8(g, a);
-						b = aswl_unpremultiply_u8(b, a);
+					if (!alpha_not_ff_first_set) {
+						alpha_not_ff_first_set = true;
+						alpha_not_ff_first_x = x;
+						alpha_not_ff_first_y = y;
+						alpha_not_ff_first_a = raw_a;
+						alpha_not_ff_first_r = raw_r;
+						alpha_not_ff_first_g = raw_g;
+						alpha_not_ff_first_b = raw_b;
+					}
+					if (!alpha_not_ff_bbox_set) {
+						alpha_not_ff_min_x = x;
+						alpha_not_ff_max_x = x;
+						alpha_not_ff_min_y = y;
+						alpha_not_ff_max_y = y;
+						alpha_not_ff_bbox_set = true;
+					} else {
+						if (x < alpha_not_ff_min_x)
+							alpha_not_ff_min_x = x;
+						if (x > alpha_not_ff_max_x)
+							alpha_not_ff_max_x = x;
+						if (y < alpha_not_ff_min_y)
+							alpha_not_ff_min_y = y;
+						if (y > alpha_not_ff_max_y)
+							alpha_not_ff_max_y = y;
 					}
 					a = 0xFFu;
 				}
@@ -868,19 +917,45 @@ static bool aswl_render_background_afterimage(struct as_state *state, struct as_
 		safe_asimage_destroy(im);
 
 		if (debug_samples && sample_set) {
-			fprintf(stderr,
-			        "aswlbg: alpha_not_ff=%zu sample(%u,%u): raw=%02X/%02X%02X%02X out=%02X/%02X%02X%02X\n",
-			        alpha_not_ff,
-			        sample_x,
-			        sample_y,
-			        sample_raw_a,
-			        sample_raw_r,
-			        sample_raw_g,
-			        sample_raw_b,
-			        sample_out_a,
-			        sample_out_r,
-			        sample_out_g,
-			        sample_out_b);
+			if (alpha_not_ff_bbox_set) {
+				fprintf(stderr,
+				        "aswlbg: alpha_not_ff=%zu alpha_bbox=(%u,%u)-(%u,%u) alpha_first(%u,%u)=%02X/%02X%02X%02X sample(%u,%u): raw=%02X/%02X%02X%02X out=%02X/%02X%02X%02X\n",
+				        alpha_not_ff,
+				        alpha_not_ff_min_x,
+				        alpha_not_ff_min_y,
+				        alpha_not_ff_max_x,
+				        alpha_not_ff_max_y,
+				        alpha_not_ff_first_x,
+				        alpha_not_ff_first_y,
+				        alpha_not_ff_first_a,
+				        alpha_not_ff_first_r,
+				        alpha_not_ff_first_g,
+				        alpha_not_ff_first_b,
+				        sample_x,
+				        sample_y,
+				        sample_raw_a,
+				        sample_raw_r,
+				        sample_raw_g,
+				        sample_raw_b,
+				        sample_out_a,
+				        sample_out_r,
+				        sample_out_g,
+				        sample_out_b);
+			} else {
+				fprintf(stderr,
+				        "aswlbg: alpha_not_ff=%zu sample(%u,%u): raw=%02X/%02X%02X%02X out=%02X/%02X%02X%02X\n",
+				        alpha_not_ff,
+				        sample_x,
+				        sample_y,
+				        sample_raw_a,
+				        sample_raw_r,
+				        sample_raw_g,
+				        sample_raw_b,
+				        sample_out_a,
+				        sample_out_r,
+				        sample_out_g,
+				        sample_out_b);
+			}
 		}
 
 		as_image_destroy(img);

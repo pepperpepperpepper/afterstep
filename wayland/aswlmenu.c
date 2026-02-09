@@ -410,8 +410,6 @@ static void as_buffer_draw_bevel_rect(struct as_buffer *buf, int x, int y, int w
 	if (w <= 1 || h <= 1)
 		return;
 
-	(void)base_argb;
-
 	int x1 = x;
 	int y1 = y;
 	int x2 = x + w;
@@ -435,36 +433,38 @@ static void as_buffer_draw_bevel_rect(struct as_buffer *buf, int x, int y, int w
 	int left = x1;
 	int right = x2 - 1;
 
-	/* Top edge */
-	{
-		uint32_t *row = pixels + (size_t)top * (size_t)stride_px;
-		for (int xx = left; xx <= right; xx++) {
-			uint32_t base = as_unpremul_argb(row[xx]);
-			uint32_t c = sunken ? aswl_color_darken(base, 120) : aswl_color_lighten(base, 64);
-			row[xx] = as_premul_argb(c);
-		}
+	uint32_t relief_fore = aswl_color_hilite(base_argb);
+	uint32_t relief_back = aswl_color_shadow(base_argb);
+
+	uint32_t hi_color = sunken ? relief_back : relief_fore;
+	uint32_t lo_color = sunken ? relief_fore : relief_back;
+	uint32_t hihi_color = aswl_color_hilite(relief_fore);
+	uint32_t lolo_color = relief_back;
+	uint32_t hilo_color = aswl_color_average(hi_color, lo_color);
+
+	uint32_t hi_premul = as_premul_argb(hi_color);
+	uint32_t lo_premul = as_premul_argb(lo_color);
+
+	/* Top/bottom edges */
+	uint32_t *row_top = pixels + (size_t)top * (size_t)stride_px;
+	uint32_t *row_bot = pixels + (size_t)bottom * (size_t)stride_px;
+	for (int xx = left; xx <= right; xx++) {
+		row_top[xx] = hi_premul;
+		row_bot[xx] = lo_premul;
 	}
 
-	/* Bottom edge */
-	{
-		uint32_t *row = pixels + (size_t)bottom * (size_t)stride_px;
-		for (int xx = left; xx <= right; xx++) {
-			uint32_t base = as_unpremul_argb(row[xx]);
-			uint32_t c = sunken ? aswl_color_lighten(base, 64) : aswl_color_darken(base, 120);
-			row[xx] = as_premul_argb(c);
-		}
-	}
-
-	/* Left/right edges (excluding corners to avoid double-darkening). */
+	/* Left/right edges (excluding corners). */
 	for (int yy = top + 1; yy <= bottom - 1; yy++) {
 		uint32_t *row = pixels + (size_t)yy * (size_t)stride_px;
-		uint32_t base_l = as_unpremul_argb(row[left]);
-		uint32_t base_r = as_unpremul_argb(row[right]);
-		uint32_t c_l = sunken ? aswl_color_darken(base_l, 120) : aswl_color_lighten(base_l, 64);
-		uint32_t c_r = sunken ? aswl_color_lighten(base_r, 64) : aswl_color_darken(base_r, 120);
-		row[left] = as_premul_argb(c_l);
-		row[right] = as_premul_argb(c_r);
+		row[left] = hi_premul;
+		row[right] = lo_premul;
 	}
+
+	/* Corners. */
+	row_top[left] = as_premul_argb(sunken ? lolo_color : hihi_color);
+	row_top[right] = as_premul_argb(hilo_color);
+	row_bot[left] = as_premul_argb(hilo_color);
+	row_bot[right] = as_premul_argb(sunken ? hihi_color : lolo_color);
 }
 
 static double as_gradient_t(int type, int x, int y, int w, int h)
@@ -1824,7 +1824,7 @@ static bool as_state_get_layout(struct as_state *state, struct as_menu_layout *l
 	if (state == NULL || layout == NULL)
 		return false;
 
-	layout->pad = 10;
+	layout->pad = state->window_list_mode ? 1 : 10;
 	layout->text_scale = 2;
 	if ((state->font.use_freetype && state->font.base_px > 0) ||
 	    (state->header_font.use_freetype && state->header_font.base_px > 0) ||
@@ -1841,15 +1841,20 @@ static bool as_state_get_layout(struct as_state *state, struct as_menu_layout *l
 	if (header_text_h <= 0)
 		header_text_h = item_text_h;
 
-	int hilite_text_h = aswl_font_height(&state->hilite_font);
 	int row_text_h = item_text_h;
-	if (hilite_text_h > row_text_h)
-		row_text_h = hilite_text_h;
+	if (!state->window_list_mode) {
+		int hilite_text_h = aswl_font_height(&state->hilite_font);
+		if (hilite_text_h > row_text_h)
+			row_text_h = hilite_text_h;
+	}
 
-	layout->header_h = header_text_h + 2 * 8;
-	layout->row_h = row_text_h + 2 * 6;
-	if (layout->row_h < row_text_h + 4)
-		layout->row_h = row_text_h + 4;
+	int header_vpad = state->window_list_mode ? 1 : 8;
+	int row_vpad = state->window_list_mode ? 1 : 6;
+	layout->header_h = header_text_h + 2 * header_vpad;
+	layout->row_h = row_text_h + 2 * row_vpad;
+	int min_row_extra = state->window_list_mode ? 2 : 4;
+	if (layout->row_h < row_text_h + min_row_extra)
+		layout->row_h = row_text_h + min_row_extra;
 
 	layout->icon_size = layout->row_h - 8;
 	if (layout->icon_size < 0)
@@ -1857,6 +1862,12 @@ static bool as_state_get_layout(struct as_state *state, struct as_menu_layout *l
 	if (layout->icon_size > 64)
 		layout->icon_size = 64;
 	layout->icon_col_w = layout->icon_size > 0 ? layout->icon_size + 10 : 0;
+
+	/* The WinList-ish "Windows on Desktop N" popup is typically text-only. */
+	if (state->window_list_mode) {
+		layout->icon_size = 0;
+		layout->icon_col_w = 0;
+	}
 
 	return true;
 }
@@ -1870,6 +1881,10 @@ static void as_state_update_close_button_metrics(struct as_state *state, const s
 	state->close_y = 0;
 	state->close_w = 0;
 	state->close_h = 0;
+
+	/* Match the classic WinList popup: no dedicated close button. */
+	if (state->window_list_mode)
+		return;
 
 	/*
 	 * Menus draw a 1px border at the edge; keep the button inside that.
@@ -1985,7 +2000,8 @@ static void as_state_autosize(struct as_state *state)
 	(void)aswl_font_set_scale(&state->header_font, layout.text_scale);
 
 	/* Size to fit the menu content, similar to AfterStep's classic root menu. */
-	size_t max_rows = (size_t)env_int("ASWLMENU_ROWS", 12, 1, 64);
+	int default_rows = state->window_list_mode ? 8 : 12;
+	size_t max_rows = (size_t)env_int("ASWLMENU_ROWS", default_rows, 1, 64);
 	size_t rows = state->filtered_count;
 	if (rows < 1)
 		rows = 1;
@@ -2027,10 +2043,12 @@ static void as_state_autosize(struct as_state *state)
 	int desired_list_w = layout.pad * 2 + list_w;
 	if (desired_list_w > desired_w)
 		desired_w = desired_list_w;
-	desired_w = clamp_int(desired_w, 240, 640);
+	int max_w = state->window_list_mode ? 280 : 640;
+	desired_w = clamp_int(desired_w, 240, max_w);
 
 	state->width = env_int("ASWLMENU_WIDTH", desired_w, 120, 4096);
-	state->height = env_int("ASWLMENU_HEIGHT", desired_h, 120, 4096);
+	int min_env_h = state->window_list_mode ? min_h : 120;
+	state->height = env_int("ASWLMENU_HEIGHT", desired_h, min_env_h, 4096);
 }
 
 static size_t as_state_visible_rows(struct as_state *state, const struct as_menu_layout *layout)
@@ -2173,6 +2191,23 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	as_state_update_close_button_metrics(state, &layout);
 	as_state_ensure_close_button_icons(state);
 
+	const struct aswl_gradient *header_grad = &state->theme.menu_header_gradient;
+	uint32_t header_bg = state->theme.menu_header_bg;
+	uint32_t header_fg = state->theme.menu_header_fg;
+	uint32_t border = state->theme.menu_border;
+
+	/*
+	 * The X11 "Windows on Desktop N" pop-up (WinList-ish window list) uses the
+	 * focused window title style, not the menu title style. Match that look in
+	 * `--windows` mode so the screenshot gallery aligns with classic AfterStep.
+	 */
+	if (state->window_list_mode) {
+		header_grad = &state->theme.frame_active_gradient;
+		header_bg = state->theme.frame_active_bg;
+		header_fg = state->theme.frame_active_fg;
+		border = state->theme.frame_border;
+	}
+
 	uint32_t *pixels = (uint32_t *)buf->data;
 	int stride_px = buf->stride / 4;
 
@@ -2182,10 +2217,10 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	                          0,
 	                          buf->width,
 	                          layout.header_h,
-	                          &state->theme.menu_header_gradient,
-	                          state->theme.menu_header_bg,
+	                          header_grad,
+	                          header_bg,
 	                          0);
-	as_buffer_fill_rect(buf, 0, layout.header_h - 1, buf->width, 1, state->theme.menu_border);
+	as_buffer_fill_rect(buf, 0, layout.header_h - 1, buf->width, 1, border);
 
 	/* Close button (top-right). */
 	int icon_box = clamp_int(layout.header_h - 8, 10, 16);
@@ -2195,7 +2230,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		                          state->close_y,
 		                          state->close_w,
 		                          state->close_h,
-		                          state->theme.menu_header_bg,
+		                          header_bg,
 		                          state->pressed_close);
 
 		const uint32_t *icon = state->close_icon_argb;
@@ -2239,7 +2274,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 			                    fy,
 			                    "X",
 			                    state->close_w - 4,
-			                    state->theme.menu_header_fg);
+			                    header_fg);
 		}
 	}
 
@@ -2290,7 +2325,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	                    ty,
 	                    header,
 	                    header_text_w,
-	                    state->theme.menu_header_fg);
+	                    header_fg);
 
 	/* List */
 	size_t rows = as_state_visible_rows(state, &layout);
@@ -2329,7 +2364,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 			uint8_t nudge = (idx == state->pressed_index) ? 48 : 0;
 			bg = state->theme.menu_item_sel_bg;
 			fg = state->theme.menu_item_sel_fg;
-			row_font = &state->hilite_font;
+			row_font = state->window_list_mode ? &state->font : &state->hilite_font;
 			as_buffer_fill_style_rect(buf,
 			                          list_x,
 			                          y,
@@ -2437,15 +2472,9 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		}
 	}
 
-	/* Border + inner bevel (AfterStep-ish). Draw last so fills don't overwrite edges. */
-	if (buf->width >= 2 && buf->height >= 2) {
-		as_buffer_fill_rect(buf, 0, 0, buf->width, 1, state->theme.menu_border);
-		as_buffer_fill_rect(buf, 0, buf->height - 1, buf->width, 1, state->theme.menu_border);
-		as_buffer_fill_rect(buf, 0, 0, 1, buf->height, state->theme.menu_border);
-		as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, state->theme.menu_border);
-	}
-	if (buf->width >= 4 && buf->height >= 4)
-		as_buffer_draw_bevel_rect(buf, 1, 1, buf->width - 2, buf->height - 2, state->theme.menu_bg, false);
+	/* AfterStep bevel provides the visual "border" (no extra solid outline). */
+	if (buf->width >= 2 && buf->height >= 2)
+		as_buffer_draw_bevel_rect(buf, 0, 0, buf->width, buf->height, state->theme.menu_bg, false);
 }
 
 static void draw_and_commit(struct as_state *state)
@@ -3674,7 +3703,7 @@ static void control_window(void *data,
 		return;
 	if (state->current_workspace != 0 && workspace != state->current_workspace)
 		return;
-	if (app_id != NULL && strcmp(app_id, "afterstep.aswlmenu") == 0)
+	if (app_id != NULL && strncmp(app_id, "afterstep.aswl", 13) == 0)
 		return;
 
 	const char *label = NULL;
@@ -3986,8 +4015,14 @@ int main(int argc, char **argv)
 	const char *header_font_spec = font_spec;
 	const char *hilite_font_spec = font_spec;
 	if (!env_override) {
-		if (state.theme.menu_title_font != NULL && state.theme.menu_title_font[0] != '\0')
+		if (state.window_list_mode) {
+			if (state.theme.frame_font != NULL && state.theme.frame_font[0] != '\0')
+				header_font_spec = state.theme.frame_font;
+			else if (state.theme.menu_title_font != NULL && state.theme.menu_title_font[0] != '\0')
+				header_font_spec = state.theme.menu_title_font;
+		} else if (state.theme.menu_title_font != NULL && state.theme.menu_title_font[0] != '\0') {
 			header_font_spec = state.theme.menu_title_font;
+		}
 		if (state.theme.menu_hilite_font != NULL && state.theme.menu_hilite_font[0] != '\0')
 			hilite_font_spec = state.theme.menu_hilite_font;
 	}

@@ -28,6 +28,10 @@
 #include "aswlicon.h"
 #include "aswlfont.h"
 
+#if HAVE_AFTERIMAGE
+#include "afterimage.h"
+#endif
+
 /* Avoid pulling in linux headers just for BTN_LEFT. */
 #ifndef BTN_LEFT
 #define BTN_LEFT 0x110
@@ -346,13 +350,31 @@ static void as_buffer_paint_vertical_gradient(struct as_buffer *buf, uint32_t to
 	}
 }
 
-static double as_gradient_t(int type, int x, int y, int w, int h)
-{
-	if (w <= 1)
-		w = 1;
-	if (h <= 1)
-		h = 1;
+#if HAVE_AFTERIMAGE
+struct as_gradient_cache_entry {
+	const struct aswl_gradient *grad;
+	int width;
+	int height;
+	uint32_t *argb;
+	uint64_t last_use;
+};
 
+enum { AS_GRADIENT_CACHE_MAX = 16 };
+
+static struct as_gradient_cache_entry gradient_cache[AS_GRADIENT_CACHE_MAX];
+static uint64_t gradient_cache_tick = 0;
+
+static void as_gradient_cache_destroy(void)
+{
+	for (size_t i = 0; i < sizeof(gradient_cache) / sizeof(gradient_cache[0]); i++) {
+		free(gradient_cache[i].argb);
+		gradient_cache[i] = (struct as_gradient_cache_entry){ 0 };
+	}
+	gradient_cache_tick = 0;
+}
+
+static int as_afterimage_gradient_type(int type)
+{
 	/* Normalize the legacy aliases AfterStep documents. */
 	switch (type) {
 	case 1:
@@ -368,90 +390,149 @@ static double as_gradient_t(int type, int x, int y, int w, int h)
 		break;
 	}
 
-	double fx = (double)x;
-	double fy = (double)y;
-	double fw = (double)(w - 1);
-	double fh = (double)(h - 1);
-
 	switch (type) {
-	case 6: /* Top-left -> bottom-right */
-	{
-		double denom = fw + fh;
-		if (denom <= 0.0)
-			return 0.0;
-		return (fx + fy) / denom;
-	}
-	case 7: /* Bottom-left -> top-right */
-	{
-		double denom = fw + fh;
-		if (denom <= 0.0)
-			return 0.0;
-		return (fx + (fh - fy)) / denom;
-	}
-	case 8: /* Top -> bottom */
-		if (fh <= 0.0)
-			return 0.0;
-		return fy / fh;
-	case 9: /* Left -> right */
-		if (fw <= 0.0)
-			return 0.0;
-		return fx / fw;
-	case 3: /* Top/bottom -> center */
-	{
-		double mid = fh / 2.0;
-		if (mid <= 0.0)
-			return 0.0;
-		double d = (fy > mid) ? (fy - mid) : (mid - fy);
-		double t = 1.0 - (d / mid);
-		return t < 0.0 ? 0.0 : t;
-	}
-	case 5: /* Left/right -> center */
-	{
-		double mid = fw / 2.0;
-		if (mid <= 0.0)
-			return 0.0;
-		double d = (fx > mid) ? (fx - mid) : (mid - fx);
-		double t = 1.0 - (d / mid);
-		return t < 0.0 ? 0.0 : t;
-	}
+	case 6:
+		return GRADIENT_TopLeft2BottomRight;
+	case 7:
+		return GRADIENT_BottomLeft2TopRight;
+	case 8:
+		return GRADIENT_Top2Bottom;
+	case 9:
+		return GRADIENT_Left2Right;
 	default:
-		/* Unknown type: treat as a solid fill using the first stop. */
-		return 0.0;
+		return -1;
 	}
 }
 
-static uint32_t as_gradient_sample(const struct aswl_gradient *grad, double t)
+static uint32_t *as_afterimage_make_gradient_argb(const struct aswl_gradient *grad, int width, int height)
 {
 	if (!aswl_gradient_is_valid(grad))
-		return 0;
+		return NULL;
+	if (width <= 0 || height <= 0)
+		return NULL;
 
-	if (t <= grad->offsets[0])
-		return grad->colors[0];
-	if (t >= grad->offsets[grad->count - 1])
-		return grad->colors[grad->count - 1];
+	int ai_type = as_afterimage_gradient_type(grad->type);
+	if (ai_type < 0)
+		return NULL;
 
-	for (size_t i = 0; i + 1 < grad->count; i++) {
-		double a = grad->offsets[i];
-		double b = grad->offsets[i + 1];
-		if (t > b)
-			continue;
+	if (grad->count < 2 || grad->count > 1024)
+		return NULL;
 
-		double span = b - a;
-		if (span <= 0.0)
-			return grad->colors[i + 1];
+	ASGradient ai_grad = { 0 };
+	ai_grad.type = ai_type;
+	ai_grad.npoints = (int)grad->count;
 
-		double local = (t - a) / span;
-		if (local < 0.0)
-			local = 0.0;
-		if (local > 1.0)
-			local = 1.0;
-
-		uint8_t tt = (uint8_t)(local * 255.0 + 0.5);
-		return aswl_color_blend(grad->colors[i], grad->colors[i + 1], tt);
+	ai_grad.color = calloc(grad->count, sizeof(ARGB32));
+	ai_grad.offset = calloc(grad->count, sizeof(double));
+	if (ai_grad.color == NULL || ai_grad.offset == NULL) {
+		free(ai_grad.color);
+		free(ai_grad.offset);
+		return NULL;
 	}
 
-	return grad->colors[grad->count - 1];
+	for (size_t i = 0; i < grad->count; i++) {
+		ai_grad.color[i] = (ARGB32)grad->colors[i];
+		ai_grad.offset[i] = grad->offsets[i];
+	}
+
+	ASImage *im =
+		make_gradient(NULL, &ai_grad, width, height, SCL_DO_ALL, ASA_ASImage, 0, ASIMAGE_QUALITY_DEFAULT);
+
+	free(ai_grad.color);
+	free(ai_grad.offset);
+
+	if (im == NULL)
+		return NULL;
+
+	uint8_t fill_r = ARGB32_RED8(im->back_color);
+	uint8_t fill_g = ARGB32_GREEN8(im->back_color);
+	uint8_t fill_b = ARGB32_BLUE8(im->back_color);
+	uint8_t fill_a = ARGB32_ALPHA8(im->back_color);
+
+	uint32_t *argb = calloc((size_t)width * (size_t)height, sizeof(uint32_t));
+	CARD32 *red = calloc((size_t)width, sizeof(CARD32));
+	CARD32 *green = calloc((size_t)width, sizeof(CARD32));
+	CARD32 *blue = calloc((size_t)width, sizeof(CARD32));
+	CARD32 *alpha = calloc((size_t)width, sizeof(CARD32));
+
+	if (argb == NULL || red == NULL || green == NULL || blue == NULL || alpha == NULL) {
+		free(argb);
+		free(red);
+		free(green);
+		free(blue);
+		free(alpha);
+		destroy_asimage(&im);
+		return NULL;
+	}
+
+	for (int y = 0; y < height; y++) {
+		int n_r = asimage_decode_line(im, IC_RED, red, (unsigned)y, 0, (unsigned)width);
+		int n_g = asimage_decode_line(im, IC_GREEN, green, (unsigned)y, 0, (unsigned)width);
+		int n_b = asimage_decode_line(im, IC_BLUE, blue, (unsigned)y, 0, (unsigned)width);
+		int n_a = asimage_decode_line(im, IC_ALPHA, alpha, (unsigned)y, 0, (unsigned)width);
+
+		for (int x = 0; x < width; x++) {
+			uint32_t r = (x < n_r) ? (red[x] & 0xFFu) : (uint32_t)fill_r;
+			uint32_t g = (x < n_g) ? (green[x] & 0xFFu) : (uint32_t)fill_g;
+			uint32_t b = (x < n_b) ? (blue[x] & 0xFFu) : (uint32_t)fill_b;
+			uint32_t a = (x < n_a) ? (alpha[x] & 0xFFu) : (uint32_t)fill_a;
+
+			argb[(size_t)y * (size_t)width + (size_t)x] = (a << 24) | (r << 16) | (g << 8) | b;
+		}
+	}
+
+	free(red);
+	free(green);
+	free(blue);
+	free(alpha);
+	destroy_asimage(&im);
+	return argb;
 }
+
+static const uint32_t *as_gradient_cache_get(const struct aswl_gradient *grad, int width, int height)
+{
+	if (!aswl_gradient_is_valid(grad) || width <= 0 || height <= 0)
+		return NULL;
+
+	gradient_cache_tick++;
+	uint64_t now = gradient_cache_tick;
+
+	struct as_gradient_cache_entry *oldest = NULL;
+	struct as_gradient_cache_entry *slot = NULL;
+
+	for (size_t i = 0; i < sizeof(gradient_cache) / sizeof(gradient_cache[0]); i++) {
+		struct as_gradient_cache_entry *ent = &gradient_cache[i];
+		if (ent->argb != NULL && ent->grad == grad && ent->width == width && ent->height == height) {
+			ent->last_use = now;
+			return ent->argb;
+		}
+
+		if (ent->argb == NULL && slot == NULL)
+			slot = ent;
+		if (ent->argb != NULL && (oldest == NULL || ent->last_use < oldest->last_use))
+			oldest = ent;
+	}
+
+	if (slot == NULL)
+		slot = oldest;
+	if (slot == NULL)
+		return NULL;
+
+	free(slot->argb);
+	*slot = (struct as_gradient_cache_entry){ 0 };
+
+	uint32_t *argb = as_afterimage_make_gradient_argb(grad, width, height);
+	if (argb == NULL)
+		return NULL;
+
+	slot->grad = grad;
+	slot->width = width;
+	slot->height = height;
+	slot->argb = argb;
+	slot->last_use = now;
+	return slot->argb;
+}
+#endif
 
 static void as_buffer_fill_style_rect(struct as_buffer *buf,
                                       int x,
@@ -475,6 +556,39 @@ static void as_buffer_fill_style_rect(struct as_buffer *buf,
 		return;
 	}
 
+#if HAVE_AFTERIMAGE
+	const uint32_t *src = as_gradient_cache_get(grad, w, h);
+	if (src == NULL) {
+		as_buffer_fill_rect(buf, x, y, w, h, base_argb);
+		return;
+	}
+
+	int x1 = x;
+	int y1 = y;
+	int x2 = x + w;
+	int y2 = y + h;
+	if (x1 < 0)
+		x1 = 0;
+	if (y1 < 0)
+		y1 = 0;
+	if (x2 > buf->width)
+		x2 = buf->width;
+	if (y2 > buf->height)
+		y2 = buf->height;
+	if (x2 <= x1 || y2 <= y1)
+		return;
+
+	for (int yy = y1; yy < y2; yy++) {
+		uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)yy * (size_t)buf->stride);
+		const uint32_t *src_row = src + (size_t)(yy - y) * (size_t)w + (size_t)(x1 - x);
+		for (int xx = x1; xx < x2; xx++) {
+			uint32_t c = src_row[xx - x1];
+			if (nudge != 0)
+				c = aswl_color_nudge(c, nudge);
+			row[xx] = as_premul_argb(c);
+		}
+	}
+#else
 	int x1 = x;
 	int y1 = y;
 	int x2 = x + w;
@@ -493,13 +607,13 @@ static void as_buffer_fill_style_rect(struct as_buffer *buf,
 	for (int yy = y1; yy < y2; yy++) {
 		uint32_t *row = (uint32_t *)((uint8_t *)buf->data + (size_t)yy * (size_t)buf->stride);
 		for (int xx = x1; xx < x2; xx++) {
-			double t = as_gradient_t(grad->type, xx - x, yy - y, w, h);
-			uint32_t c = as_gradient_sample(grad, t);
+			uint32_t c = grad->colors[0];
 			if (nudge != 0)
 				c = aswl_color_nudge(c, nudge);
 			row[xx] = as_premul_argb(c);
 		}
 	}
+#endif
 }
 
 static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t argb)
@@ -543,8 +657,6 @@ static void as_buffer_draw_bevel_rect(struct as_buffer *buf, int x, int y, int w
 	if (w <= 1 || h <= 1)
 		return;
 
-	(void)base_argb;
-
 	int x1 = x;
 	int y1 = y;
 	int x2 = x + w;
@@ -568,36 +680,38 @@ static void as_buffer_draw_bevel_rect(struct as_buffer *buf, int x, int y, int w
 	int left = x1;
 	int right = x2 - 1;
 
-	/* Top edge */
-	{
-		uint32_t *row = pixels + (size_t)top * (size_t)stride_px;
-		for (int xx = left; xx <= right; xx++) {
-			uint32_t base = as_unpremul_argb(row[xx]);
-			uint32_t c = sunken ? aswl_color_darken(base, 120) : aswl_color_lighten(base, 64);
-			row[xx] = as_premul_argb(c);
-		}
+	uint32_t relief_fore = aswl_color_hilite(base_argb);
+	uint32_t relief_back = aswl_color_shadow(base_argb);
+
+	uint32_t hi_color = sunken ? relief_back : relief_fore;
+	uint32_t lo_color = sunken ? relief_fore : relief_back;
+	uint32_t hihi_color = aswl_color_hilite(relief_fore);
+	uint32_t lolo_color = relief_back;
+	uint32_t hilo_color = aswl_color_average(hi_color, lo_color);
+
+	uint32_t hi_premul = as_premul_argb(hi_color);
+	uint32_t lo_premul = as_premul_argb(lo_color);
+
+	/* Top/bottom edges */
+	uint32_t *row_top = pixels + (size_t)top * (size_t)stride_px;
+	uint32_t *row_bot = pixels + (size_t)bottom * (size_t)stride_px;
+	for (int xx = left; xx <= right; xx++) {
+		row_top[xx] = hi_premul;
+		row_bot[xx] = lo_premul;
 	}
 
-	/* Bottom edge */
-	{
-		uint32_t *row = pixels + (size_t)bottom * (size_t)stride_px;
-		for (int xx = left; xx <= right; xx++) {
-			uint32_t base = as_unpremul_argb(row[xx]);
-			uint32_t c = sunken ? aswl_color_lighten(base, 64) : aswl_color_darken(base, 120);
-			row[xx] = as_premul_argb(c);
-		}
-	}
-
-	/* Left/right edges (excluding corners to avoid double-darkening). */
+	/* Left/right edges (excluding corners). */
 	for (int yy = top + 1; yy <= bottom - 1; yy++) {
 		uint32_t *row = pixels + (size_t)yy * (size_t)stride_px;
-		uint32_t base_l = as_unpremul_argb(row[left]);
-		uint32_t base_r = as_unpremul_argb(row[right]);
-		uint32_t c_l = sunken ? aswl_color_darken(base_l, 120) : aswl_color_lighten(base_l, 64);
-		uint32_t c_r = sunken ? aswl_color_lighten(base_r, 64) : aswl_color_darken(base_r, 120);
-		row[left] = as_premul_argb(c_l);
-		row[right] = as_premul_argb(c_r);
+		row[left] = hi_premul;
+		row[right] = lo_premul;
 	}
+
+	/* Corners. */
+	row_top[left] = as_premul_argb(sunken ? lolo_color : hihi_color);
+	row_top[right] = as_premul_argb(hilo_color);
+	row_bot[left] = as_premul_argb(hilo_color);
+	row_bot[right] = as_premul_argb(sunken ? hihi_color : lolo_color);
 }
 
 static void as_buffer_blend_pixel(struct as_buffer *buf, int x, int y, uint32_t src_argb)
@@ -928,18 +1042,25 @@ static int as_state_calc_dock_main_axis_size(const struct as_state *state)
 		return 0;
 
 	/* Keep in sync with as_state_get_layout() for dock mode. */
-	const int pad = 2;
-	const int spacing = 2;
+	const int pad = 0;
+	const int spacing = 0;
+	const int dock_tile = 64;
+	const int max_gutter = 8;
 
-	int cross = 0;
+	int cross_raw = 0;
 	if (as_panel_edge_is_vertical(state->edge)) {
-		cross = state->width - 2 * pad;
+		cross_raw = state->width - 2 * pad;
 	} else {
-		cross = state->height - 2 * pad;
+		cross_raw = state->height - 2 * pad;
 	}
 
-	if (cross < 0)
-		cross = 0;
+	if (cross_raw < 0)
+		cross_raw = 0;
+
+	int cross = cross_raw;
+	int gutter = cross_raw - dock_tile;
+	if (gutter > 0 && gutter <= max_gutter)
+		cross = dock_tile;
 
 	return 2 * pad + (int)state->button_count * cross + (int)(state->button_count - 1) * spacing;
 }
@@ -1786,6 +1907,7 @@ struct as_layout {
 	int spacing;
 	int cross;
 	int row;
+	int dock_gutter;
 	int icon_pad;
 	int icon_size;
 	int text_gap;
@@ -1806,13 +1928,30 @@ static bool as_state_get_layout(struct as_state *state, struct as_layout *layout
 	if (state->dock_mode) {
 		layout->pad = 0;
 		layout->spacing = 0;
+	} else if (state->pager_mode && layout->vertical) {
+		/* Pager should match X11's tight desk borders (no outer padding). */
+		layout->pad = 0;
+		layout->spacing = 0;
 	} else {
 		layout->pad = 6;
 		layout->spacing = 6;
 	}
-	layout->cross = layout->vertical ? (state->width - 2 * layout->pad) : (state->height - 2 * layout->pad);
-	if (layout->cross <= 0)
+
+	int cross_raw = layout->vertical ? (state->width - 2 * layout->pad) : (state->height - 2 * layout->pad);
+	if (cross_raw <= 0)
 		return false;
+
+	layout->cross = cross_raw;
+	layout->dock_gutter = 0;
+	if (state->dock_mode) {
+		const int dock_tile = 64;
+		const int max_gutter = 8;
+		int gutter = cross_raw - dock_tile;
+		if (gutter > 0 && gutter <= max_gutter) {
+			layout->cross = dock_tile;
+			layout->dock_gutter = gutter;
+		}
+	}
 
 	layout->row = layout->cross;
 	if (layout->vertical && !state->dock_mode) {
@@ -1952,6 +2091,15 @@ static int as_state_window_main_size(struct as_state *state, const struct as_lay
 
 	if (layout->vertical)
 		return layout->text_h + 2 * layout->icon_pad;
+
+	if (state->window_list_focused_only && state->button_count == 0) {
+		/*
+		 * The classic AfterStep WinList strip is a single, full-width frame with
+		 * the focused window title right-aligned. Match that look by forcing the
+		 * entry to span the available main axis.
+		 */
+		return layout->max_main;
+	}
 
 	const char *label = as_window_label(win);
 	(void)aswl_font_set_scale(&state->font, layout->text_scale);
@@ -2105,6 +2253,7 @@ static int as_state_hit_test(struct as_state *state, int x, int y)
 
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
+	bool pager_panel = (state->pager_mode && as_panel_edge_is_vertical(state->edge) && !state->dock_mode);
 	bool winlist_strip = (!state->dock_mode && state->button_count == 0 && state->window_list_focused_only);
 	bool winlist_has_window = winlist_strip && (as_state_visible_window_nth(state, 0) != NULL);
 	const struct aswl_gradient *bg_grad = &state->theme.panel_bg_gradient;
@@ -2115,19 +2264,24 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		bg_color = state->theme.frame_inactive_bg;
 	}
 
-	if (aswl_gradient_is_valid(bg_grad)) {
-		as_buffer_fill_style_rect(buf,
-		                          0,
-		                          0,
-		                          buf->width,
-		                          buf->height,
-		                          bg_grad,
-		                          bg_color,
-		                          0);
+	if (pager_panel) {
+		/* Pager tiles can be translucent; start with a fully transparent surface so the wallpaper shows through. */
+		as_buffer_fill_rect(buf, 0, 0, buf->width, buf->height, 0x00000000u);
 	} else {
-		uint32_t grad_top = aswl_color_lighten(bg_color, 24);
-		uint32_t grad_bot = aswl_color_darken(bg_color, 24);
-		as_buffer_paint_vertical_gradient(buf, grad_top, grad_bot);
+		if (aswl_gradient_is_valid(bg_grad)) {
+			as_buffer_fill_style_rect(buf,
+			                          0,
+			                          0,
+			                          buf->width,
+			                          buf->height,
+			                          bg_grad,
+			                          bg_color,
+			                          0);
+		} else {
+			uint32_t grad_top = aswl_color_lighten(bg_color, 24);
+			uint32_t grad_bot = aswl_color_darken(bg_color, 24);
+			as_buffer_paint_vertical_gradient(buf, grad_top, grad_bot);
+		}
 	}
 
 	struct as_layout layout;
@@ -2143,341 +2297,232 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	int ry = layout.pad;
 
 	if (state->pager_mode && layout.vertical && !state->dock_mode) {
+		int cols = state->pager_columns > 0 ? state->pager_columns : 2;
+		int rows = state->pager_rows > 0 ? state->pager_rows : 2;
+		if (cols < 1)
+			cols = 1;
+		if (rows < 1)
+			rows = 1;
+
+		/* X11 pager look: tight stacked desks with black borders, a styled title bar, translucent desk background, grid,
+		 * and a viewport selection frame.
+		 */
+		const int desk_border = 1;
+		uint32_t border_color = state->theme.pager_border;
+		if ((border_color >> 24) == 0)
+			border_color = 0xFF000000u;
+		uint32_t grid_color = state->theme.pager_grid;
+		if ((grid_color >> 24) == 0)
+			grid_color = 0xFF2D3332u;
+		uint32_t selection_color = state->theme.pager_selection;
+		if ((selection_color >> 24) == 0)
+			selection_color = 0xFFCCAD8Du;
+
 		size_t ws_count = 0;
-		size_t nav_count = 0;
 		for (size_t i = 0; i < state->button_count; i++) {
 			if (as_command_parse_workspace_target(state->buttons[i].command, NULL))
 				ws_count++;
-			else
-				nav_count++;
 		}
+		if (ws_count == 0)
+			return;
 
-		int nav_h = clamp_int(state->item_height > 0 ? state->item_height : 48, 24, 128);
-		int nav_total = (int)nav_count * nav_h + (nav_count > 0 ? (int)(nav_count - 1) * layout.spacing : 0);
-		int nav_y0 = state->height - layout.pad - nav_total;
+		int total_span = buf->height - 1;
+		int w = buf->width;
+		int right = w - 1;
 
-		int workspace_area_h = nav_y0 - layout.pad;
-		if (ws_count > 0 && nav_count > 0)
-			workspace_area_h -= layout.spacing;
-
-		int tile_h = 0;
-		if (ws_count > 0)
-			tile_h = (workspace_area_h - (int)(ws_count - 1) * layout.spacing) / (int)ws_count;
-		if (tile_h < 24)
-			tile_h = 24;
-
+		size_t ws_pos = 0;
 		for (size_t i = 0; i < state->button_count; i++) {
-			int idx = (int)i;
 			uint32_t ws_target = 0;
-			bool is_ws = as_command_parse_workspace_target(state->buttons[i].command, &ws_target);
-			bool active_ws = is_ws && ws_target == state->current_workspace;
+			if (!as_command_parse_workspace_target(state->buttons[i].command, &ws_target))
+				continue;
 
-			uint32_t base_bg = state->theme.panel_button_bg;
-			uint32_t base_fg = state->theme.panel_button_fg;
-			if (is_ws) {
-				if (active_ws) {
-					base_bg = state->theme.panel_ws_active_bg;
-					base_fg = state->theme.panel_ws_active_fg;
-				} else {
-					base_bg = state->theme.panel_ws_inactive_bg;
-					base_fg = state->theme.panel_ws_inactive_fg;
-				}
+			bool active_ws = ws_target == state->current_workspace;
+
+			int y0 = (int)((int64_t)total_span * (int64_t)ws_pos / (int64_t)ws_count);
+			int y1 = (int)((int64_t)total_span * (int64_t)(ws_pos + 1) / (int64_t)ws_count);
+			int desk_h = y1 - y0 + 1;
+
+			/* Desk border. */
+			as_buffer_fill_rect(buf, 0, y0, w, 1, border_color);
+			as_buffer_fill_rect(buf, 0, y1, w, 1, border_color);
+			as_buffer_fill_rect(buf, 0, y0, 1, desk_h, border_color);
+			as_buffer_fill_rect(buf, right, y0, 1, desk_h, border_color);
+
+			int inner_x = desk_border;
+			int inner_y = y0 + desk_border;
+			int inner_w = w - 2 * desk_border;
+			int inner_h = desk_h - 2 * desk_border;
+			if (inner_w <= 0 || inner_h <= 0) {
+				ws_pos++;
+				continue;
 			}
 
-			uint8_t nudge = 0;
-			if (idx == state->pressed_index)
-				nudge = 48;
-			else if (idx == state->hover_index)
-				nudge = 24;
+			int min_title_h = text_h + 2 * layout.icon_pad;
+			int title_h = clamp_int(21, min_title_h, inner_h);
 
-			int bx = layout.pad;
-			int by = layout.pad;
-			int bw = layout.cross;
-			int bh = nav_h;
+				const struct aswl_gradient *title_grad =
+					active_ws ? &state->theme.panel_ws_active_gradient : &state->theme.panel_ws_inactive_gradient;
+				uint32_t title_bg = active_ws ? state->theme.panel_ws_active_bg : state->theme.panel_ws_inactive_bg;
+				uint32_t title_fg = active_ws ? state->theme.panel_ws_active_fg : state->theme.panel_ws_inactive_fg;
+				as_buffer_fill_style_rect(buf, inner_x, inner_y, inner_w, title_h, title_grad, title_bg, 0);
+				as_buffer_draw_bevel_rect(buf, inner_x, inner_y, inner_w, title_h, title_bg, false);
 
-			if (is_ws && tile_h > 0) {
-				size_t pos = 0;
-				for (size_t j = 0; j < i; j++) {
-					if (as_command_parse_workspace_target(state->buttons[j].command, NULL))
-						pos++;
-				}
-				by = layout.pad + (int)pos * (tile_h + layout.spacing);
-				bh = tile_h;
-			} else if (!is_ws) {
-				size_t pos = 0;
-				for (size_t j = 0; j < i; j++) {
-					if (!as_command_parse_workspace_target(state->buttons[j].command, NULL))
-						pos++;
-				}
-				by = nav_y0 + (int)pos * (nav_h + layout.spacing);
-				bh = nav_h;
-			} else {
-				bh = nav_h;
-			}
-
-			const struct aswl_gradient *grad = &state->theme.panel_button_gradient;
-			if (is_ws) {
-				grad = active_ws ? &state->theme.panel_ws_active_gradient : &state->theme.panel_ws_inactive_gradient;
-			}
-
-			as_buffer_fill_style_rect(buf, bx, by, bw, bh, grad, base_bg, nudge);
-			uint32_t bevel_bg = nudge != 0 ? aswl_color_nudge(base_bg, nudge) : base_bg;
-			as_buffer_draw_bevel_rect(buf, bx, by, bw, bh, bevel_bg, idx == state->pressed_index);
-
-			if (is_ws && bh >= 80) {
-				int header_h = clamp_int(text_h + 2 * layout.icon_pad, 18, 48);
-				uint32_t header_bg = aswl_color_darken(bevel_bg, 24);
-				as_buffer_fill_rect(buf, bx, by, bw, header_h, header_bg);
-				as_buffer_draw_bevel_rect(buf, bx, by, bw, header_h, header_bg, true);
-
+				const char *label = state->buttons[i].label != NULL ? state->buttons[i].label : "";
+				int label_w = aswl_font_text_width(&state->font, label);
 				int tx_pad = layout.icon_pad;
-				int label_tw = bw - 2 * tx_pad;
-				int tx = bx + tx_pad;
-				int tw = label_tw;
-				int label_w = aswl_font_text_width(&state->font, state->buttons[i].label);
-				if (label_w > 0 && label_w < label_tw) {
-					tx = bx + bw - tx_pad - label_w;
-					tw = label_w;
-					}
-					int ty = by + (header_h - text_h) / 2;
-					if (tw > 0) {
-						aswl_font_draw_text(&state->font,
-						                    pixels,
-						                    buf->width,
-						                    buf->height,
-					                    stride_px,
-					                    tx,
-					                    ty,
-						                    state->buttons[i].label,
-						                    tw,
-						                    base_fg);
-					}
-
-					int px = bx + layout.icon_pad;
-					int py = by + header_h + layout.icon_pad;
-					int pw = bw - 2 * layout.icon_pad;
-					int ph = bh - header_h - 2 * layout.icon_pad;
-					if (pw > 0 && ph > 0) {
-						const struct aswl_gradient *desk_grad =
-							aswl_gradient_is_valid(&state->theme.desk_gradient) ? &state->theme.desk_gradient : NULL;
-						uint32_t pane_bg = state->theme.desk_bg != 0 ? state->theme.desk_bg :
-						                                             aswl_color_darken(state->theme.panel_bg, 16);
-						as_buffer_fill_style_rect(buf, px, py, pw, ph, desk_grad, pane_bg, 0);
-						as_buffer_draw_bevel_rect(buf, px, py, pw, ph, pane_bg, true);
-
-						if (state->pager_columns > 1 || state->pager_rows > 1) {
-						uint32_t grid = aswl_color_darken(pane_bg, 90);
-						if (state->pager_columns > 1) {
-							for (int c = 1; c < state->pager_columns; c++) {
-								int gx = px + (int)((int64_t)c * pw / state->pager_columns);
-								as_buffer_fill_rect(buf, gx, py, 1, ph, grid);
-							}
-						}
-						if (state->pager_rows > 1) {
-							for (int r = 1; r < state->pager_rows; r++) {
-								int gy = py + (int)((int64_t)r * ph / state->pager_rows);
-								as_buffer_fill_rect(buf, px, gy, pw, 1, grid);
-							}
-						}
-					}
-
-					int ow = state->output_width;
-					int oh = state->output_height;
-
-					if (ow > 0 && oh > 0) {
-						for (size_t widx = 0; widx < state->window_count; widx++) {
-							const struct as_window *win = &state->windows[widx];
-							if ((win->flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
-								continue;
-							if (win->workspace != ws_target)
-								continue;
-							if (win->w <= 0 || win->h <= 0)
-								continue;
-
-							int sx = px + (int)((int64_t)win->x * pw / ow);
-							int sy = py + (int)((int64_t)win->y * ph / oh);
-							int sw = (int)((int64_t)win->w * pw / ow);
-							int sh = (int)((int64_t)win->h * ph / oh);
-							if (sw < 4)
-								sw = 4;
-							if (sh < 4)
-								sh = 4;
-
-							int x0 = sx;
-							int y0 = sy;
-							int x1 = sx + sw;
-							int y1 = sy + sh;
-
-							int cx0 = x0 < px ? px : x0;
-							int cy0 = y0 < py ? py : y0;
-							int cx1 = x1 > px + pw ? px + pw : x1;
-							int cy1 = y1 > py + ph ? py + ph : y1;
-							if (cx1 <= cx0 || cy1 <= cy0)
-								continue;
-
-							uint32_t win_bg = aswl_color_lighten(pane_bg, 22);
-							if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0)
-								win_bg = aswl_color_blend(win_bg, state->theme.panel_ws_active_bg, 80);
-
-							int rw = cx1 - cx0;
-							int rh = cy1 - cy0;
-							as_buffer_fill_rect(buf, cx0, cy0, rw, rh, win_bg);
-							as_buffer_draw_bevel_rect(buf, cx0, cy0, rw, rh, win_bg, false);
-
-							if (rh >= 8) {
-								int th = 3;
-								if (th > rh)
-									th = rh;
-								uint32_t title_bg = aswl_color_darken(win_bg, 48);
-								as_buffer_fill_rect(buf, cx0, cy0, rw, th, title_bg);
-							}
-						}
-					} else {
-						/* Fallback: show up to 9 markers per workspace. */
-						size_t win_count = 0;
-						for (size_t widx = 0; widx < state->window_count; widx++) {
-							const struct as_window *win = &state->windows[widx];
-							if ((win->flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
-								continue;
-							if (win->workspace != ws_target)
-								continue;
-							win_count++;
-						}
-
-						int marker_w = 14;
-						int marker_h = 10;
-						int marker_gap = 4;
-						int max_markers = 9;
-						if (win_count > (size_t)max_markers)
-							win_count = (size_t)max_markers;
-
-						for (size_t m = 0; m < win_count; m++) {
-							int col = (int)(m % 3);
-							int row = (int)(m / 3);
-							int mx = px + layout.icon_pad + col * (marker_w + marker_gap);
-							int my = py + layout.icon_pad + row * (marker_h + marker_gap);
-							if (mx + marker_w > px + pw - layout.icon_pad)
-								break;
-							if (my + marker_h > py + ph - layout.icon_pad)
-								break;
-
-							uint32_t marker_bg = aswl_color_lighten(pane_bg, 18);
-							as_buffer_fill_rect(buf, mx, my, marker_w, marker_h, marker_bg);
-							as_buffer_draw_bevel_rect(buf, mx, my, marker_w, marker_h, marker_bg, false);
-						}
-					}
-				}
-			} else if (is_ws && !state->dock_mode) {
-				/* Compact workspace row: pager preview + right-aligned label. */
-				int tx_pad = layout.icon_pad;
-				int label_w = aswl_font_text_width(&state->font, state->buttons[i].label);
-				int label_area = label_w > 0 ? (label_w + 2 * tx_pad) : 0;
-				int preview_gap = layout.text_gap > 0 ? layout.text_gap : 8;
-
-				int px = bx + layout.icon_pad;
-				int py = by + layout.icon_pad;
-				int ph = bh - 2 * layout.icon_pad;
-				int pw = bw - 2 * layout.icon_pad - (label_area > 0 ? (label_area + preview_gap) : 0);
-
-					if (pw > 0 && ph > 0) {
-						const struct aswl_gradient *desk_grad =
-							aswl_gradient_is_valid(&state->theme.desk_gradient) ? &state->theme.desk_gradient : NULL;
-						uint32_t pane_bg = state->theme.desk_bg != 0 ? state->theme.desk_bg : aswl_color_darken(bevel_bg, 18);
-						as_buffer_fill_style_rect(buf, px, py, pw, ph, desk_grad, pane_bg, 0);
-						as_buffer_draw_bevel_rect(buf, px, py, pw, ph, pane_bg, true);
-
-						int cols = state->pager_columns > 0 ? state->pager_columns : 2;
-					int rows = state->pager_rows > 0 ? state->pager_rows : 1;
-					uint32_t grid = aswl_color_darken(pane_bg, 90);
-					if (cols > 1) {
-						for (int c = 1; c < cols; c++) {
-							int gx = px + (int)((int64_t)c * pw / cols);
-							as_buffer_fill_rect(buf, gx, py, 1, ph, grid);
-						}
-					}
-					if (rows > 1) {
-						for (int r = 1; r < rows; r++) {
-							int gy = py + (int)((int64_t)r * ph / rows);
-							as_buffer_fill_rect(buf, px, gy, pw, 1, grid);
-						}
-					}
-				}
-
-				if (label_w > 0) {
-					int tx = bx + bw - tx_pad - label_w;
-					int ty = by + (bh - text_h) / 2;
-					aswl_font_draw_text(&state->font,
-					                    pixels,
-					                    buf->width,
-					                    buf->height,
-					                    stride_px,
-					                    tx,
-					                    ty,
-					                    state->buttons[i].label,
-					                    label_w,
-					                    base_fg);
-				}
-			} else if (!state->dock_mode) {
-				/* Compact button row (icon + label), reused for non-workspace controls. */
-				int is = bh - 2 * layout.icon_pad;
-				if (is > bw - 2 * layout.icon_pad)
-					is = bw - 2 * layout.icon_pad;
-				if (is < 0)
-					is = 0;
-
-				int ix = bx + layout.icon_pad;
-				int iy = by + (bh - is) / 2;
-
-				if (is > 0) {
-					uint32_t icon_bg = aswl_color_darken(bevel_bg, 32);
-					as_buffer_fill_rect(buf, ix, iy, is, is, icon_bg);
-					as_buffer_draw_bevel_rect(buf, ix, iy, is, is, icon_bg, idx == state->pressed_index);
-					if (state->buttons[i].icon_argb != NULL) {
-						int box = is - 4;
-						int dw = state->buttons[i].icon_w;
-						int dh = state->buttons[i].icon_h;
-						if (box > 0 && dw > 0 && dh > 0) {
-							if (dw > box || dh > box) {
-								double sx = (double)box / (double)dw;
-								double sy = (double)box / (double)dh;
-								double s = sx < sy ? sx : sy;
-								dw = (int)((double)dw * s + 0.5);
-								dh = (int)((double)dh * s + 0.5);
-								if (dw < 1)
-									dw = 1;
-								if (dh < 1)
-									dh = 1;
-							}
-
-							int px = ix + 2 + (box - dw) / 2;
-							int py = iy + 2 + (box - dh) / 2;
-							as_buffer_draw_image_bilinear(buf,
-							                             px,
-							                             py,
-							                             dw,
-							                             dh,
-							                             state->buttons[i].icon_argb,
-							                             state->buttons[i].icon_w,
-							                             state->buttons[i].icon_h);
-						}
-					}
-				}
-
-				int tx = bx + layout.icon_pad + is + layout.text_gap;
-				int tw = bw - (layout.icon_pad + is + layout.text_gap + layout.icon_pad);
-				int ty = by + (bh - text_h) / 2;
-				if (tw > 0)
-					aswl_font_draw_text(&state->font,
-					                    pixels,
-					                    buf->width,
-					                    buf->height,
-					                    stride_px,
-					                    tx,
-					                    ty,
-					                    state->buttons[i].label,
-					                    tw,
-					                    base_fg);
+				int label_tw = inner_w - 2 * tx_pad;
+			int tx = inner_x + tx_pad;
+			int tw = label_tw;
+			if (label_w > 0 && label_w < label_tw) {
+				tx = inner_x + inner_w - tx_pad - label_w;
+				tw = label_w;
 			}
+			int ty = inner_y + (title_h - text_h) / 2;
+			if (tw > 0) {
+				aswl_font_draw_text(&state->font,
+				                    pixels,
+				                    buf->width,
+				                    buf->height,
+				                    stride_px,
+				                    tx,
+				                    ty,
+				                    label,
+				                    tw,
+				                    title_fg);
+			}
+
+			int bg_x = inner_x;
+			int bg_y = inner_y + title_h;
+			int bg_w = inner_w;
+			int bg_h = inner_h - title_h;
+
+			if (bg_w > 0 && bg_h > 0) {
+				const struct aswl_gradient *desk_grad =
+					aswl_gradient_is_valid(&state->theme.desk_gradient) ? &state->theme.desk_gradient : NULL;
+				uint32_t desk_bg = state->theme.desk_bg != 0 ? state->theme.desk_bg : 0x77222222u;
+				as_buffer_fill_style_rect(buf, bg_x, bg_y, bg_w, bg_h, desk_grad, desk_bg, 0);
+
+				/* Mini-window markers (scale against full virtual screen size: output × pages). */
+				int ow = state->output_width;
+				int oh = state->output_height;
+				int64_t vsw = (ow > 0) ? (int64_t)ow * (int64_t)cols : 0;
+				int64_t vsh = (oh > 0) ? (int64_t)oh * (int64_t)rows : 0;
+
+				if (ow > 0 && oh > 0 && vsw > 0 && vsh > 0) {
+					for (size_t widx = 0; widx < state->window_count; widx++) {
+						const struct as_window *win = &state->windows[widx];
+						if ((win->flags & ASWL_WINDOW_FLAG_MAPPED) == 0)
+							continue;
+						if (win->workspace != ws_target)
+							continue;
+						if (win->w <= 0 || win->h <= 0)
+							continue;
+
+						int sx = bg_x + (int)((int64_t)win->x * (int64_t)bg_w / vsw);
+						int sy = bg_y + (int)((int64_t)win->y * (int64_t)bg_h / vsh);
+						int sw = (int)((int64_t)win->w * (int64_t)bg_w / vsw);
+						int sh = (int)((int64_t)win->h * (int64_t)bg_h / vsh);
+						if (sw < 2)
+							sw = 2;
+						if (sh < 2)
+							sh = 2;
+
+						int x0 = sx;
+						int y0w = sy;
+						int x1w = sx + sw;
+						int y1w = sy + sh;
+
+						int cx0 = x0 < bg_x ? bg_x : x0;
+						int cy0 = y0w < bg_y ? bg_y : y0w;
+						int cx1 = x1w > bg_x + bg_w ? bg_x + bg_w : x1w;
+						int cy1 = y1w > bg_y + bg_h ? bg_y + bg_h : y1w;
+						if (cx1 <= cx0 || cy1 <= cy0)
+							continue;
+
+						uint32_t win_bg = state->theme.frame_inactive_bg;
+						if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0)
+							win_bg = state->theme.frame_active_bg;
+						if ((win_bg >> 24) == 0)
+							win_bg = aswl_color_lighten(desk_bg, 24);
+
+						int rw = cx1 - cx0;
+						int rh = cy1 - cy0;
+						as_buffer_fill_rect(buf, cx0, cy0, rw, rh, win_bg);
+
+						if (rh >= 6) {
+							int th = 2;
+							if (th > rh)
+								th = rh;
+							uint32_t win_title_bg = aswl_color_darken(win_bg, 48);
+							as_buffer_fill_rect(buf, cx0, cy0, rw, th, win_title_bg);
+						}
+					}
+				}
+
+				/* Grid lines (drawn above client markers). */
+				if (cols > 1) {
+					for (int c = 1; c < cols; c++) {
+						int gx = bg_x + (int)((int64_t)bg_w * (int64_t)c / (int64_t)cols);
+						as_buffer_fill_rect(buf, gx, bg_y, 1, bg_h, grid_color);
+					}
+				}
+				if (rows > 1) {
+					for (int r = 1; r < rows; r++) {
+						int gy = bg_y + (int)((int64_t)bg_h * (int64_t)r / (int64_t)rows);
+						as_buffer_fill_rect(buf, bg_x, gy, bg_w, 1, grid_color);
+					}
+				}
+
+				/* Viewport selection frame (drawn on top). */
+				if (active_ws && cols >= 1 && rows >= 1) {
+					int page_w = bg_w / cols;
+					int page_h = bg_h / rows;
+					if (page_w < 1)
+						page_w = 1;
+					if (page_h < 1)
+						page_h = 1;
+
+					int sel_x = bg_x;
+					int sel_y = bg_y;
+
+					struct {
+						int x, y, w, h;
+					} bars[4] = {
+						{ sel_x - 1, sel_y - 1, page_w + 2, 1 },                 /* top */
+						{ sel_x - 1, sel_y - 1, 1, page_h + 2 },                 /* left */
+						{ sel_x - 1, sel_y + page_h + 1, page_w + 2, 1 },        /* bottom */
+						{ sel_x + page_w + 1, sel_y - 1, 1, page_h + 2 },        /* right */
+					};
+
+					/* Clip to desk interior so the black border stays intact. */
+					int clip_x0 = inner_x;
+					int clip_y0 = inner_y;
+					int clip_x1 = inner_x + inner_w;
+					int clip_y1 = y1 - desk_border + 1;
+					for (size_t b = 0; b < 4; b++) {
+						int bx0 = bars[b].x;
+						int by0 = bars[b].y;
+						int bx1 = bars[b].x + bars[b].w;
+						int by1 = bars[b].y + bars[b].h;
+
+						if (bx0 < clip_x0)
+							bx0 = clip_x0;
+						if (by0 < clip_y0)
+							by0 = clip_y0;
+						if (bx1 > clip_x1)
+							bx1 = clip_x1;
+						if (by1 > clip_y1)
+							by1 = clip_y1;
+
+						int bw = bx1 - bx0;
+						int bh = by1 - by0;
+						if (bw > 0 && bh > 0)
+							as_buffer_fill_rect(buf, bx0, by0, bw, bh, selection_color);
+					}
+				}
+			}
+
+			ws_pos++;
 		}
 
 		return;
@@ -2533,8 +2578,8 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		int iy = ry + layout.icon_pad;
 		if (is > 0) {
 			if (state->dock_mode) {
-				ix = rx + (rw - is) / 2;
-				iy = ry + (rh - is) / 2;
+				ix = rx + (rw - is) / 2 - 2;
+				iy = ry + (rh - is) / 2 - 2;
 			} else if (layout.vertical) {
 				ix = rx + layout.icon_pad;
 				iy = ry + (rh - is) / 2;
@@ -2550,42 +2595,43 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 				as_buffer_draw_bevel_rect(buf, ix, iy, is, is, icon_bg, idx == state->pressed_index);
 			}
 
-				bool drew_image = false;
-				const char *cmd = state->buttons[i].command;
-				if (state->dock_mode && cmd != NULL && cmd[0] == '@' && strncasecmp(cmd + 1, "clock", 5) == 0) {
-					char time_buf[16] = { 0 };
-					const char *clock_override = getenv("ASWLPANEL_CLOCK_OVERRIDE");
-					if (clock_override != NULL && clock_override[0] != '\0') {
-						snprintf(time_buf, sizeof(time_buf), "%s", clock_override);
-					} else {
-						time_t now = time(NULL);
-						struct tm tm_now;
-						if (localtime_r(&now, &tm_now) != NULL)
-							(void)strftime(time_buf, sizeof(time_buf), "%H:%M", &tm_now);
-					}
+			bool drew_image = false;
+			const char *cmd = state->buttons[i].command;
+			if (state->dock_mode && cmd != NULL && cmd[0] == '@' && strncasecmp(cmd + 1, "clock", 5) == 0) {
+				char time_buf[16] = { 0 };
+				const char *clock_override = getenv("ASWLPANEL_CLOCK_OVERRIDE");
+				if (clock_override != NULL && clock_override[0] != '\0') {
+					snprintf(time_buf, sizeof(time_buf), "%s", clock_override);
+				} else {
+					time_t now = time(NULL);
+					struct tm tm_now;
+					if (localtime_r(&now, &tm_now) != NULL)
+						(void)strftime(time_buf, sizeof(time_buf), "%H:%M", &tm_now);
+				}
 
-					if (time_buf[0] == '\0')
-						strcpy(time_buf, "--:--");
+				if (time_buf[0] == '\0')
+					strcpy(time_buf, "--:--");
 
-					/*
-					 * In classic AfterStep MonitorWharf, the clock is typically a
-					 * swallowed xclock (dark background + cyan digits). Mimic that
-					 * by drawing a dark inner rect inside the dock button.
-					 */
-					uint32_t clock_bg = 0xFF1A1A1A;
-					as_buffer_fill_rect(buf, ix, iy, is, is, clock_bg);
-					as_buffer_draw_bevel_rect(buf, ix, iy, is, is, clock_bg, idx == state->pressed_index);
+				/*
+				 * In classic AfterStep MonitorWharf, the clock is typically a
+				 * swallowed xclock (dark background + cyan digits). Mimic that
+				 * by letting the clock fully cover the dock tile.
+				 */
+				uint32_t clock_bg = 0xFF1A1A1A;
+				uint32_t clock_fg = 0xFF00FFFF;
+				as_buffer_fill_rect(buf, rx, ry, rw, rh, clock_bg);
 
-					(void)aswl_font_set_scale(&state->font, layout.text_scale);
-					int tw = aswl_font_text_width(&state->font, time_buf);
-					int maxw = is - 4;
-					if (maxw < 1)
-					maxw = is;
+				(void)aswl_font_set_scale(&state->font, layout.text_scale);
+				int tw = aswl_font_text_width(&state->font, time_buf);
+				int maxw = rw - 4;
+				if (maxw < 1)
+					maxw = rw;
 				int draw_w = tw;
 				if (draw_w < 1 || draw_w > maxw)
 					draw_w = maxw;
-				int tx = ix + (is - draw_w) / 2;
-				int ty = iy + (is - text_h) / 2;
+
+				int tx = rx + (rw - draw_w) / 2 + 2;
+				int ty = ry + (rh - text_h) / 4;
 				aswl_font_draw_text(&state->font,
 				                    pixels,
 				                    buf->width,
@@ -2595,7 +2641,78 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 				                    ty,
 				                    time_buf,
 				                    draw_w,
-				                    base_fg);
+				                    clock_fg);
+				drew_image = true;
+			} else if (state->dock_mode && cmd != NULL && cmd[0] == '@' && strncasecmp(cmd + 1, "xeyes", 5) == 0) {
+				/*
+				 * Classic MonitorWharf commonly swallows `xeyes` into a 64x64 tile.
+				 * We can't actually swallow Xwayland clients into this layer-shell
+				 * surface, but we can render a deterministic “xeyes-ish” tile.
+				 */
+				const uint32_t white = as_premul_argb(0xFFFFFFFF);
+				const uint32_t black = as_premul_argb(0xFF000000);
+
+				int bx = rx;
+				int by = ry;
+				int bw = rw;
+				int bh = rh;
+
+				int eye_area_w = bw - 6;
+				int eye_area_h = bh - 14;
+				if (eye_area_w > 0 && eye_area_h > 0) {
+					int eye_area_x = bx + (bw - eye_area_w) / 2;
+					int eye_area_y = by + (bh - eye_area_h) / 2;
+
+					int gap = clamp_int(bw / 6, 8, 14); /* 64px tile -> 10px gap */
+					int eye_w = (eye_area_w - gap) / 2;
+					int eye_h = eye_area_h;
+					if (eye_w > 0 && eye_h > 0) {
+						int cy = eye_area_y + eye_h / 2;
+						int left_x = eye_area_x;
+						int right_x = eye_area_x + eye_w + gap;
+						int left_cx = left_x + eye_w / 2;
+						int right_cx = right_x + eye_w / 2;
+
+						double erx = (double)eye_w / 2.0;
+						double ery = (double)eye_h / 2.0;
+						double outline_t = 0.85;
+
+						for (int eye_idx = 0; eye_idx < 2; eye_idx++) {
+							int ex = eye_idx == 0 ? left_x : right_x;
+							int ecx = eye_idx == 0 ? left_cx : right_cx;
+							for (int yy = eye_area_y; yy < eye_area_y + eye_h; yy++) {
+								uint32_t *row = pixels + yy * stride_px;
+								for (int xx = ex; xx < ex + eye_w; xx++) {
+									double dx = ((double)xx + 0.5 - (double)ecx) / erx;
+									double dy = ((double)yy + 0.5 - (double)cy) / ery;
+									double d = dx * dx + dy * dy;
+									if (d > 1.0)
+										continue;
+									row[xx] = (d >= outline_t) ? black : white;
+								}
+							}
+
+							int pupil_r = clamp_int(eye_w / 5, 3, 8);
+							int pupil_dy = clamp_int((eye_h + 15) / 18, 2, 4); /* 50px eye -> ~3px */
+							int pcx = ecx;
+							int pcy = cy + pupil_dy;
+							for (int yy = pcy - pupil_r; yy <= pcy + pupil_r; yy++) {
+								if (yy < 0 || yy >= buf->height)
+									continue;
+								int dy = yy - pcy;
+								uint32_t *row = pixels + yy * stride_px;
+								for (int xx = pcx - pupil_r; xx <= pcx + pupil_r; xx++) {
+									if (xx < 0 || xx >= buf->width)
+										continue;
+									int dx = xx - pcx;
+									if (dx * dx + dy * dy <= pupil_r * pupil_r)
+										row[xx] = black;
+								}
+							}
+						}
+					}
+				}
+
 				drew_image = true;
 			} else if (state->buttons[i].icon_argb != NULL && state->buttons[i].icon_w > 0 && state->buttons[i].icon_h > 0) {
 				int box = is - (draw_icon_frame ? 2 : 0);
@@ -2705,6 +2822,21 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 			rx += rw + layout.spacing;
 	}
 
+	/* AfterStep Wharf/MonitorWharf often has a one-sided bevel on the outer edge. */
+		if (state->dock_mode && layout.dock_gutter > 0 && state->edge == ASWL_PANEL_EDGE_RIGHT && layout.vertical) {
+			int gx = layout.pad + layout.cross;
+			int gy = layout.pad;
+			int gw = layout.dock_gutter;
+			int gh = buf->height - 2 * layout.pad;
+			if (gw > 0 && gh > 0 && gx >= 0 && gx + gw <= buf->width) {
+				uint32_t bg = state->theme.panel_bg;
+				uint32_t hi = aswl_color_hilite(bg);
+				uint32_t lo = aswl_color_shadow(bg);
+				as_buffer_fill_rect(buf, gx, gy, 1, gh, hi);
+				as_buffer_fill_rect(buf, gx + gw - 1, gy, 1, gh, lo);
+			}
+		}
+
 	if (state->dock_mode)
 		goto draw_border;
 
@@ -2721,7 +2853,10 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 
 		uint32_t base_bg = winlist_frame_style ? state->theme.frame_inactive_bg : state->theme.panel_button_bg;
 		uint32_t base_fg = winlist_frame_style ? state->theme.frame_inactive_fg : state->theme.panel_button_fg;
-		if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0) {
+		bool is_focused = (win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0;
+		if (winlist_strip)
+			is_focused = false;
+		if (is_focused) {
 			base_bg = winlist_frame_style ? state->theme.frame_active_bg : state->theme.panel_ws_active_bg;
 			base_fg = winlist_frame_style ? state->theme.frame_active_fg : state->theme.panel_ws_active_fg;
 		}
@@ -2747,7 +2882,7 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		int wy = layout.vertical ? win_y : ry;
 
 		const struct aswl_gradient *grad = winlist_frame_style ? &state->theme.frame_inactive_gradient : &state->theme.panel_button_gradient;
-		if ((win->flags & ASWL_WINDOW_FLAG_FOCUSED) != 0)
+		if (is_focused)
 			grad = winlist_frame_style ? &state->theme.frame_active_gradient : &state->theme.panel_ws_active_gradient;
 
 		as_buffer_fill_style_rect(buf, wx, wy, rw, rh, grad, base_bg, nudge);
@@ -2774,17 +2909,15 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 			rx += rw + layout.spacing;
 	}
 
-draw_border:
+	draw_border:
 	{
-		uint32_t border_argb = winlist_has_window ? state->theme.frame_border : state->theme.panel_border;
-		if (buf->width >= 2 && buf->height >= 2) {
-			as_buffer_fill_rect(buf, 0, 0, buf->width, 1, border_argb);
-			as_buffer_fill_rect(buf, 0, buf->height - 1, buf->width, 1, border_argb);
-			as_buffer_fill_rect(buf, 0, 0, 1, buf->height, border_argb);
-			as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, border_argb);
-		}
-		if (buf->width >= 4 && buf->height >= 4)
-			as_buffer_draw_bevel_rect(buf, 1, 1, buf->width - 2, buf->height - 2, bg_color, false);
+		if (state->dock_mode)
+			return;
+
+		(void)winlist_has_window;
+		/* AfterStep bevel provides the visual "border" (no extra solid outline). */
+		if (buf->width >= 2 && buf->height >= 2)
+			as_buffer_draw_bevel_rect(buf, 0, 0, buf->width, buf->height, bg_color, false);
 	}
 }
 
@@ -3518,6 +3651,10 @@ static void cleanup(struct as_state *state)
 {
 	if (state->frame_cb != NULL)
 		wl_callback_destroy(state->frame_cb);
+
+#if HAVE_AFTERIMAGE
+	as_gradient_cache_destroy();
+#endif
 
 	as_state_destroy_buffers(state);
 	as_state_free_buttons(state);

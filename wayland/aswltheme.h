@@ -30,6 +30,11 @@ struct aswl_theme {
 	uint32_t desk_bg;
 	struct aswl_gradient desk_gradient;
 
+	/* Pager decoration colors (from colorscheme tokens). */
+	uint32_t pager_border;
+	uint32_t pager_grid;
+	uint32_t pager_selection;
+
 	char *panel_font;
 
 	uint32_t frame_active_bg;
@@ -74,6 +79,9 @@ uint32_t aswl_color_lighten(uint32_t c, uint8_t t);
 uint32_t aswl_color_darken(uint32_t c, uint8_t t);
 bool aswl_color_is_light(uint32_t c);
 uint32_t aswl_color_nudge(uint32_t c, uint8_t t);
+uint32_t aswl_color_hilite(uint32_t background);
+uint32_t aswl_color_shadow(uint32_t background);
+uint32_t aswl_color_average(uint32_t foreground, uint32_t background);
 
 void aswl_gradient_destroy(struct aswl_gradient *grad);
 bool aswl_gradient_is_valid(const struct aswl_gradient *grad);

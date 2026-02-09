@@ -31,6 +31,9 @@ void aswl_theme_init_default(struct aswl_theme *theme)
 			.panel_ws_active_fg = 0xFFE0E0E0u,
 
 			.desk_bg = 0x77222222u,
+			.pager_border = 0xFF000000u,
+			.pager_grid = 0xFF2D3332u,
+			.pager_selection = 0xFFCCAD8Du,
 
 			.panel_font = NULL,
 
@@ -144,6 +147,43 @@ uint32_t aswl_color_nudge(uint32_t c, uint8_t t)
 	if (aswl_color_is_light(c))
 		return aswl_color_darken(c, t);
 	return aswl_color_lighten(c, t);
+}
+
+static uint8_t aswl_make_component_hilite(uint8_t cmp)
+{
+	if (cmp < 51)
+		cmp = 51;
+	int v = ((int)cmp * 12) / 10;
+	if (v > 255)
+		v = 255;
+	return (uint8_t)v;
+}
+
+uint32_t aswl_color_hilite(uint32_t background)
+{
+	uint8_t a = (background >> 24) & 0xFFu;
+	uint8_t r = aswl_make_component_hilite((background >> 16) & 0xFFu);
+	uint8_t g = aswl_make_component_hilite((background >> 8) & 0xFFu);
+	uint8_t b = aswl_make_component_hilite(background & 0xFFu);
+	return ((uint32_t)a << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
+}
+
+uint32_t aswl_color_shadow(uint32_t background)
+{
+	uint32_t a = (background >> 24) & 0xFFu;
+	uint32_t r = ((background >> 16) & 0xFFu) * 3u / 4u;
+	uint32_t g = ((background >> 8) & 0xFFu) * 3u / 4u;
+	uint32_t b = (background & 0xFFu) * 3u / 4u;
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+uint32_t aswl_color_average(uint32_t foreground, uint32_t background)
+{
+	uint32_t a = (((foreground >> 24) & 0xFFu) + ((background >> 24) & 0xFFu)) / 2u;
+	uint32_t r = (((foreground >> 16) & 0xFFu) + ((background >> 16) & 0xFFu)) / 2u;
+	uint32_t g = (((foreground >> 8) & 0xFFu) + ((background >> 8) & 0xFFu)) / 2u;
+	uint32_t b = ((foreground & 0xFFu) + (background & 0xFFu)) / 2u;
+	return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
 static bool aswl_is_file_readable(const char *path)
@@ -1413,6 +1453,17 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	struct aswl_color_entry *colors = NULL;
 	size_t color_count = 0;
 	(void)aswl_load_colorscheme(cfg.colorscheme_path, &colors, &color_count);
+
+	/* Pager decoration defaults come from colorscheme tokens. */
+	{
+		uint32_t v = 0;
+		if (aswl_colors_lookup(colors, color_count, "BaseDark", &v))
+			theme->pager_border = v;
+		if (aswl_colors_lookup(colors, color_count, "Inactive2Dark", &v))
+			theme->pager_grid = v;
+		if (aswl_colors_lookup(colors, color_count, "HighActiveLight", &v))
+			theme->pager_selection = v;
+	}
 
 	struct aswl_style *styles = NULL;
 	size_t style_count = 0;

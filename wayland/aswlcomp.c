@@ -5067,28 +5067,42 @@ static struct wlr_buffer *view_render_titlebar_buffer(struct aswl_view *view, in
 		}
 	}
 
-		/* Simple bevel to feel more like classic AfterStep (gradient-aware). */
-		for (int x = 0; x < frame_w; x++) {
-			uint32_t base = aswl_unpremul_argb(pixels[(size_t)x]);
-			pixels[(size_t)x] = aswl_premul_argb(aswl_color_lighten(base, 64));
-		}
-		for (int x = 0; x < frame_w; x++) {
-			size_t pos = (size_t)(title_h - 1) * (size_t)frame_w + (size_t)x;
-			uint32_t base = aswl_unpremul_argb(pixels[pos]);
-			pixels[pos] = aswl_premul_argb(aswl_color_darken(base, 120));
-		}
-		if (frame_w > 1 && title_h > 2) {
-			for (int y = 1; y < title_h - 1; y++) {
-				size_t lpos = (size_t)y * (size_t)frame_w;
-				size_t rpos = lpos + (size_t)(frame_w - 1);
-				uint32_t base_l = aswl_unpremul_argb(pixels[lpos]);
-				uint32_t base_r = aswl_unpremul_argb(pixels[rpos]);
-				pixels[lpos] = aswl_premul_argb(aswl_color_lighten(base_l, 64));
-				pixels[rpos] = aswl_premul_argb(aswl_color_darken(base_r, 120));
-			}
-		}
+			/* AfterStep-style bevel (fixed colors derived from the base). */
+			uint32_t relief_fore = aswl_color_hilite(bg);
+			uint32_t relief_back = aswl_color_shadow(bg);
 
-		aswl_deco_assets_ensure(server);
+				uint32_t hi_color = relief_fore;
+				uint32_t lo_color = relief_back;
+				uint32_t hihi_color = aswl_color_hilite(relief_fore);
+				uint32_t lolo_color = relief_back;
+				uint32_t hilo_color = aswl_color_average(hi_color, lo_color);
+
+			uint32_t hi_premul = aswl_premul_argb(hi_color);
+			uint32_t lo_premul = aswl_premul_argb(lo_color);
+
+			/* Top/bottom edges */
+			for (int x = 0; x < frame_w; x++) {
+				pixels[(size_t)x] = hi_premul;
+				size_t pos = (size_t)(title_h - 1) * (size_t)frame_w + (size_t)x;
+				pixels[pos] = lo_premul;
+			}
+			if (frame_w > 1 && title_h > 2) {
+				for (int y = 1; y < title_h - 1; y++) {
+					size_t lpos = (size_t)y * (size_t)frame_w;
+					size_t rpos = lpos + (size_t)(frame_w - 1);
+					pixels[lpos] = hi_premul;
+					pixels[rpos] = lo_premul;
+				}
+			}
+			if (frame_w > 1 && title_h > 1) {
+				pixels[0] = aswl_premul_argb(hihi_color);
+				pixels[(size_t)(frame_w - 1)] = aswl_premul_argb(hilo_color);
+				size_t bl = (size_t)(title_h - 1) * (size_t)frame_w;
+				pixels[bl] = aswl_premul_argb(hilo_color);
+				pixels[bl + (size_t)(frame_w - 1)] = aswl_premul_argb(lolo_color);
+			}
+
+			aswl_deco_assets_ensure(server);
 
 		int border = 0;
 		view_get_deco_metrics(view, &border, NULL);
@@ -5287,8 +5301,8 @@ static void view_update_decorations(struct aswl_view *view)
 	view_get_frame_size(view, &frame_w, &frame_h);
 
 	uint32_t border_base = server->theme.frame_border;
-	uint32_t border_hilite = aswl_color_lighten(border_base, 64);
-	uint32_t border_shadow = aswl_color_darken(border_base, 120);
+		uint32_t border_hilite = aswl_color_hilite(border_base);
+		uint32_t border_shadow = aswl_color_shadow(border_base);
 	float border_hilite_color[4];
 	float border_shadow_color[4];
 	aswl_argb_to_premul_f(border_hilite, border_hilite_color);
@@ -5854,6 +5868,65 @@ static void arrange_dock_views(struct aswl_server *server)
 	free(items);
 }
 
+static void apply_layer_struts_top(struct aswl_server *server, struct wlr_output *output, struct wlr_box *usable)
+{
+	if (server == NULL || server->output_layout == NULL || output == NULL || usable == NULL)
+		return;
+
+	const int spacing = 3; /* Match AfterStep-ish NoCollidesSpacing feel. */
+	int top_limit = usable->y;
+
+	struct wlr_output *default_output = wlr_output_layout_get_center_output(server->output_layout);
+	if (default_output == NULL)
+		default_output = output;
+
+	struct aswl_layer_surface *ls;
+	wl_list_for_each(ls, &server->layer_surfaces, link) {
+		struct wlr_layer_surface_v1 *surf = ls->layer_surface;
+		if (surf == NULL || surf->surface == NULL || ls->scene == NULL || ls->scene->tree == NULL)
+			continue;
+		if (!surf->initialized || !surf->surface->mapped)
+			continue;
+
+		struct wlr_output *target = surf->output;
+		if (target == NULL)
+			target = default_output;
+		if (target != output)
+			continue;
+
+		/* Only treat surfaces that want to reserve space. */
+		if (surf->current.exclusive_zone <= 0)
+			continue;
+
+		/* Only treat wide/short surfaces as top "bars" (avoid right-side panels). */
+		int sw = (int)surf->surface->current.width;
+		int sh = (int)surf->surface->current.height;
+		if (sw <= 0 || sh <= 0 || sw < sh)
+			continue;
+
+		if ((surf->current.anchor & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) == 0)
+			continue;
+
+		int sx = 0;
+		int sy = 0;
+		(void)wlr_scene_node_coords(&ls->scene->tree->node, &sx, &sy);
+
+		int bottom = sy + sh + spacing;
+		if (bottom > top_limit)
+			top_limit = bottom;
+	}
+
+	int max_y = usable->y + usable->height;
+	if (top_limit > max_y)
+		top_limit = max_y;
+
+	int delta = top_limit - usable->y;
+	if (delta > 0) {
+		usable->y = top_limit;
+		usable->height -= delta;
+	}
+}
+
 static void place_view(struct aswl_view *view)
 {
 	if (view == NULL || view->server == NULL)
@@ -5882,7 +5955,34 @@ static void place_view(struct aswl_view *view)
 	int height = 0;
 	view_get_frame_size(view, &width, &height);
 
+	int border = 0;
+	int title_h = 0;
+	view_get_deco_metrics(view, &border, &title_h);
+
+	int content_w = 0;
+	int content_h = 0;
+	view_get_current_size(view, &content_w, &content_h);
+
+	if (view->xwayland_surface != NULL && !view->xwayland_surface->override_redirect && (content_w <= 1 || content_h <= 1)) {
+		/*
+		 * Some Xwayland clients can map before a meaningful size is known,
+		 * leaving width/height at 0. Avoid forcing a huge default size (which
+		 * can stick for clients like xterm); pick a smaller, terminal-like
+		 * fallback that still keeps the window visible.
+		 */
+		if (content_w <= 1)
+			content_w = 640;
+		if (content_h <= 1)
+			content_h = 400;
+		width = content_w + 2 * border;
+		height = content_h + title_h + border;
+	}
+
 	bool suite_popup = view_is_suite_popup(view);
+
+	/* Avoid placing regular windows under top layer-shell bars (e.g. Wharf-ish docks). */
+	if (!suite_popup)
+		apply_layer_struts_top(server, output, &usable);
 
 	/*
 	 * Root-menu style: suite popups (aswlmenu) should appear near the pointer,
@@ -5913,9 +6013,6 @@ static void place_view(struct aswl_view *view)
 
 	wlr_scene_node_set_position(&view->scene_tree->node, x, y);
 	if (view->xwayland_surface != NULL && width > 0 && height > 0) {
-		int border = 0;
-		int title_h = 0;
-		view_get_deco_metrics(view, &border, &title_h);
 		int ox = border;
 		int oy = title_h;
 		int cw = width - 2 * border;
@@ -5929,6 +6026,7 @@ static void place_view(struct aswl_view *view)
 		                               y + oy,
 		                               (uint16_t)cw,
 		                               (uint16_t)ch);
+		view_update_decorations(view);
 	}
 	view->placed = true;
 
@@ -6524,6 +6622,19 @@ static void handle_xwayland_request_configure(struct wl_listener *listener, void
 		w = 1;
 	if (h < 1)
 		h = 1;
+
+	/*
+	 * Some Xwayland clients (notably xterm) may map before a meaningful size
+	 * propagates, leaving width/height at 0 and causing us to shrink them to
+	 * 1×1. Avoid making newly created windows invisible; they can still request
+	 * a different size later.
+	 */
+	if (!view->xwayland_surface->override_redirect && (w <= 1 || h <= 1)) {
+		if (w <= 1)
+			w = 640;
+		if (h <= 1)
+			h = 400;
+	}
 
 	if (!view->placed && (x != cur_x || y != cur_y)) {
 		wlr_scene_node_set_position(&view->scene_tree->node, x - ox, y - oy);

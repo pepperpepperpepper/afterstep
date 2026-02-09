@@ -99,6 +99,8 @@ require_cmd identify
 require_cmd make
 require_cmd cc
 require_cmd pkg-config
+require_cmd pgrep
+require_cmd xdotool
 
 cd -- "${repo_root}"
 
@@ -136,12 +138,27 @@ top_dock_h=64
 top_dock_btns=15
 top_dock_cross=$((top_dock_h))
 top_dock_w=$((top_dock_btns * top_dock_cross))
-right_pager_w=192
+
+# X11 baseline geometry (1600x900):
+# - Right pager: 102px wide at x=1429..1530, starting at y=47.
+# - Right dock strip: 64px wide at x=1531..1594 with a 5px right margin, starting at y=4.
+# - WinList strip: 462x32+964+46 (gap between top dock and right sidebar).
+right_pager_w=102
+right_pager_h=313
+right_pager_margin_top=47
+
 right_dock_w=64
 right_dock_margin=5
 right_reserved=$((right_dock_w + right_dock_margin))
+right_dock_margin_top=4
 
-default_terminal_cmd="xterm -fa Monospace -fs 12"
+right_gap=3
+top_winlist_h=32
+top_winlist_margin_top=46
+top_winlist_margin_right=$((right_pager_w + right_reserved + right_gap))
+
+terminal_app_id="ASWLShotXTerm"
+default_terminal_cmd="xterm -class ${terminal_app_id} -geometry 80x24 -fa Monospace -fs 12 -T aswlshot-xterm"
 terminal_cmd="${TERMINAL:-${default_terminal_cmd}}"
 wayland_demo_cmd="weston-simple-shm"
 
@@ -178,8 +195,10 @@ cat >"${top_winlist_cfg}" <<EOF
 # Screenshot run top "WinList" strip (focused window title).
 @edge top
 @nodock
+@height ${top_winlist_h}
+@margin top ${top_winlist_margin_top}
 @margin left $((top_dock_w + 4))
-@margin right ${right_reserved}
+@margin right ${top_winlist_margin_right}
 EOF
 
 cat >"${right_pager_cfg}" <<EOF
@@ -187,10 +206,10 @@ cat >"${right_pager_cfg}" <<EOF
 @edge right
 @anchor right top
 @width ${right_pager_w}
-@height 240
+@height ${right_pager_h}
 @pager_columns 2
-@pager_rows 1
-@margin top 27
+@pager_rows 2
+@margin top ${right_pager_margin_top}
 @margin right ${right_reserved}
 @nodock
 Work|normal/Desktop=@workspace 1
@@ -202,20 +221,25 @@ EOF
 cat >"${right_dock_cfg}" <<EOF
 # Screenshot run right-side dock/wharf-ish strip.
 @edge right
-@anchor right bottom
+@anchor right top bottom
+@width ${right_dock_w}
 @margin right ${right_dock_margin}
-@margin bottom ${right_dock_margin}
+@margin top ${right_dock_margin_top}
 @dock
+AudioPlayer|normal/MusicalNote=:
 afterstepdoc|large/AfterStep3=:
 WharfExtras|normal/Info=:
-Tools|normal/Desktop=:
-XEyes|normal/EyeInMonitorShadow=xeyes
+ToolsFolder|normal/Desktop=:
+XEyes=@xeyes
 QuitFolder|normal/RedLight=:
 asfsm|normal/Harddrive=:
 loadmonitor|normal/Monitor1=:
+loadinstantmonitor|normal/Monitor1=:
+asmon|normal/Monitor1=:
+wmtop|normal/Monitor1=:
 netmonitor|normal/Ethernet=:
 asmail|normal/MailBox2=:
-Clock=@clock
+clock=@clock
 EOF
 
 cat >"${menu_cfg}" <<'EOF'
@@ -334,20 +358,41 @@ snap() {
   import -window "${win_id}" "${file}"
 }
 
+move_pointer() {
+  local x="${1:?x required}"
+  local y="${2:?y required}"
+  xdotool mousemove --sync "${x}" "${y}" >/dev/null 2>&1 || true
+}
+
 focus_window_by_app_id() {
-  local app_id="$1"
+  local app_id="${1:-}"
+  focus_window_by_match "${app_id}" ""
+}
+
+focus_window_by_match() {
+  local app_id="${1:-}"
+  local title_substr="${2:-}"
   local wid=""
-  wid="$(WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v want="${app_id}" '
+  wid="$(WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v want_app="${app_id}" -v want_title="${title_substr}" '
     BEGIN { id = "" }
     {
-      got = $5
-      sub(/^app_id=/, "", got)
-      if (tolower(got) == tolower(want) && id == "") {
-        id = $1
-      }
+      got_app = $5
+      sub(/^app_id=/, "", got_app)
+      got_app = tolower(got_app)
+
+      got_title = $6
+      sub(/^title=/, "", got_title)
+      got_title = tolower(got_title)
+
+      want_app = tolower(want_app)
+      want_title = tolower(want_title)
+
+      match_app = (want_app != "" && got_app == want_app)
+      match_title = (want_title != "" && index(got_title, want_title) > 0)
+      if ((match_app || match_title) && id == "") id = $1
     }
     END { print id }
-  ')"
+  ' || true)"
   if [[ -n "${wid}" ]]; then
     WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl focus_window "${wid}" >/dev/null 2>&1 || true
   fi
@@ -363,13 +408,13 @@ window_ids_by_app_id() {
         print $1
       }
     }
-  '
+  ' || true
 }
 
 close_windows_by_app_id() {
   local app_id="$1"
   local ids=()
-  mapfile -t ids < <(window_ids_by_app_id "${app_id}")
+  mapfile -t ids < <(window_ids_by_app_id "${app_id}") || true
   if [[ "${#ids[@]}" -eq 0 ]]; then
     return 0
   fi
@@ -382,9 +427,12 @@ close_windows_by_app_id() {
 
 wait_until_app_id_gone() {
   local app_id="$1"
+  local ids=()
   for _ in $(seq 1 200); do
     require_comp_alive
-    if ! window_ids_by_app_id "${app_id}" | grep -q .; then
+    ids=()
+    mapfile -t ids < <(window_ids_by_app_id "${app_id}") || true
+    if [[ "${#ids[@]}" -eq 0 ]]; then
       return 0
     fi
     sleep 0.05
@@ -393,25 +441,82 @@ wait_until_app_id_gone() {
 }
 
 wait_for_mapped_app_id() {
-  local app_id="$1"
+  local app_id="${1:-}"
+  local title_substr="${2:-}"
+  local max_tries="${3:-200}"
   for _ in $(seq 1 200); do
+    if [[ "${max_tries}" -le 0 ]]; then
+      break
+    fi
     require_comp_alive
-    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v want="${app_id}" '
+    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' -v want_app="${app_id}" -v want_title="${title_substr}" '
       BEGIN { found = 0 }
       {
-        got = $5
-        sub(/^app_id=/, "", got)
-        if (tolower(got) == tolower(want) && $4 ~ /mapped/) {
-          found = 1
-        }
+        got_app = $5
+        sub(/^app_id=/, "", got_app)
+        got_app = tolower(got_app)
+
+        got_title = $6
+        sub(/^title=/, "", got_title)
+        got_title = tolower(got_title)
+
+        want_app = tolower(want_app)
+        want_title = tolower(want_title)
+
+        match_app = (want_app != "" && got_app == want_app)
+        match_title = (want_title != "" && index(got_title, want_title) > 0)
+        if ($4 ~ /mapped/ && (match_app || match_title)) found = 1
       }
       END { exit found ? 0 : 1 }
     ' >/dev/null; then
       return 0
     fi
     sleep 0.05
+    max_tries=$((max_tries - 1))
   done
   return 1
+}
+
+ensure_mapped_window() {
+  local desc="$1"
+  local cmd="$2"
+  local want_app_id="${3:-}"
+  local want_title_substr="${4:-}"
+  local attempts="${5:-3}"
+
+  for attempt in $(seq 1 "${attempts}"); do
+    require_comp_alive
+    WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${cmd}" || true
+    if wait_for_mapped_app_id "${want_app_id}" "${want_title_substr}" 200; then
+      return 0
+    fi
+
+    echo "Warning: ${desc} did not map in time (attempt ${attempt}/${attempts}); retrying..." >&2
+    sleep 0.25
+  done
+
+  echo "Error: timed out waiting for ${desc} to map." >&2
+  WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null || true
+  echo "aswlcomp log tail:" >&2
+  tail -n 200 "${log_file}" >&2 || true
+  return 1
+}
+
+kill_children_matching() {
+  local pattern="$1"
+  local signal="${2:-TERM}"
+  local pids=()
+
+  if [[ -z "${as_pid:-}" ]]; then
+    return 0
+  fi
+
+  mapfile -t pids < <(pgrep -P "${as_pid}" -f "${pattern}" 2>/dev/null || true) || true
+  if [[ "${#pids[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  kill -s "${signal}" "${pids[@]}" 2>/dev/null || true
 }
 
 open_menu_and_wait() {
@@ -443,6 +548,15 @@ close_menu_if_open() {
   if ! wait_until_app_id_gone "afterstep.aswlmenu"; then
     close_windows_by_app_id "afterstep.aswlmenu"
     if ! wait_until_app_id_gone "afterstep.aswlmenu"; then
+      echo "Warning: forcing aswlmenu termination (close request ignored)" >&2
+      kill_children_matching "aswlmenu" TERM
+      if ! wait_until_app_id_gone "afterstep.aswlmenu"; then
+        kill_children_matching "aswlmenu" KILL
+      fi
+      if wait_until_app_id_gone "afterstep.aswlmenu"; then
+        sleep 0.05
+        return 0
+      fi
       echo "Error: aswlmenu did not close in time." >&2
       WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null || true
       return 1
@@ -456,16 +570,22 @@ close_menu_if_open() {
 sleep 2
 snap "${out_dir}/01-desktop.png"
 
+# The X11 baseline's Banner is only visible during early init. Stop it before we
+# bring up the panels and menus so subsequent shots match the baseline.
+kill_children_matching "aswlbanner" TERM
+sleep 0.1
+
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_HEIGHT=${top_dock_h} ASWLPANEL_CONFIG='${top_panel_cfg}' ./wayland/aswlpanel" || true
 require_comp_alive
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_HEIGHT=24 ASWLPANEL_WINDOW_LIST=focused ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_CONFIG='${top_winlist_cfg}' ./wayland/aswlpanel" || true
-	require_comp_alive
-	WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_CLOCK_OVERRIDE=05:45 ASWLPANEL_CONFIG='${right_dock_cfg}' ./wayland/aswlpanel" || true
-	require_comp_alive
-	WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_MODE=pager ASWLPANEL_CONFIG='${right_pager_cfg}' ./wayland/aswlpanel" || true
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_WINDOW_LIST=focused ASWLPANEL_CONFIG='${top_winlist_cfg}' ./wayland/aswlpanel" || true
+require_comp_alive
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_CLOCK_OVERRIDE=05:45 ASWLPANEL_CONFIG='${right_dock_cfg}' ./wayland/aswlpanel" || true
+require_comp_alive
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_MODE=pager ASWLPANEL_CONFIG='${right_pager_cfg}' ./wayland/aswlpanel" || true
 
-	sleep 0.3
+sleep 0.3
+move_pointer 48 100
 open_menu_and_wait
 snap "${out_dir}/02-menu.png"
 close_menu_if_open
@@ -473,22 +593,26 @@ close_menu_if_open
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl workspace 1 || true
 require_comp_alive
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${wayland_demo_cmd}" || true
+close_windows_by_app_id "${terminal_app_id}"
+ensure_mapped_window "xterm" "${terminal_cmd}" "${terminal_app_id}" "aswlshot-xterm"
 require_comp_alive
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${terminal_cmd}" || true
-require_comp_alive
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "xeyes" || true
-wait_for_mapped_app_id "XTerm"
-wait_for_mapped_app_id "XEyes"
-focus_window_by_app_id "XTerm"
-sleep 0.1
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl maximize >/dev/null 2>&1 || true
-sleep 0.1
+close_windows_by_app_id "XEyes"
+ensure_mapped_window "xeyes" "xeyes" "XEyes" "xeyes"
+focus_window_by_app_id "${terminal_app_id}"
 for _ in $(seq 1 30); do
-  focus_window_by_app_id "XEyes"
+  focus_window_by_match "XEyes" "xeyes"
   if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' '
     BEGIN { found = 0 }
-    $5 == "app_id=XEyes" && $4 ~ /focused/ { found = 1 }
+    BEGIN { want_app = tolower("XEyes"); want_title = tolower("xeyes"); }
+    {
+      got_app = $5
+      sub(/^app_id=/, "", got_app)
+      got_app = tolower(got_app)
+      got_title = $6
+      sub(/^title=/, "", got_title)
+      got_title = tolower(got_title)
+      if ($4 ~ /focused/ && ((got_app == want_app) || (index(got_title, want_title) > 0))) found = 1
+    }
     END { exit found ? 0 : 1 }
   ' >/dev/null; then
     break
@@ -498,6 +622,7 @@ done
 sleep 0.3
 snap "${out_dir}/03-clients.png"
 
+move_pointer 707 402
 open_window_list_menu_and_wait
 snap "${out_dir}/04-clients-menu.png"
 close_menu_if_open
@@ -508,7 +633,11 @@ require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${wayland_demo_cmd}" || true
 for _ in $(seq 1 200); do
   require_comp_alive
-  if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | grep -q "ws=2.*mapped"; then
+  if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' '
+    BEGIN { found = 0 }
+    $2 == "ws=2" && $4 ~ /mapped/ { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' >/dev/null; then
     break
   fi
   sleep 0.05

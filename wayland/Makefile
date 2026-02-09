@@ -179,7 +179,7 @@ aswlpanel: aswlpanel.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(AFTE
 	$(CC) $(CFLAGS) -o $@ aswlpanel.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS)
 
 aswlpanel.o: aswlpanel.c aswlicon.h aswlfont.h aswltheme.h $(PROTOCOL_HDRS)
-	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(AFTERIMAGE_CFLAGS) -DHAVE_AFTERIMAGE=1 -I$(GEN_DIR) -c -o $@ $<
 
 aswlmenu: aswlmenu.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
 	$(CC) $(CFLAGS) -o $@ aswlmenu.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS) $(MENU_LIBS)
