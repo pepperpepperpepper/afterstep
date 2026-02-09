@@ -106,12 +106,13 @@ tools/postcard.sh
 
 # Wayland screenshot harness outputs (keep local by default)
 /screenshots/*-wayland/
+/screenshots/*-wayland-test*/
 /screenshots/asan-wayland-test/
 /screenshots/wayland-test-*/
 
 # Track the current Wayland screenshot baseline in-repo (used by README.md).
-!/screenshots/2026-02-05-wayland/
-!/screenshots/2026-02-05-wayland/**
+!/screenshots/2026-02-09-wayland/
+!/screenshots/2026-02-09-wayland/**
 
 # Local notes (keep untracked)
 /plan.md

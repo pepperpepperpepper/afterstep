@@ -18,22 +18,22 @@ Linux/Xorg systems.
 
 Full in-repo gallery: [screenshots/2026-01-18-xvfb/index.html](screenshots/2026-01-18-xvfb/index.html)
 
-## Screenshots (2026-02-05, Wayland/aswlcomp)
+## Screenshots (2026-02-09, Wayland/aswlcomp)
 
 <p>
-  <img src="screenshots/2026-02-05-wayland/01-desktop.png" width="48%" alt="aswlcomp desktop with panel" />
-  <img src="screenshots/2026-02-05-wayland/02-menu.png" width="48%" alt="aswlmenu launcher open" />
+  <img src="screenshots/2026-02-09-wayland/01-desktop.png" width="48%" alt="aswlcomp desktop with panel" />
+  <img src="screenshots/2026-02-09-wayland/02-menu.png" width="48%" alt="aswlmenu launcher open" />
 </p>
 <p>
-  <img src="screenshots/2026-02-05-wayland/03-clients.png" width="48%" alt="Wayland and Xwayland clients" />
-  <img src="screenshots/2026-02-05-wayland/04-clients-menu.png" width="48%" alt="Wayland and Xwayland clients with window list menu open" />
+  <img src="screenshots/2026-02-09-wayland/03-clients.png" width="48%" alt="Wayland and Xwayland clients" />
+  <img src="screenshots/2026-02-09-wayland/04-clients-menu.png" width="48%" alt="Wayland and Xwayland clients with window list menu open" />
 </p>
 <p>
-  <img src="screenshots/2026-02-05-wayland/05-workspaces.png" width="48%" alt="Workspace switching" />
-  <img src="screenshots/2026-02-05-wayland/06-dockapp.png" width="48%" alt="Xwayland dockapp-style window" />
+  <img src="screenshots/2026-02-09-wayland/05-workspaces.png" width="48%" alt="Workspace switching" />
+  <img src="screenshots/2026-02-09-wayland/06-dockapp.png" width="48%" alt="Xwayland dockapp-style window" />
 </p>
 
-Full in-repo gallery: [screenshots/2026-02-05-wayland/index.html](screenshots/2026-02-05-wayland/index.html)
+Full in-repo gallery: [screenshots/2026-02-09-wayland/index.html](screenshots/2026-02-09-wayland/index.html)
 
 ## Build + install (local prefix)
 
