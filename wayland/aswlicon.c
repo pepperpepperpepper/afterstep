@@ -25,6 +25,7 @@
 enum aswl_icon_kind {
 	ASWL_ICON_KIND_UNKNOWN = 0,
 	ASWL_ICON_KIND_PNG,
+	ASWL_ICON_KIND_XPM,
 	ASWL_ICON_KIND_XML,
 };
 
@@ -93,6 +94,24 @@ static bool aswl_path_has_extension(const char *p)
 	return strchr(base, '.') != NULL;
 }
 
+static bool aswl_path_has_suffix_case(const char *path, const char *suffix)
+{
+	if (path == NULL || suffix == NULL)
+		return false;
+
+	size_t plen = strlen(path);
+	size_t slen = strlen(suffix);
+	if (plen < slen)
+		return false;
+
+	const char *p = path + (plen - slen);
+	for (size_t i = 0; i < slen; i++) {
+		if (tolower((unsigned char)p[i]) != tolower((unsigned char)suffix[i]))
+			return false;
+	}
+	return true;
+}
+
 static bool aswl_try_icon_variants(char **out_path, const char *candidate)
 {
 	if (out_path != NULL)
@@ -132,6 +151,9 @@ static enum aswl_icon_kind aswl_detect_icon_kind(const char *path)
 	if (path == NULL || path[0] == '\0')
 		return ASWL_ICON_KIND_UNKNOWN;
 
+	if (aswl_path_has_suffix_case(path, ".xpm"))
+		return ASWL_ICON_KIND_XPM;
+
 	FILE *fp = fopen(path, "rb");
 	if (fp == NULL)
 		return ASWL_ICON_KIND_UNKNOWN;
@@ -148,6 +170,10 @@ static enum aswl_icon_kind aswl_detect_icon_kind(const char *path)
 		i++;
 	if (i < n && buf[i] == '<')
 		return ASWL_ICON_KIND_XML;
+	if (i + 6 < n && buf[i] == '/' && buf[i + 1] == '*' && buf[i + 2] == ' ' &&
+	    (buf[i + 3] == 'X' || buf[i + 3] == 'x') && (buf[i + 4] == 'P' || buf[i + 4] == 'p') &&
+	    (buf[i + 5] == 'M' || buf[i + 5] == 'm'))
+		return ASWL_ICON_KIND_XPM;
 
 	return ASWL_ICON_KIND_UNKNOWN;
 }
@@ -863,6 +889,144 @@ static uint32_t aswl_blend_over(uint32_t dst, uint32_t src)
 
 static bool aswl_icon_load_argb_rec(const char *spec, int depth, uint32_t **out_argb, int *out_w, int *out_h);
 
+static bool aswl_icon_load_composite_list(const char *spec, int depth, uint32_t **out_argb, int *out_w, int *out_h)
+{
+	if (out_argb != NULL)
+		*out_argb = NULL;
+	if (out_w != NULL)
+		*out_w = 0;
+	if (out_h != NULL)
+		*out_h = 0;
+
+	if (spec == NULL || spec[0] == '\0')
+		return false;
+	if (depth > 8)
+		return false;
+
+	char *dup = strdup(spec);
+	if (dup == NULL)
+		return false;
+
+	struct aswl_composite_layer {
+		uint32_t *pix;
+		int w;
+		int h;
+	};
+
+	struct aswl_composite_layer *layers = NULL;
+	size_t count = 0;
+	size_t cap = 0;
+	bool ok = true;
+
+	char *p = dup;
+	while (p != NULL && *p != '\0') {
+		char *comma = strchr(p, ',');
+		if (comma != NULL)
+			*comma = '\0';
+
+		char *tok = aswl_lstrip_ws(p);
+		aswl_rstrip_ws(tok);
+
+		if (tok[0] != '\0' && strcmp(tok, "-") != 0) {
+			uint32_t *pix = NULL;
+			int w = 0;
+			int h = 0;
+			if (aswl_icon_load_argb_rec(tok, depth + 1, &pix, &w, &h) && pix != NULL && w > 0 && h > 0) {
+				if (count == cap) {
+					size_t ncap = cap == 0 ? 4 : cap * 2;
+					struct aswl_composite_layer *nlayers = realloc(layers, ncap * sizeof(*nlayers));
+					if (nlayers == NULL) {
+						free(pix);
+						ok = false;
+						break;
+					}
+					layers = nlayers;
+					cap = ncap;
+				}
+
+				layers[count] = (struct aswl_composite_layer){
+					.pix = pix,
+					.w = w,
+					.h = h,
+				};
+				count++;
+			} else {
+				free(pix);
+			}
+		}
+
+		p = comma != NULL ? (comma + 1) : NULL;
+	}
+
+	free(dup);
+
+	if (!ok || count == 0 || layers == NULL) {
+		if (layers != NULL) {
+			for (size_t i = 0; i < count; i++)
+				free(layers[i].pix);
+		}
+		free(layers);
+		return false;
+	}
+
+	int cw = 0;
+	int ch = 0;
+	for (size_t i = 0; i < count; i++) {
+		if (layers[i].w > cw)
+			cw = layers[i].w;
+		if (layers[i].h > ch)
+			ch = layers[i].h;
+	}
+
+	if (cw <= 0 || ch <= 0 || cw > 4096 || ch > 4096) {
+		for (size_t i = 0; i < count; i++)
+			free(layers[i].pix);
+		free(layers);
+		return false;
+	}
+
+	uint32_t *canvas = calloc((size_t)cw * (size_t)ch, sizeof(*canvas));
+	if (canvas == NULL) {
+		for (size_t i = 0; i < count; i++)
+			free(layers[i].pix);
+		free(layers);
+		return false;
+	}
+
+	for (size_t i = 0; i < count; i++) {
+		int ox = (cw - layers[i].w) / 2;
+		int oy = (ch - layers[i].h) / 2;
+
+		for (int y = 0; y < layers[i].h; y++) {
+			int dy = oy + y;
+			if (dy < 0 || dy >= ch)
+				continue;
+			for (int x = 0; x < layers[i].w; x++) {
+				int dx = ox + x;
+				if (dx < 0 || dx >= cw)
+					continue;
+				size_t di = (size_t)dy * (size_t)cw + (size_t)dx;
+				size_t si = (size_t)y * (size_t)layers[i].w + (size_t)x;
+				canvas[di] = aswl_blend_over(canvas[di], layers[i].pix[si]);
+			}
+		}
+	}
+
+	for (size_t i = 0; i < count; i++)
+		free(layers[i].pix);
+	free(layers);
+
+	if (out_argb != NULL)
+		*out_argb = canvas;
+	else
+		free(canvas);
+	if (out_w != NULL)
+		*out_w = cw;
+	if (out_h != NULL)
+		*out_h = ch;
+	return out_argb == NULL || *out_argb != NULL;
+}
+
 #ifdef HAVE_AFTERIMAGE
 struct aswl_afterimage_state {
 	bool init_attempted;
@@ -1542,6 +1706,96 @@ static bool aswl_icon_load_xml_afterimage(const char *xml_path, uint32_t **out_a
 		*out_h = h;
 	return out_argb == NULL || *out_argb != NULL;
 }
+
+static const char *aswl_afterimage_relpath(const char *path)
+{
+	if (path == NULL || path[0] == '\0')
+		return path;
+
+	if (aswl_ai.icon_root != NULL) {
+		size_t n = strlen(aswl_ai.icon_root);
+		if (strncmp(path, aswl_ai.icon_root, n) == 0 && path[n] == '/')
+			return path + n + 1;
+	}
+
+	if (aswl_ai.alt_root != NULL) {
+		size_t n = strlen(aswl_ai.alt_root);
+		if (strncmp(path, aswl_ai.alt_root, n) == 0 && path[n] == '/')
+			return path + n + 1;
+	}
+
+	return path;
+}
+
+static bool aswl_icon_load_file_afterimage(const char *path, uint32_t **out_argb, int *out_w, int *out_h)
+{
+	if (out_argb != NULL)
+		*out_argb = NULL;
+	if (out_w != NULL)
+		*out_w = 0;
+	if (out_h != NULL)
+		*out_h = 0;
+
+	if (path == NULL || path[0] == '\0')
+		return false;
+
+	aswl_afterimage_init(path);
+	if (aswl_ai.asv == NULL)
+		return false;
+
+	ASImage *im = NULL;
+	if (aswl_ai.imman != NULL)
+		im = get_asimage(aswl_ai.imman, aswl_afterimage_relpath(path), ASFLAGS_EVERYTHING, 0);
+	if (im == NULL)
+		im = file2ASImage(path, ASFLAGS_EVERYTHING, SCREEN_GAMMA, 0, NULL);
+	if (im == NULL)
+		return false;
+
+	const int w = (int)im->width;
+	const int h = (int)im->height;
+
+	if (w <= 0 || h <= 0 || w > 4096 || h > 4096) {
+		safe_asimage_destroy(im);
+		return false;
+	}
+
+	uint32_t *argb = calloc((size_t)w * (size_t)h, sizeof(*argb));
+	if (argb == NULL) {
+		safe_asimage_destroy(im);
+		return false;
+	}
+
+	ASImageDecoder *dec = start_image_decoding(aswl_ai.asv, im, SCL_DO_ALL, 0, 0, im->width, im->height, NULL);
+	if (dec == NULL) {
+		free(argb);
+		safe_asimage_destroy(im);
+		return false;
+	}
+
+	for (unsigned int y = 0; y < im->height; y++) {
+		dec->decode_image_scanline(dec);
+		for (unsigned int x = 0; x < im->width; x++) {
+			uint32_t a = dec->buffer.alpha[x] & 0xFFu;
+			uint32_t r = dec->buffer.red[x] & 0xFFu;
+			uint32_t g = dec->buffer.green[x] & 0xFFu;
+			uint32_t b = dec->buffer.blue[x] & 0xFFu;
+			argb[y * (size_t)w + x] = (a << 24) | (r << 16) | (g << 8) | b;
+		}
+	}
+
+	stop_image_decoding(&dec);
+	safe_asimage_destroy(im);
+
+	if (out_argb != NULL)
+		*out_argb = argb;
+	else
+		free(argb);
+	if (out_w != NULL)
+		*out_w = w;
+	if (out_h != NULL)
+		*out_h = h;
+	return out_argb == NULL || *out_argb != NULL;
+}
 #endif
 
 static bool aswl_icon_load_xml(const char *xml_path, int depth, uint32_t **out_argb, int *out_w, int *out_h)
@@ -1823,6 +2077,9 @@ static bool aswl_icon_load_argb_rec(const char *spec, int depth, uint32_t **out_
 	if (depth > 8)
 		return false;
 
+	if (strchr(spec, ',') != NULL)
+		return aswl_icon_load_composite_list(spec, depth, out_argb, out_w, out_h);
+
 	char *path = aswl_resolve_icon_spec(spec);
 	if (path == NULL)
 		return false;
@@ -1835,12 +2092,18 @@ static bool aswl_icon_load_argb_rec(const char *spec, int depth, uint32_t **out_
 		ok = aswl_load_png_argb(path, out_argb, out_w, out_h);
 #endif
 
-	if (!ok)
+	if (!ok && kind == ASWL_ICON_KIND_XML) {
 #ifdef HAVE_AFTERIMAGE
 		ok = aswl_icon_load_xml_afterimage(path, out_argb, out_w, out_h);
-	if (!ok)
 #endif
-		ok = aswl_icon_load_xml(path, depth, out_argb, out_w, out_h);
+		if (!ok)
+			ok = aswl_icon_load_xml(path, depth, out_argb, out_w, out_h);
+	}
+
+#ifdef HAVE_AFTERIMAGE
+	if (!ok && kind != ASWL_ICON_KIND_XML)
+		ok = aswl_icon_load_file_afterimage(path, out_argb, out_w, out_h);
+#endif
 
 #ifdef HAVE_LIBPNG
 	if (!ok)

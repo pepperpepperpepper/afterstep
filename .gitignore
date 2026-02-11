@@ -106,6 +106,7 @@ tools/postcard.sh
 
 # Wayland screenshot harness outputs (keep local by default)
 /screenshots/*-wayland/
+/screenshots/*-wayland-*/
 /screenshots/*-wayland-test*/
 /screenshots/asan-wayland-test/
 /screenshots/wayland-test-*/

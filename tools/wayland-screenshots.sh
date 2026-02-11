@@ -229,9 +229,9 @@ cat >"${right_dock_cfg}" <<EOF
 AudioPlayer|normal/MusicalNote=:
 afterstepdoc|large/AfterStep3=:
 WharfExtras|normal/Info=:
-ToolsFolder|normal/Desktop=:
+ToolsFolder|normal/Desktop,normal/HammerBrown,normal/HammerRed,dots/3_dots=:
 XEyes=@xeyes
-QuitFolder|normal/RedLight=:
+QuitFolder|normal/RedLight,dots/3_dots=:
 asfsm|normal/Harddrive=:
 loadmonitor|normal/Monitor1=:
 loadinstantmonitor|normal/Monitor1=:
