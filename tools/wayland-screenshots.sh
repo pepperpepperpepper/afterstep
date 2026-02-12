@@ -114,6 +114,7 @@ top_panel_cfg="${out_dir}/aswlpanel-top.conf"
 top_winlist_cfg="${out_dir}/aswlpanel-top-winlist.conf"
 right_pager_cfg="${out_dir}/aswlpanel-right-pager.conf"
 right_dock_cfg="${out_dir}/aswlpanel-right-dock.conf"
+right_dock_theme_cfg="${out_dir}/aswltheme-right-dock.conf"
 menu_cfg="${out_dir}/aswlmenu.conf"
 log_file="${out_dir}/aswlcomp.log"
 
@@ -240,6 +241,11 @@ wmtop|normal/Monitor1=:
 netmonitor|normal/Ethernet=:
 asmail|normal/MailBox2=:
 clock=@clock
+EOF
+
+cat >"${right_dock_theme_cfg}" <<'EOF'
+# Match classic X11 MonitorWharf styling (uses MyStyle BackPixmap 149).
+PanelStyle=*MonitorWharfTile
 EOF
 
 cat >"${menu_cfg}" <<'EOF'
@@ -580,7 +586,7 @@ WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_HEIGHT=${top_dock_
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_WINDOW_LIST=focused ASWLPANEL_CONFIG='${top_winlist_cfg}' ./wayland/aswlpanel" || true
 require_comp_alive
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_CLOCK_OVERRIDE=05:45 ASWLPANEL_CONFIG='${right_dock_cfg}' ./wayland/aswlpanel" || true
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_CLOCK_OVERRIDE=05:45 ASWLTHEME_CONFIG='${right_dock_theme_cfg}' ASWLPANEL_CONFIG='${right_dock_cfg}' ./wayland/aswlpanel" || true
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_MODE=pager ASWLPANEL_CONFIG='${right_pager_cfg}' ./wayland/aswlpanel" || true
 

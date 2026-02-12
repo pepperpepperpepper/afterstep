@@ -423,6 +423,8 @@ struct aswl_style {
 	char *fore;
 	char *back;
 	char *font;
+	int back_pixmap_type;
+	char *back_pixmap;
 	int back_grad_type;
 	char **back_grad_colors;
 	double *back_grad_offsets;
@@ -449,6 +451,7 @@ static void aswl_free_styles(struct aswl_style *styles, size_t count)
 		free(styles[i].fore);
 		free(styles[i].back);
 		free(styles[i].font);
+		free(styles[i].back_pixmap);
 		for (size_t j = 0; j < styles[i].back_grad_count; j++)
 			free(styles[i].back_grad_colors[j]);
 		free(styles[i].back_grad_colors);
@@ -594,6 +597,34 @@ static bool aswl_load_look(const char *path,
 					free(cur->font);
 					cur->font = v;
 				}
+				continue;
+			}
+			if (strncmp(s, "BackPixmap", 9) == 0 && isspace((unsigned char)s[9])) {
+				/* BackPixmap <type> <pixmap_name|color_name> */
+				char *args = aswl_trim(s + 9);
+				if (args == NULL || args[0] == '\0')
+					continue;
+
+				char *p = args;
+				char *tok_type = p;
+				while (*p != '\0' && !isspace((unsigned char)*p))
+					p++;
+				if (*p != '\0')
+					*p++ = '\0';
+
+				char *endptr = NULL;
+				long type = strtol(tok_type, &endptr, 10);
+				if (endptr == tok_type || type < 0 || type > 255)
+					continue;
+
+				p = aswl_trim(p);
+				char *tok = NULL;
+				if (p != NULL && p[0] != '\0')
+					tok = aswl_parse_quoted_or_token_dup(p);
+
+				cur->back_pixmap_type = (int)type;
+				free(cur->back_pixmap);
+				cur->back_pixmap = tok;
 				continue;
 			}
 			if (strncmp(s, "BackGradient", 12) == 0 && isspace((unsigned char)s[12])) {
@@ -1133,6 +1164,98 @@ static bool aswl_resolve_style_font(struct aswl_style *styles,
 	return *font_out != NULL;
 }
 
+static bool aswl_resolve_style_back_pixmap_rec(struct aswl_style *styles,
+                                               size_t style_count,
+                                               const struct aswl_style *st,
+                                               const char **stack,
+                                               size_t stack_len,
+                                               const struct aswl_style **src_out)
+{
+	if (src_out != NULL)
+		*src_out = NULL;
+	if (st == NULL)
+		return false;
+
+	for (size_t i = 0; i < stack_len; i++) {
+		if (stack[i] != NULL && st->name != NULL && strcmp(stack[i], st->name) == 0)
+			return false;
+	}
+
+	if (stack_len >= 16)
+		return false;
+
+	const char *next_stack[16];
+	for (size_t i = 0; i < stack_len; i++)
+		next_stack[i] = stack[i];
+	next_stack[stack_len] = st->name;
+
+	if (st->back_pixmap_type != 0) {
+		if (src_out != NULL)
+			*src_out = st;
+		return true;
+	}
+
+	for (size_t i = 0; i < st->inherit_count; i++) {
+		struct aswl_style *parent = aswl_find_style(styles, style_count, st->inherits[i]);
+		if (parent == NULL)
+			continue;
+		const struct aswl_style *src = NULL;
+		if (aswl_resolve_style_back_pixmap_rec(styles, style_count, parent, next_stack, stack_len + 1, &src)) {
+			if (src != NULL) {
+				if (src_out != NULL)
+					*src_out = src;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static bool aswl_resolve_style_back_pixmap_tint(struct aswl_style *styles,
+                                                size_t style_count,
+                                                const char *style_name,
+                                                const struct aswl_color_entry *colors,
+                                                size_t color_count,
+                                                int *type_out,
+                                                uint32_t *tint_out)
+{
+	if (type_out != NULL)
+		*type_out = 0;
+	if (tint_out != NULL)
+		*tint_out = 0;
+	if (style_name == NULL || style_name[0] == '\0')
+		return false;
+
+	struct aswl_style *st = aswl_find_style(styles, style_count, style_name);
+	if (st == NULL)
+		return false;
+
+	const char *stack[16] = { 0 };
+	const struct aswl_style *src = NULL;
+	if (!aswl_resolve_style_back_pixmap_rec(styles, style_count, st, stack, 0, &src))
+		return false;
+	if (src == NULL)
+		return false;
+
+	if (src->back_pixmap_type != 129 && src->back_pixmap_type != 149)
+		return false;
+
+	uint32_t tint = 0x7F7F7F7Fu; /* TINT_LEAVE_SAME */
+	uint32_t parsed = 0;
+	if (src->back_pixmap != NULL && aswl_parse_color_token(src->back_pixmap, colors, color_count, &parsed)) {
+		tint = parsed;
+		if (src->back_pixmap_type == 129)
+			tint = (tint >> 1) & 0x7F7F7F7Fu; /* match AfterStep's "old style" tint conversion */
+	}
+
+	if (type_out != NULL)
+		*type_out = src->back_pixmap_type;
+	if (tint_out != NULL)
+		*tint_out = tint;
+	return true;
+}
+
 static bool aswl_resolve_style_gradient_rec(struct aswl_style *styles,
                                            size_t style_count,
                                            const struct aswl_style *st,
@@ -1424,6 +1547,9 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	aswl_gradient_destroy(&theme->menu_item_gradient);
 	aswl_gradient_destroy(&theme->menu_item_sel_gradient);
 
+	theme->panel_back_pixmap_type = 0;
+	theme->panel_back_pixmap_tint = 0;
+
 		struct aswl_theme_cfg cfg = {
 			.panel_style = strdup("*WharfTile"),
 			.ws_active_style = strdup("*PagerActiveDesk"),
@@ -1511,6 +1637,16 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	if (!panel_style_has_bg && aswl_colors_lookup(colors, color_count, "Base", &c)) {
 		theme->panel_bg = c;
 		applied = true;
+	}
+
+	{
+		int bp_type = 0;
+		uint32_t bp_tint = 0;
+		if (aswl_resolve_style_back_pixmap_tint(styles, style_count, cfg.panel_style, colors, color_count, &bp_type, &bp_tint)) {
+			theme->panel_back_pixmap_type = bp_type;
+			theme->panel_back_pixmap_tint = bp_tint;
+			applied = true;
+		}
 	}
 
 	if (aswl_resolve_style_color(styles, style_count, cfg.ws_inactive_style, false, colors, color_count, &c)) {

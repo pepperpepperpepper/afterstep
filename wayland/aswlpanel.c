@@ -91,6 +91,24 @@ struct as_window {
 	char *app_id;
 };
 
+struct aswl_bg_snapshot_header {
+	char magic[8]; /* "ASWLBG1\0" */
+	uint32_t width;
+	uint32_t height;
+	uint32_t stride; /* bytes per row */
+	uint32_t format; /* reserved; currently 0 = ARGB8888 */
+};
+
+struct as_bg_snapshot {
+	void *map;
+	size_t size;
+	uint32_t *argb; /* points into map, immediately after header */
+	int width;
+	int height;
+	int stride;
+	char *path;
+};
+
 struct as_buffer {
 	struct wl_buffer *wl_buffer;
 	void *data;
@@ -173,6 +191,7 @@ struct as_state {
 	size_t window_cap;
 	bool window_list_in_progress;
 
+	struct as_bg_snapshot bg_snapshot;
 	struct aswl_theme theme;
 	struct aswl_font font;
 };
@@ -326,6 +345,212 @@ static uint32_t as_unpremul_argb(uint32_t argb)
 		b = 255u;
 
 	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+static void as_bg_snapshot_destroy(struct as_bg_snapshot *snap)
+{
+	if (snap == NULL)
+		return;
+	if (snap->map != NULL && snap->size > 0)
+		munmap(snap->map, snap->size);
+	free(snap->path);
+	*snap = (struct as_bg_snapshot){ 0 };
+}
+
+static char *as_expand_tilde_dup(const char *path)
+{
+	if (path == NULL)
+		return NULL;
+
+	if (path[0] != '~')
+		return strdup(path);
+
+	const char *home = getenv("HOME");
+	if (home == NULL || home[0] == '\0')
+		return strdup(path);
+
+	if (path[1] == '\0')
+		return strdup(home);
+	if (path[1] != '/')
+		return strdup(path);
+
+	size_t home_len = strlen(home);
+	size_t rest_len = strlen(path + 1);
+	char *out = malloc(home_len + rest_len + 1);
+	if (out == NULL)
+		return NULL;
+
+	memcpy(out, home, home_len);
+	memcpy(out + home_len, path + 1, rest_len + 1);
+	return out;
+}
+
+static char *as_sanitize_filename_segment(const char *s)
+{
+	if (s == NULL || s[0] == '\0')
+		return strdup("wayland");
+
+	size_t len = strlen(s);
+	if (len > 200)
+		len = 200;
+
+	char *out = malloc(len + 1);
+	if (out == NULL)
+		return NULL;
+
+	for (size_t i = 0; i < len; i++) {
+		unsigned char ch = (unsigned char)s[i];
+		if (isalnum(ch) || ch == '-' || ch == '_' || ch == '.')
+			out[i] = (char)ch;
+		else
+			out[i] = '_';
+	}
+	out[len] = '\0';
+	return out;
+}
+
+static char *as_bg_snapshot_path(void)
+{
+	const char *env = getenv("ASWLBG_SNAPSHOT");
+	if (env != NULL) {
+		if (env[0] == '\0' || strcmp(env, "0") == 0 || strcasecmp(env, "off") == 0 || strcasecmp(env, "false") == 0)
+			return NULL;
+		return as_expand_tilde_dup(env);
+	}
+
+	const char *runtime = getenv("XDG_RUNTIME_DIR");
+	if (runtime == NULL || runtime[0] == '\0')
+		runtime = "/tmp";
+
+	char *safe = as_sanitize_filename_segment(getenv("WAYLAND_DISPLAY"));
+	if (safe == NULL)
+		return NULL;
+
+	char *out = NULL;
+	if (asprintf(&out, "%s/afterstep.aswlbg.%s.argb", runtime, safe) < 0)
+		out = NULL;
+	free(safe);
+	return out;
+}
+
+static bool as_bg_snapshot_load(struct as_bg_snapshot *snap, const char *path)
+{
+	if (snap == NULL || path == NULL || path[0] == '\0')
+		return false;
+
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+
+	struct stat st;
+	if (fstat(fd, &st) != 0) {
+		close(fd);
+		return false;
+	}
+	if (st.st_size < (off_t)sizeof(struct aswl_bg_snapshot_header)) {
+		close(fd);
+		return false;
+	}
+
+	size_t size = (size_t)st.st_size;
+	void *map = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+	close(fd);
+	if (map == MAP_FAILED)
+		return false;
+
+	const struct aswl_bg_snapshot_header *hdr = (const struct aswl_bg_snapshot_header *)map;
+	static const char want_magic[8] = { 'A', 'S', 'W', 'L', 'B', 'G', '1', '\0' };
+	if (memcmp(hdr->magic, want_magic, sizeof(want_magic)) != 0) {
+		munmap(map, size);
+		return false;
+	}
+
+	if (hdr->width == 0 || hdr->height == 0 || hdr->width > 16384 || hdr->height > 16384) {
+		munmap(map, size);
+		return false;
+	}
+	if (hdr->stride < hdr->width * 4u) {
+		munmap(map, size);
+		return false;
+	}
+
+	size_t needed = sizeof(*hdr);
+	if (hdr->height > 0 && (size_t)hdr->stride > (SIZE_MAX - needed) / (size_t)hdr->height) {
+		munmap(map, size);
+		return false;
+	}
+	needed += (size_t)hdr->stride * (size_t)hdr->height;
+	if (needed > size) {
+		munmap(map, size);
+		return false;
+	}
+
+	char *saved_path = strdup(path);
+	if (saved_path == NULL) {
+		munmap(map, size);
+		return false;
+	}
+
+	*snap = (struct as_bg_snapshot){
+		.map = map,
+		.size = size,
+		.argb = (uint32_t *)((uint8_t *)map + sizeof(*hdr)),
+		.width = (int)hdr->width,
+		.height = (int)hdr->height,
+		.stride = (int)hdr->stride,
+		.path = saved_path,
+	};
+	return true;
+}
+
+static bool as_state_ensure_bg_snapshot(struct as_state *state)
+{
+	if (state == NULL)
+		return false;
+
+	char *path = as_bg_snapshot_path();
+	if (path == NULL)
+		return false;
+
+	bool ok = false;
+	if (state->bg_snapshot.map != NULL && state->bg_snapshot.path != NULL && strcmp(state->bg_snapshot.path, path) == 0) {
+		ok = true;
+	} else {
+		as_bg_snapshot_destroy(&state->bg_snapshot);
+		ok = as_bg_snapshot_load(&state->bg_snapshot, path);
+	}
+
+	free(path);
+	return ok;
+}
+
+static inline uint8_t as_tint_u8(uint8_t v, uint8_t tint)
+{
+	unsigned ratio = (unsigned)tint << 1;
+	unsigned out = ((unsigned)v * ratio + 128u) >> 8;
+	if (out > 255u)
+		out = 255u;
+	return (uint8_t)out;
+}
+
+static uint32_t as_apply_backpixmap_tint(uint32_t bg, uint32_t tint)
+{
+	uint8_t ba = (uint8_t)((bg >> 24) & 0xFFu);
+	uint8_t br = (uint8_t)((bg >> 16) & 0xFFu);
+	uint8_t bgc = (uint8_t)((bg >> 8) & 0xFFu);
+	uint8_t bb = (uint8_t)(bg & 0xFFu);
+
+	uint8_t ta = (uint8_t)((tint >> 24) & 0xFFu);
+	uint8_t tr = (uint8_t)((tint >> 16) & 0xFFu);
+	uint8_t tg = (uint8_t)((tint >> 8) & 0xFFu);
+	uint8_t tb = (uint8_t)(tint & 0xFFu);
+
+	uint8_t oa = as_tint_u8(ba, ta);
+	uint8_t orr = as_tint_u8(br, tr);
+	uint8_t og = as_tint_u8(bgc, tg);
+	uint8_t ob = as_tint_u8(bb, tb);
+
+	return ((uint32_t)oa << 24) | ((uint32_t)orr << 16) | ((uint32_t)og << 8) | (uint32_t)ob;
 }
 
 static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t argb);
@@ -650,6 +875,44 @@ static void as_buffer_fill_rect(struct as_buffer *buf, int x, int y, int w, int 
 	}
 }
 
+static bool as_buffer_fill_backpixmap_tint(struct as_buffer *buf,
+                                          const struct as_bg_snapshot *snap,
+                                          int src_x,
+                                          int src_y,
+                                          uint32_t tint)
+{
+	if (buf == NULL || buf->data == NULL)
+		return false;
+	if (snap == NULL || snap->argb == NULL)
+		return false;
+	if (snap->width <= 0 || snap->height <= 0 || snap->stride <= 0)
+		return false;
+
+	for (int y = 0; y < buf->height; y++) {
+		int sy = src_y + y;
+		uint32_t *dst_row = (uint32_t *)((uint8_t *)buf->data + (size_t)y * (size_t)buf->stride);
+		if (sy < 0 || sy >= snap->height) {
+			for (int x = 0; x < buf->width; x++)
+				dst_row[x] = 0;
+			continue;
+		}
+
+		const uint32_t *src_row = (const uint32_t *)((const uint8_t *)snap->argb + (size_t)sy * (size_t)snap->stride);
+		for (int x = 0; x < buf->width; x++) {
+			int sx = src_x + x;
+			if (sx < 0 || sx >= snap->width) {
+				dst_row[x] = 0;
+				continue;
+			}
+			uint32_t bg = src_row[sx];
+			uint32_t out = as_apply_backpixmap_tint(bg, tint);
+			dst_row[x] = as_premul_argb(out);
+		}
+	}
+
+	return true;
+}
+
 static void as_buffer_draw_bevel_rect(struct as_buffer *buf, int x, int y, int w, int h, uint32_t base_argb, bool sunken)
 {
 	if (buf == NULL || buf->data == NULL)
@@ -922,6 +1185,57 @@ static bool as_anchor_spans_horizontal(uint32_t anchor)
 static bool as_anchor_spans_vertical(uint32_t anchor)
 {
 	return (anchor & ASWL_ANCHOR_TOP) != 0 && (anchor & ASWL_ANCHOR_BOTTOM) != 0;
+}
+
+static bool as_state_compute_surface_origin(const struct as_state *state, int *x_out, int *y_out)
+{
+	if (x_out != NULL)
+		*x_out = 0;
+	if (y_out != NULL)
+		*y_out = 0;
+	if (state == NULL)
+		return false;
+
+	int ow = state->output_width;
+	int oh = state->output_height;
+	if (ow <= 0 || oh <= 0)
+		return false;
+
+	int w = state->width;
+	int h = state->height;
+	if (w <= 0 || h <= 0)
+		return false;
+
+	uint32_t anchor = as_state_anchor_flags(state);
+
+	int x = 0;
+	if (as_anchor_spans_horizontal(anchor) || (anchor & ASWL_ANCHOR_LEFT) != 0) {
+		x = state->margins.left;
+	} else if ((anchor & ASWL_ANCHOR_RIGHT) != 0) {
+		x = ow - state->margins.right - w;
+	} else {
+		x = (ow - w) / 2;
+	}
+
+	int y = 0;
+	if (as_anchor_spans_vertical(anchor) || (anchor & ASWL_ANCHOR_TOP) != 0) {
+		y = state->margins.top;
+	} else if ((anchor & ASWL_ANCHOR_BOTTOM) != 0) {
+		y = oh - state->margins.bottom - h;
+	} else {
+		y = (oh - h) / 2;
+	}
+
+	if (x < 0)
+		x = 0;
+	if (y < 0)
+		y = 0;
+
+	if (x_out != NULL)
+		*x_out = x;
+	if (y_out != NULL)
+		*y_out = y;
+	return true;
 }
 
 static int as_clamp_margin(int v)
@@ -2258,29 +2572,45 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	bool winlist_has_window = winlist_strip && (as_state_visible_window_nth(state, 0) != NULL);
 	const struct aswl_gradient *bg_grad = &state->theme.panel_bg_gradient;
 	uint32_t bg_color = state->theme.panel_bg;
+	int bg_backpix_type = state->theme.panel_back_pixmap_type;
+	uint32_t bg_backpix_tint = state->theme.panel_back_pixmap_tint;
+	bool bg_backpix_filled = false;
 	if (winlist_has_window) {
 		/* WinList uses window styles by default; match that look when we're a WinList-only strip. */
 		bg_grad = &state->theme.frame_inactive_gradient;
 		bg_color = state->theme.frame_inactive_bg;
+		bg_backpix_type = 0;
+		bg_backpix_tint = 0;
 	}
 
 	if (pager_panel) {
 		/* Pager tiles can be translucent; start with a fully transparent surface so the wallpaper shows through. */
 		as_buffer_fill_rect(buf, 0, 0, buf->width, buf->height, 0x00000000u);
 	} else {
-		if (aswl_gradient_is_valid(bg_grad)) {
-			as_buffer_fill_style_rect(buf,
-			                          0,
-			                          0,
-			                          buf->width,
-			                          buf->height,
-			                          bg_grad,
-			                          bg_color,
-			                          0);
-		} else {
-			uint32_t grad_top = aswl_color_lighten(bg_color, 24);
-			uint32_t grad_bot = aswl_color_darken(bg_color, 24);
-			as_buffer_paint_vertical_gradient(buf, grad_top, grad_bot);
+		if (bg_backpix_type == 129 || bg_backpix_type == 149) {
+			int ox = 0;
+			int oy = 0;
+			if (as_state_compute_surface_origin(state, &ox, &oy) && as_state_ensure_bg_snapshot(state) &&
+			    state->bg_snapshot.width == state->output_width && state->bg_snapshot.height == state->output_height) {
+				bg_backpix_filled = as_buffer_fill_backpixmap_tint(buf, &state->bg_snapshot, ox, oy, bg_backpix_tint);
+			}
+		}
+
+		if (!bg_backpix_filled) {
+			if (aswl_gradient_is_valid(bg_grad)) {
+				as_buffer_fill_style_rect(buf,
+				                          0,
+				                          0,
+				                          buf->width,
+				                          buf->height,
+				                          bg_grad,
+				                          bg_color,
+				                          0);
+			} else {
+				uint32_t grad_top = aswl_color_lighten(bg_color, 24);
+				uint32_t grad_bot = aswl_color_darken(bg_color, 24);
+				as_buffer_paint_vertical_gradient(buf, grad_top, grad_bot);
+			}
 		}
 	}
 
@@ -2560,7 +2890,8 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		if (is_ws)
 			grad = active_ws ? &state->theme.panel_ws_active_gradient : &state->theme.panel_ws_inactive_gradient;
 
-		as_buffer_fill_style_rect(buf, rx, ry, rw, rh, grad, base_bg, nudge);
+		if (!(bg_backpix_filled && state->dock_mode))
+			as_buffer_fill_style_rect(buf, rx, ry, rw, rh, grad, base_bg, nudge);
 		uint32_t bevel_bg = nudge != 0 ? aswl_color_nudge(base_bg, nudge) : base_bg;
 		as_buffer_draw_bevel_rect(buf, rx, ry, rw, rh, bevel_bg, idx == state->pressed_index);
 
@@ -3659,6 +3990,7 @@ static void cleanup(struct as_state *state)
 	as_state_destroy_buffers(state);
 	as_state_free_buttons(state);
 	as_state_destroy_windows(state);
+	as_bg_snapshot_destroy(&state->bg_snapshot);
 	free(state->buttons_config_path);
 	state->buttons_config_path = NULL;
 	aswl_font_destroy(&state->font);

@@ -29,6 +29,14 @@ struct as_image {
 	int height;
 };
 
+struct aswl_bg_snapshot_header {
+	char magic[8]; /* "ASWLBG1\0" */
+	uint32_t width;
+	uint32_t height;
+	uint32_t stride; /* bytes per row */
+	uint32_t format; /* reserved; currently 0 = ARGB8888 */
+};
+
 static void as_image_destroy(struct as_image *img);
 
 static unsigned aswl_env_uint_clamped(const char *name, unsigned def, unsigned max_inclusive)
@@ -131,6 +139,119 @@ static char *aswl_expand_tilde(const char *path)
 	memcpy(out, home, home_len);
 	memcpy(out + home_len, path + 1, rest_len + 1);
 	return out;
+}
+
+static bool aswl_write_full(int fd, const void *data, size_t len)
+{
+	const uint8_t *p = data;
+	size_t left = len;
+	while (left > 0) {
+		ssize_t n = write(fd, p, left);
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			return false;
+		}
+		if (n == 0)
+			return false;
+		p += (size_t)n;
+		left -= (size_t)n;
+	}
+	return true;
+}
+
+static char *aswl_sanitize_filename_segment(const char *s)
+{
+	if (s == NULL || s[0] == '\0')
+		return strdup("wayland");
+
+	size_t len = strlen(s);
+	if (len > 200)
+		len = 200;
+
+	char *out = malloc(len + 1);
+	if (out == NULL)
+		return NULL;
+
+	for (size_t i = 0; i < len; i++) {
+		unsigned char ch = (unsigned char)s[i];
+		if (isalnum(ch) || ch == '-' || ch == '_' || ch == '.')
+			out[i] = (char)ch;
+		else
+			out[i] = '_';
+	}
+	out[len] = '\0';
+	return out;
+}
+
+static char *aswl_bg_snapshot_path(void)
+{
+	const char *env = getenv("ASWLBG_SNAPSHOT");
+	if (env != NULL) {
+		if (env[0] == '\0' || strcmp(env, "0") == 0 || strcasecmp(env, "off") == 0 || strcasecmp(env, "false") == 0)
+			return NULL;
+		return aswl_expand_tilde(env);
+	}
+
+	const char *runtime = getenv("XDG_RUNTIME_DIR");
+	if (runtime == NULL || runtime[0] == '\0')
+		runtime = "/tmp";
+
+	char *safe = aswl_sanitize_filename_segment(getenv("WAYLAND_DISPLAY"));
+	if (safe == NULL)
+		return NULL;
+
+	char *out = NULL;
+	if (asprintf(&out, "%s/afterstep.aswlbg.%s.argb", runtime, safe) < 0)
+		out = NULL;
+	free(safe);
+	return out;
+}
+
+static void aswl_bg_snapshot_write(const struct as_state *state)
+{
+	if (state == NULL)
+		return;
+	if (state->background.argb == NULL || state->background.width <= 0 || state->background.height <= 0)
+		return;
+
+	char *path = aswl_bg_snapshot_path();
+	if (path == NULL)
+		return;
+
+	char *tmp = NULL;
+	if (asprintf(&tmp, "%s.tmp.%ld", path, (long)getpid()) < 0)
+		tmp = NULL;
+
+	int fd = -1;
+	if (tmp != NULL)
+		fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+	if (fd < 0) {
+		free(tmp);
+		free(path);
+		return;
+	}
+
+	struct aswl_bg_snapshot_header hdr = {
+		.magic = { 'A', 'S', 'W', 'L', 'B', 'G', '1', '\0' },
+		.width = (uint32_t)state->background.width,
+		.height = (uint32_t)state->background.height,
+		.stride = (uint32_t)state->background.width * 4u,
+		.format = 0,
+	};
+
+	size_t pixels_bytes = (size_t)state->background.width * (size_t)state->background.height * 4u;
+	bool ok = aswl_write_full(fd, &hdr, sizeof(hdr)) && aswl_write_full(fd, state->background.argb, pixels_bytes);
+	(void)fsync(fd);
+	close(fd);
+
+	if (ok)
+		(void)rename(tmp, path);
+	else
+		(void)unlink(tmp);
+
+	free(tmp);
+	free(path);
 }
 
 static char *aswl_dirname_dup(const char *path)
@@ -1122,6 +1243,7 @@ static void draw_and_commit(struct as_state *state)
 	}
 
 	if (state->background.argb != NULL) {
+		aswl_bg_snapshot_write(state);
 		uint32_t *dst = buf->data;
 		int dst_stride_px = buf->stride / 4;
 		for (int y = 0; y < buf->height; y++) {
