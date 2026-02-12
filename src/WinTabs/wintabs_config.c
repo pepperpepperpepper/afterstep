@@ -12,7 +12,12 @@ retrieve_wintabs_astbar_props()
 	memset(&WinTabsState.unswallow_button, 0x00, sizeof(MyButton));
 	memset(&WinTabsState.menu_button, 0x00, sizeof(MyButton));
 
+	if (Scr.wmprops == NULL)
+		return;
+
 	WinTabsState.tbar_props = get_astbar_props(Scr.wmprops );
+	if (WinTabsState.tbar_props == NULL)
+		return;
 	button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.close_button, 		C_CloseButton, 		_AS_BUTTON_CLOSE, _AS_BUTTON_CLOSE_PRESSED );
 	if (!button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.unswallow_button, 	C_UnswallowButton, 	_AS_BUTTON_MAXIMIZE, _AS_BUTTON_MAXIMIZE_PRESSED ))
 		button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.unswallow_button, 	C_UnswallowButton, 	_AS_BUTTON_MINIMIZE, _AS_BUTTON_MINIMIZE_PRESSED );
@@ -104,7 +109,8 @@ SetWinTabsLook()
 
 	if( WinTabsState.tbar_props == NULL )
 	    retrieve_wintabs_astbar_props();
-	mystyle_get_property (Scr.wmprops);
+	if (Scr.wmprops != NULL)
+		mystyle_get_property (Scr.wmprops);
 
     Scr.Look.MSWindow[BACK_UNFOCUSED] = mystyle_find( Config->unfocused_style );
     Scr.Look.MSWindow[BACK_FOCUSED] = mystyle_find( Config->focused_style );
@@ -132,11 +138,15 @@ SetWinTabsLook()
 	else
 	{
 		clear_flags( WinTabsState.flags, ASWT_Transparent );
-		border_color = Scr.Look.MSWindow[BACK_FOCUSED]->colors.back;
-		if( border_color_override != NULL )
-			parse_argb_color( border_color_override, &border_color );
-		else if( TransparentMS(Scr.Look.MSWindow[BACK_FOCUSED]) )
-			set_flags( WinTabsState.flags, ASWT_Transparent );
+		if (Scr.Look.MSWindow[BACK_FOCUSED] != NULL) {
+			border_color = Scr.Look.MSWindow[BACK_FOCUSED]->colors.back;
+			if( border_color_override != NULL )
+				parse_argb_color( border_color_override, &border_color );
+			else if( TransparentMS(Scr.Look.MSWindow[BACK_FOCUSED]) )
+				set_flags( WinTabsState.flags, ASWT_Transparent );
+		} else {
+			border_color = 0xFF000000;
+		}
 		ARGB2PIXEL(Scr.asv,border_color,&WinTabsState.border_color);
 		XSetForeground(dpy, Scr.DrawGC, WinTabsState.border_color);
 	}

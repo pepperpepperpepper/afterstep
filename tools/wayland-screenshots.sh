@@ -105,6 +105,7 @@ require_cmd xdotool
 cd -- "${repo_root}"
 
 make -C wayland aswlcomp aswlpanel aswlmenu aswlctl aswlbg aswlbanner
+make -C src/WinTabs WinTabs
 
 tmp_home="$(mktemp -d)"
 runtime_dir="$(mktemp -d)"
@@ -130,7 +131,12 @@ cleanup() {
     upload_index=""
   fi
 
-  rm -rf -- "${tmp_home}" "${runtime_dir}"
+  if [[ -n "${tmp_home:-}" && -d "${tmp_home}" ]]; then
+    rm -r -- "${tmp_home}" 2>/dev/null || true
+  fi
+  if [[ -n "${runtime_dir:-}" && -d "${runtime_dir}" ]]; then
+    rm -r -- "${runtime_dir}" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
@@ -159,7 +165,7 @@ top_winlist_margin_top=46
 top_winlist_margin_right=$((right_pager_w + right_reserved + right_gap))
 
 terminal_app_id="ASWLShotXTerm"
-default_terminal_cmd="xterm -class ${terminal_app_id} -geometry 80x24 -fa Monospace -fs 12 -T aswlshot-xterm"
+default_terminal_cmd="xterm -class ${terminal_app_id} -geometry 80x24 -fa Monospace -fs 12 -T 'arch@sandbox-server:/home/arch/afterstep'"
 terminal_cmd="${TERMINAL:-${default_terminal_cmd}}"
 wayland_demo_cmd="weston-simple-shm"
 
@@ -270,6 +276,14 @@ export XDG_RUNTIME_DIR="${runtime_dir}"
 export XDG_CURRENT_DESKTOP=AfterStep:wlroots
 export XDG_SESSION_DESKTOP=AfterStep
 export XDG_SESSION_TYPE=wayland
+
+mkdir -p -- "${HOME}/.afterstep/non-configurable"
+
+# Many legacy AfterStep modules (e.g. WinTabs) expect a populated AfterStep config
+# tree even when running "standalone" under the Wayland harness. Populate the
+# temporary HOME with the in-repo defaults so style/fonts/pixmaps resolve and the
+# module can render (and therefore map) consistently.
+cp -a -- "${repo_root}/afterstep/." "${HOME}/.afterstep/"
 
 export WLR_BACKENDS=x11
 export WLR_X11_FULLSCREEN=1
@@ -589,6 +603,10 @@ require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_CLOCK_OVERRIDE=05:45 ASWLTHEME_CONFIG='${right_dock_theme_cfg}' ASWLPANEL_CONFIG='${right_dock_cfg}' ./wayland/aswlpanel" || true
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_MODE=pager ASWLPANEL_CONFIG='${right_pager_cfg}' ./wayland/aswlpanel" || true
+
+ensure_mapped_window "TermTabs (WinTabs)" \
+  "./src/WinTabs/WinTabs --myname TermTabs --pattern '*term*' --exclude-pattern 'mc*' --geometry +5+100 --title 'term tabs'" \
+  "" "term tabs"
 
 sleep 0.3
 move_pointer 48 100

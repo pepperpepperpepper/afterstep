@@ -2570,6 +2570,23 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	bool pager_panel = (state->pager_mode && as_panel_edge_is_vertical(state->edge) && !state->dock_mode);
 	bool winlist_strip = (!state->dock_mode && state->button_count == 0 && state->window_list_focused_only);
 	bool winlist_has_window = winlist_strip && (as_state_visible_window_nth(state, 0) != NULL);
+
+	if (winlist_strip && !winlist_has_window) {
+		/*
+		 * X11's WinList module effectively disappears when there's no focused
+		 * window to show, leaving only a 1px strip behind. Match that "empty"
+		 * look by making the surface fully transparent except for a single
+		 * top border line.
+		 */
+		as_buffer_fill_rect(buf, 0, 0, buf->width, buf->height, 0x00000000u);
+
+		uint32_t border_color = state->theme.panel_border;
+		if ((border_color >> 24) == 0)
+			border_color = 0xFF000000u;
+		as_buffer_fill_rect(buf, 0, 0, buf->width, 1, border_color);
+		return;
+	}
+
 	const struct aswl_gradient *bg_grad = &state->theme.panel_bg_gradient;
 	uint32_t bg_color = state->theme.panel_bg;
 	int bg_backpix_type = state->theme.panel_back_pixmap_type;

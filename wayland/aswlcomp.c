@@ -181,6 +181,7 @@ struct aswl_view {
 
 	struct wl_listener xwayland_associate;
 	struct wl_listener xwayland_dissociate;
+	struct wl_listener xwayland_map_request;
 	struct wl_listener xwayland_request_configure;
 };
 
@@ -6329,6 +6330,7 @@ static void handle_view_destroy(struct wl_listener *listener, void *data)
 	if (view->type == ASWL_VIEW_XWAYLAND) {
 		wl_list_remove(&view->xwayland_associate.link);
 		wl_list_remove(&view->xwayland_dissociate.link);
+		wl_list_remove(&view->xwayland_map_request.link);
 		wl_list_remove(&view->xwayland_request_configure.link);
 	}
 	wl_list_remove(&view->link);
@@ -6515,6 +6517,14 @@ static void xwayland_attach_surface(struct aswl_view *view)
 	view->surface_destroy.notify = handle_view_surface_destroy;
 	wl_signal_add(&xsurface->surface->events.destroy, &view->surface_destroy);
 	view->surface_destroy_listener_added = true;
+
+	/*
+	 * Some Xwayland clients can fully map (including committing a buffer) before
+	 * we manage to attach our surface listeners. In that case we'd miss the
+	 * wlr_surface map event and the view would remain "unmapped" forever.
+	 */
+	if (!view->mapped && xsurface->surface->mapped)
+		handle_view_map(&view->map, NULL);
 }
 
 static void xwayland_detach_surface(struct aswl_view *view)
@@ -6575,11 +6585,13 @@ static void handle_xwayland_request_configure(struct wl_listener *listener, void
 	struct aswl_view *view = wl_container_of(listener, view, xwayland_request_configure);
 	struct wlr_xwayland_surface_configure_event *event = data;
 
-	if (view == NULL || view->xwayland_surface == NULL || view->scene_tree == NULL || event == NULL)
+	if (view == NULL || view->xwayland_surface == NULL || event == NULL)
 		return;
+	const bool have_scene = (view->scene_tree != NULL);
 
 	if (view->is_dock) {
-		arrange_dock_views(view->server);
+		if (view->server != NULL)
+			arrange_dock_views(view->server);
 		return;
 	}
 
@@ -6598,10 +6610,11 @@ static void handle_xwayland_request_configure(struct wl_listener *listener, void
 	 */
 	int lx = 0;
 	int ly = 0;
-	(void)wlr_scene_node_coords(&view->scene_tree->node, &lx, &ly);
+	if (have_scene)
+		(void)wlr_scene_node_coords(&view->scene_tree->node, &lx, &ly);
 
-	int cur_x = lx + ox;
-	int cur_y = ly + oy;
+	int cur_x = have_scene ? (lx + ox) : (int)view->xwayland_surface->x;
+	int cur_y = have_scene ? (ly + oy) : (int)view->xwayland_surface->y;
 
 	int x = cur_x;
 	int y = cur_y;
@@ -6637,7 +6650,8 @@ static void handle_xwayland_request_configure(struct wl_listener *listener, void
 	}
 
 	if (!view->placed && (x != cur_x || y != cur_y)) {
-		wlr_scene_node_set_position(&view->scene_tree->node, x - ox, y - oy);
+		if (have_scene)
+			wlr_scene_node_set_position(&view->scene_tree->node, x - ox, y - oy);
 		view->placed = true;
 	}
 
@@ -6647,6 +6661,64 @@ static void handle_xwayland_request_configure(struct wl_listener *listener, void
 	                               (uint16_t)w,
 	                               (uint16_t)h);
 	view_update_decorations(view);
+}
+
+static void handle_xwayland_map_request(struct wl_listener *listener, void *data)
+{
+	(void)data;
+	struct aswl_view *view = wl_container_of(listener, view, xwayland_map_request);
+	struct wlr_xwayland_surface *xsurface = view != NULL ? view->xwayland_surface : NULL;
+
+	if (view == NULL || xsurface == NULL)
+		return;
+
+	int x = (int)xsurface->x;
+	int y = (int)xsurface->y;
+	int w = (int)xsurface->width;
+	int h = (int)xsurface->height;
+
+	/*
+	 * Some X11 clients (notably AfterStep modules like WinTabs) create their
+	 * toplevel as 1×1 and rely on the window manager to configure an initial
+	 * size before they render/commit. Without this, the wl_surface never maps.
+	 */
+	if ((w <= 1 || h <= 1) && xsurface->size_hints != NULL) {
+		int hw = xsurface->size_hints->width;
+		int hh = xsurface->size_hints->height;
+		if (hw > 1 && hw <= 4096)
+			w = hw;
+		if (hh > 1 && hh <= 4096)
+			h = hh;
+	}
+
+	if (w <= 1 || h <= 1) {
+		int fallback_w = 640;
+		int fallback_h = 400;
+		if (xsurface->class != NULL && str_ieq(xsurface->class, "ASModule")) {
+			fallback_w = 320;
+			fallback_h = 80;
+		}
+		if (w <= 1)
+			w = fallback_w;
+		if (h <= 1)
+			h = fallback_h;
+	}
+
+	wlr_xwayland_surface_configure(xsurface,
+	                               clamp_i16(x),
+	                               clamp_i16(y),
+	                               clamp_u16(w, 320),
+	                               clamp_u16(h, 80));
+
+	if (view->scene_tree != NULL) {
+		int ox = 0;
+		int oy = 0;
+		view_get_content_offset(view, &ox, &oy);
+		wlr_scene_node_set_position(&view->scene_tree->node, x - ox, y - oy);
+	}
+
+	if (!view->placed && (x != 0 || y != 0))
+		view->placed = true;
 }
 
 static void handle_xwayland_request_move(struct wl_listener *listener, void *data)
@@ -6772,6 +6844,9 @@ static void handle_new_xwayland_surface(struct wl_listener *listener, void *data
 
 	view->xwayland_dissociate.notify = handle_xwayland_dissociate;
 	wl_signal_add(&xsurface->events.dissociate, &view->xwayland_dissociate);
+
+	view->xwayland_map_request.notify = handle_xwayland_map_request;
+	wl_signal_add(&xsurface->events.map_request, &view->xwayland_map_request);
 
 	view->xwayland_request_configure.notify = handle_xwayland_request_configure;
 	wl_signal_add(&xsurface->events.request_configure, &view->xwayland_request_configure);

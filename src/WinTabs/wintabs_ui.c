@@ -103,6 +103,7 @@ make_wintabs_window()
     unsigned int height = max(Config->geometry.height,1);
 	char *iconic_name ;
 
+	memset(&shints, 0x00, sizeof(shints));
 
 	memset( &extwm_hints, 0x00, sizeof(extwm_hints));
     switch( Config->gravity )
@@ -127,7 +128,15 @@ make_wintabs_window()
 	}
     LOCAL_DEBUG_OUT( "creating main window with geometry %dx%d%+d%+d", width, height, x, y );
 
-    w = create_visual_window( Scr.asv, Scr.Root, x, y, 1, 1, 0, InputOutput, 0, NULL);
+    /*
+     * WinTabs historically created its toplevel as 1×1 and relied on the window
+     * manager to configure a real size before first render. Under Xwayland that
+     * can delay buffer commits long enough that the wl_surface never maps,
+     * breaking the Wayland screenshot harness.
+     *
+     * Create the toplevel at its intended size so we can render immediately.
+     */
+    w = create_visual_window( Scr.asv, Scr.Root, x, y, width, height, 0, InputOutput, 0, NULL);
     LOCAL_DEBUG_OUT( "main window created with Id %lX", w);
 
 	iconic_name = Config->icon_title ;
@@ -144,6 +153,10 @@ make_wintabs_window()
 
     shints.flags = USPosition|USSize|PWinGravity;
     shints.win_gravity = Config->gravity ;
+    shints.x = x;
+    shints.y = y;
+    shints.width = width;
+    shints.height = height;
 
 	extwm_hints.pid = getpid();
     extwm_hints.flags = EXTWM_PID|EXTWM_TypeSet ;
@@ -193,4 +206,3 @@ make_frame_window( Window parent )
 	XGrabKey( dpy, WINTABS_SWITCH_KEYCODE, WINTABS_SWITCH_MOD, w, True, GrabModeAsync, GrabModeAsync);
     return w;
 }
-
