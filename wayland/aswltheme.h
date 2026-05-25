@@ -47,6 +47,8 @@ struct aswl_theme {
 	uint32_t frame_border;
 	char *frame_font;
 	char *frame_inactive_font;
+	int frame_active_text_style; /* AfterStep TextStyle 0..9 */
+	int frame_inactive_text_style; /* AfterStep TextStyle 0..9 */
 
 	struct aswl_gradient frame_active_gradient;
 	struct aswl_gradient frame_inactive_gradient;
@@ -55,6 +57,9 @@ struct aswl_theme {
 	uint32_t menu_border;
 	uint32_t menu_header_bg;
 	uint32_t menu_header_fg;
+	/* Focused/active menu titlebar colors (MenuHiTitleStyle). */
+	uint32_t menu_hititle_bg;
+	uint32_t menu_hititle_fg;
 	uint32_t menu_item_bg;
 	uint32_t menu_item_fg;
 	uint32_t menu_item_sel_bg;
@@ -63,12 +68,18 @@ struct aswl_theme {
 	uint32_t menu_footer_fg;
 
 	struct aswl_gradient menu_header_gradient;
+	struct aswl_gradient menu_hititle_gradient;
 	struct aswl_gradient menu_item_gradient;
 	struct aswl_gradient menu_item_sel_gradient;
 
 	char *menu_font;
 	char *menu_title_font;
+	char *menu_hititle_font;
 	char *menu_hilite_font;
+	int menu_item_text_style; /* AfterStep TextStyle 0..9 */
+	int menu_title_text_style; /* AfterStep TextStyle 0..9 */
+	int menu_hititle_text_style; /* AfterStep TextStyle 0..9 */
+	int menu_hilite_text_style; /* AfterStep TextStyle 0..9 */
 };
 
 void aswl_theme_init_default(struct aswl_theme *theme);

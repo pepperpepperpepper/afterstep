@@ -173,16 +173,16 @@ AFTERIMAGE_LIB := ../libAfterImage/libAfterImage.a
 AFTERBASE_LIB := ../libAfterBase/libAfterBase.a
 AFTERIMAGE_LIBS_EXTERNAL := $(shell sh $(AFTERIMAGE_CONFIG) --libs --external-only 2>/dev/null)
 
-all: aswlpanel aswlmenu aswlctl aswlrandr aswlbg aswlbanner aswllock aswlidle aswlprobe
+all: aswlpanel aswlmenu aswlctl aswlrandr aswlbg aswlbanner aswlwait aswllock aswlidle aswlprobe
 
-aswlpanel: aswlpanel.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
-	$(CC) $(CFLAGS) -o $@ aswlpanel.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS)
+aswlpanel: aswlpanel.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlicon.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
+	$(CC) $(CFLAGS) -o $@ aswlpanel.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlicon.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS)
 
 aswlpanel.o: aswlpanel.c aswlicon.h aswlfont.h aswltheme.h $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(AFTERIMAGE_CFLAGS) -DHAVE_AFTERIMAGE=1 -I$(GEN_DIR) -c -o $@ $<
 
-aswlmenu: aswlmenu.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
-	$(CC) $(CFLAGS) -o $@ aswlmenu.o aswltheme.o aswlicon.o aswlfont.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS) $(MENU_LIBS)
+aswlmenu: aswlmenu.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlicon.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
+	$(CC) $(CFLAGS) -o $@ aswlmenu.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlicon.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS) $(MENU_LIBS)
 
 aswlmenu.o: aswlmenu.c aswlicon.h aswlfont.h aswltheme.h $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(MENU_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
@@ -205,10 +205,16 @@ $(AFTERBASE_LIB):
 $(AFTERIMAGE_LIB): $(AFTERBASE_LIB)
 	$(MAKE) -C ../libAfterImage libAfterImage.a
 
-aswlbg: aswlbg.o aswlfont.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
-	$(CC) $(CFLAGS) -o $@ aswlbg.o aswlfont.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS)
+aswlbg: aswlbg.o aswlbg_wl.o aswlbg_render.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
+	$(CC) $(CFLAGS) -o $@ aswlbg.o aswlbg_wl.o aswlbg_render.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS)
 
-aswlbg.o: aswlbg.c aswlfont.h $(PROTOCOL_HDRS)
+aswlbg.o: aswlbg.c aswlbg_internal.h $(PROTOCOL_HDRS)
+	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(AFTERIMAGE_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+
+aswlbg_wl.o: aswlbg_wl.c aswlbg_internal.h $(PROTOCOL_HDRS)
+	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(AFTERIMAGE_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+
+aswlbg_render.o: aswlbg_render.c aswlbg_internal.h $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(AFTERIMAGE_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
 
 aswlbanner: aswlbanner.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
@@ -217,10 +223,19 @@ aswlbanner: aswlbanner.o $(PROTOCOL_SRCS) $(AFTERIMAGE_LIB)
 aswlbanner.o: aswlbanner.c $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) $(AFTERIMAGE_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
 
-aswllock: aswllock.o aswltheme.o aswlfont.o $(PROTOCOL_SRCS)
-	$(CC) $(CFLAGS) -o $@ aswllock.o aswltheme.o aswlfont.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS)
+aswlwait: aswlwait.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS)
+	$(CC) $(CFLAGS) -o $@ aswlwait.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS)
 
-aswllock.o: aswllock.c aswlfont.h aswltheme.h $(PROTOCOL_HDRS)
+aswlwait.o: aswlwait.c aswlfont.h aswltheme.h $(PROTOCOL_HDRS)
+	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+
+aswllock: aswllock.o aswllock_wl.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS)
+	$(CC) $(CFLAGS) -o $@ aswllock_wl.o aswllock.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(PROTOCOL_SRCS) $(WAYLAND_LIBS) $(EXTRA_LIBS)
+
+aswllock.o: aswllock.c aswllock_internal.h aswlfont.h aswltheme.h
+	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
+
+aswllock_wl.o: aswllock_wl.c aswllock_internal.h aswlfont.h aswltheme.h $(PROTOCOL_HDRS)
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -I$(GEN_DIR) -c -o $@ $<
 
 aswlidle: aswlidle.o $(PROTOCOL_SRCS)
@@ -235,13 +250,28 @@ aswlprobe: aswlprobe.o
 aswlprobe.o: aswlprobe.c
 	$(CC) $(CFLAGS) $(WAYLAND_CFLAGS) -c -o $@ $<
 
-aswltheme.o: aswltheme.c aswltheme.h
+aswltheme_core.o: aswltheme_core.c aswltheme.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+aswltheme_colorscheme.o: aswltheme_colorscheme.c aswltheme_internal.h aswltheme.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+aswltheme_styles.o: aswltheme_styles.c aswltheme_internal.h aswltheme.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+aswltheme_load.o: aswltheme_load.c aswltheme_internal.h aswltheme.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 aswlicon.o: aswlicon.c aswlicon.h
 	$(CC) $(CFLAGS) $(AFTERIMAGE_CFLAGS) -DHAVE_AFTERIMAGE=1 -c -o $@ $<
 
-aswlfont.o: aswlfont.c aswlfont.h
+aswlfont.o: aswlfont.c aswlfont_internal.h aswlfont.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+aswlfont_backend.o: aswlfont_backend.c aswlfont_internal.h aswlfont.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+aswlfont_layout.o: aswlfont_layout.c aswlfont_internal.h aswlfont.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 ifeq ($(strip $(WLROOTS_LIBS)),)
@@ -249,8 +279,8 @@ aswlcomp:
 	@echo "Missing wlroots (pkg-config 'wlroots'). Install wlroots development files." 1>&2
 	@exit 1
 else
-aswlcomp: aswlcomp.o aswltheme.o aswlicon.o aswlfont.o $(CONTROL_SRC) $(AFTERIMAGE_LIB)
-	$(CC) $(CFLAGS) -o $@ aswlcomp.o aswltheme.o aswlicon.o aswlfont.o $(CONTROL_SRC) $(WLROOTS_LIBS) $(WAYLAND_SERVER_LIBS) $(XKBCOMMON_LIBS) $(PIXMAN_LIBS) $(LIBINPUT_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS)
+aswlcomp: aswlcomp.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlicon.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(CONTROL_SRC) $(AFTERIMAGE_LIB)
+	$(CC) $(CFLAGS) -o $@ aswlcomp.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlicon.o aswlfont.o aswlfont_backend.o aswlfont_layout.o $(CONTROL_SRC) $(WLROOTS_LIBS) $(WAYLAND_SERVER_LIBS) $(XKBCOMMON_LIBS) $(PIXMAN_LIBS) $(LIBINPUT_LIBS) $(AFTERIMAGE_LIB) $(AFTERBASE_LIB) $(AFTERIMAGE_LIBS_EXTERNAL) $(EXTRA_LIBS)
 
 ASWLCOMP_PROTOCOL_HDRS := $(XDG_SERVER_HDR) $(LAYER_SERVER_HDR) $(CONTROL_SERVER_HDR) $(POINTER_CONSTRAINTS_SERVER_HDR)
 
@@ -313,7 +343,7 @@ $(POINTER_CONSTRAINTS_SERVER_HDR): $(POINTER_CONSTRAINTS_XML) | $(GEN_DIR)
 	$(WAYLAND_SCANNER) server-header $< $@
 
 clean:
-	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlmenu aswlmenu.o aswlctl aswlctl.o aswlrandr aswlrandr.o aswlbg aswlbg.o aswlbanner aswlbanner.o aswllock aswllock.o aswlidle aswlidle.o aswlprobe aswlprobe.o aswltheme.o aswlicon.o aswlfont.o aswlcomp aswlcomp.o
+	rm -rf $(GEN_DIR) aswlpanel aswlpanel.o aswlmenu aswlmenu.o aswlctl aswlctl.o aswlrandr aswlrandr.o aswlbg aswlbg.o aswlbg_wl.o aswlbg_render.o aswlbanner aswlbanner.o aswlwait aswlwait.o aswllock aswllock.o aswllock_wl.o aswlidle aswlidle.o aswlprobe aswlprobe.o aswltheme.o aswltheme_core.o aswltheme_colorscheme.o aswltheme_styles.o aswltheme_load.o aswlicon.o aswlfont.o aswlfont_backend.o aswlfont_layout.o aswlcomp aswlcomp.o
 
 run-nested: aswlcomp aswlpanel aswlmenu
 	./run-nested.sh

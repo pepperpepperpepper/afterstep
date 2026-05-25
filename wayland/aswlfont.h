@@ -44,6 +44,11 @@ int aswl_font_height(const struct aswl_font *font);
 int aswl_font_text_width_n(struct aswl_font *font, const char *s, size_t n);
 int aswl_font_text_width(struct aswl_font *font, const char *s);
 
+/* AfterStep-compatible TextStyle rendering (0..9). */
+int aswl_font_height_styled(const struct aswl_font *font, int text_style);
+int aswl_font_text_width_styled_n(struct aswl_font *font, const char *s, size_t n, int text_style);
+int aswl_font_text_width_styled(struct aswl_font *font, const char *s, int text_style);
+
 void aswl_font_draw_text(struct aswl_font *font,
                          uint32_t *dst_argb,
                          int dst_w,
@@ -54,6 +59,18 @@ void aswl_font_draw_text(struct aswl_font *font,
                          const char *s,
                          int max_w,
                          uint32_t argb);
+
+void aswl_font_draw_text_styled(struct aswl_font *font,
+                                uint32_t *dst_argb,
+                                int dst_w,
+                                int dst_h,
+                                int dst_stride_px,
+                                int x,
+                                int y,
+                                const char *s,
+                                int max_w,
+                                uint32_t argb,
+                                int text_style);
 
 /* Built-in 5x7 helpers (used for icon placeholders/badges). */
 int aswl_font5x7_glyph_w(int scale);

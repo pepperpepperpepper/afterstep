@@ -1,223 +1,6 @@
-#define _GNU_SOURCE
-#define _POSIX_C_SOURCE 200809L
+#include "aswlfont_internal.h"
 
-#include "aswlfont.h"
-
-#include <ctype.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#ifdef HAVE_FREETYPE
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#endif
-
-#ifdef HAVE_FONTCONFIG
-#include <fontconfig/fontconfig.h>
-#endif
-
-static bool aswl_utf8_decode_next(const char *s, size_t n, size_t *i, uint32_t *cp_out)
-{
-	if (cp_out != NULL)
-		*cp_out = 0;
-	if (s == NULL || i == NULL || cp_out == NULL)
-		return false;
-
-	size_t idx = *i;
-	if (idx >= n)
-		return false;
-
-	unsigned char b0 = (unsigned char)s[idx];
-	if (b0 == '\0')
-		return false;
-
-	if (b0 < 0x80u) {
-		*cp_out = (uint32_t)b0;
-		*i = idx + 1;
-		return true;
-	}
-
-	/* Reject 0x80..0xBF continuation bytes as leading bytes. */
-	if ((b0 & 0xC0u) == 0x80u) {
-		*cp_out = 0xFFFDu;
-		*i = idx + 1;
-		return true;
-	}
-
-	int need = 0;
-	uint32_t cp = 0;
-	uint32_t min = 0;
-
-	if ((b0 & 0xE0u) == 0xC0u) {
-		need = 2;
-		cp = (uint32_t)(b0 & 0x1Fu);
-		min = 0x80u;
-	} else if ((b0 & 0xF0u) == 0xE0u) {
-		need = 3;
-		cp = (uint32_t)(b0 & 0x0Fu);
-		min = 0x800u;
-	} else if ((b0 & 0xF8u) == 0xF0u) {
-		need = 4;
-		cp = (uint32_t)(b0 & 0x07u);
-		min = 0x10000u;
-	} else {
-		*cp_out = 0xFFFDu;
-		*i = idx + 1;
-		return true;
-	}
-
-	if (idx + (size_t)need > n) {
-		/* Incomplete final sequence: stop (avoid splitting codepoints). */
-		return false;
-	}
-
-	for (int k = 1; k < need; k++) {
-		unsigned char bx = (unsigned char)s[idx + (size_t)k];
-		if (bx == '\0')
-			return false;
-		if ((bx & 0xC0u) != 0x80u) {
-			*cp_out = 0xFFFDu;
-			*i = idx + 1;
-			return true;
-		}
-		cp = (cp << 6) | (uint32_t)(bx & 0x3Fu);
-	}
-
-	/* Overlong sequences and invalid ranges. */
-	if (cp < min || cp > 0x10FFFFu || (cp >= 0xD800u && cp <= 0xDFFFu)) {
-		*cp_out = 0xFFFDu;
-		*i = idx + 1;
-		return true;
-	}
-
-	*cp_out = cp;
-	*i = idx + (size_t)need;
-	return true;
-}
-
-static bool aswl_is_file_readable(const char *path)
-{
-	if (path == NULL || path[0] == '\0')
-		return false;
-	struct stat st;
-	if (stat(path, &st) != 0)
-		return false;
-	if (!S_ISREG(st.st_mode))
-		return false;
-	return access(path, R_OK) == 0;
-}
-
-static char *aswl_try_font_under_root(const char *root, const char *name)
-{
-	if (root == NULL || root[0] == '\0' || name == NULL || name[0] == '\0')
-		return NULL;
-
-	char *path = NULL;
-	if (asprintf(&path, "%s/%s", root, name) < 0)
-		return NULL;
-
-	if (aswl_is_file_readable(path))
-		return path;
-
-	free(path);
-	return NULL;
-}
-
-static char *aswl_try_afterstep_font_file(const char *name)
-{
-	if (name == NULL || name[0] == '\0')
-		return NULL;
-
-	/* Only try the AfterStep font directories for basename-like specs. */
-	if (strchr(name, '/') != NULL)
-		return NULL;
-
-	const char *home = getenv("HOME");
-	char *home_root = NULL;
-	if (home != NULL && home[0] != '\0')
-		(void)asprintf(&home_root, "%s/.afterstep/desktop/fonts", home);
-
-	const char *roots[] = {
-		home_root,
-		"afterstep/desktop/fonts",
-		"/usr/local/share/afterstep/desktop/fonts",
-		"/usr/share/afterstep/desktop/fonts",
-	};
-
-	for (size_t i = 0; i < sizeof(roots) / sizeof(roots[0]); i++) {
-		if (roots[i] == NULL || roots[i][0] == '\0')
-			continue;
-		char *p = aswl_try_font_under_root(roots[i], name);
-		if (p != NULL) {
-			free(home_root);
-			return p;
-		}
-	}
-
-	free(home_root);
-	return NULL;
-}
-
-static char *aswl_dup_trim(const char *s)
-{
-	if (s == NULL)
-		return NULL;
-
-	while (*s != '\0' && isspace((unsigned char)*s))
-		s++;
-
-	size_t len = strlen(s);
-	while (len > 0 && isspace((unsigned char)s[len - 1]))
-		len--;
-
-	if (len == 0)
-		return NULL;
-
-	return strndup(s, len);
-}
-
-static char *aswl_normalize_font_spec(const char *spec)
-{
-	char *s = aswl_dup_trim(spec);
-	if (s == NULL)
-		return NULL;
-
-	/* AfterStep often uses Xft-style "xft:..." prefixes. Strip it for fontconfig. */
-	if ((s[0] == 'x' || s[0] == 'X') && (s[1] == 'f' || s[1] == 'F') && (s[2] == 't' || s[2] == 'T') &&
-	    s[3] == ':') {
-		char *out = aswl_dup_trim(s + 4);
-		free(s);
-		return out;
-	}
-
-	return s;
-}
-
-static int aswl_parse_trailing_px(const char *spec)
-{
-	if (spec == NULL || spec[0] == '\0')
-		return 0;
-
-	size_t len = strlen(spec);
-	size_t i = len;
-	while (i > 0 && isdigit((unsigned char)spec[i - 1]))
-		i--;
-	if (i > 1 && i < len && spec[i - 1] == '-') {
-		char *end = NULL;
-		long v = strtol(spec + i, &end, 10);
-		if (end != NULL && *end == '\0') {
-			if (v >= 4 && v <= 256)
-				return (int)v;
-		}
-	}
-
-	return 0;
-}
 
 static void aswl_fill_rect(uint32_t *dst_argb,
                            int dst_w,
@@ -556,58 +339,10 @@ int aswl_font5x7_glyph_w(int scale)
 	return 5 * scale;
 }
 
-int aswl_font5x7_glyph_h(int scale)
-{
-	return 7 * scale;
-}
-
-static int as_font5x7_spacing(int scale)
-{
-	return scale;
-}
-
-static int as_font5x7_text_width_n(const char *s, size_t n, int scale)
-{
-	if (s == NULL || n == 0 || scale <= 0)
-		return 0;
-
-	int w = 0;
-	int glyph_w = aswl_font5x7_glyph_w(scale);
-	int spacing = as_font5x7_spacing(scale);
-	size_t i = 0;
-	uint32_t cp = 0;
-	while (aswl_utf8_decode_next(s, n, &i, &cp)) {
-		if (w > 0)
-			w += spacing;
-		w += glyph_w;
+	int aswl_font5x7_glyph_h(int scale)
+	{
+		return 7 * scale;
 	}
-	return w;
-}
-
-static size_t as_font5x7_fit_bytes(const char *s, int scale, int max_w)
-{
-	if (s == NULL || max_w <= 0)
-		return 0;
-
-	int glyph_w = aswl_font5x7_glyph_w(scale);
-	int spacing = as_font5x7_spacing(scale);
-
-	size_t len = strlen(s);
-	size_t i = 0;
-	size_t bytes = 0;
-	int w = 0;
-	uint32_t cp = 0;
-	while (aswl_utf8_decode_next(s, len, &i, &cp)) {
-		int add = glyph_w;
-		if (w > 0)
-			add += spacing;
-		if (w + add > max_w)
-			break;
-		w += add;
-		bytes = i;
-	}
-	return bytes;
-}
 
 void aswl_font5x7_draw_glyph(uint32_t *dst_argb,
                              int dst_w,
@@ -676,20 +411,20 @@ static void as_font5x7_draw_text(uint32_t *dst_argb,
 
 	size_t draw_n = n;
 	bool need_ellipsis = false;
-	int full_w = as_font5x7_text_width_n(s, n, scale);
+	int full_w = aswl_font5x7_text_width_n(s, n, scale);
 	if (max_w > 0 && full_w > max_w) {
-		int ell_w = as_font5x7_text_width_n("...", 3, scale);
+		int ell_w = aswl_font5x7_text_width_n("...", 3, scale);
 		if (ell_w < max_w) {
-			draw_n = as_font5x7_fit_bytes(s, scale, max_w - ell_w);
+			draw_n = aswl_font5x7_fit_bytes(s, scale, max_w - ell_w);
 			need_ellipsis = true;
 		} else {
-			draw_n = as_font5x7_fit_bytes(s, scale, max_w);
+			draw_n = aswl_font5x7_fit_bytes(s, scale, max_w);
 		}
 	}
 
 	int cx = x;
 	int glyph_w = aswl_font5x7_glyph_w(scale);
-	int spacing = as_font5x7_spacing(scale);
+	int spacing = scale;
 
 	size_t i = 0;
 	uint32_t cp = 0;
@@ -715,497 +450,11 @@ static void as_font5x7_draw_text(uint32_t *dst_argb,
 		                     "...",
 		                     max_w > 0 ? max_w - (cx - x) : 0,
 		                     scale,
-		                     argb);
+		                             argb);
 	}
 }
 
 #ifdef HAVE_FREETYPE
-
-struct aswl_ft_cached_glyph {
-	uint32_t codepoint;
-	FT_UInt glyph_index;
-	int advance;
-
-	int bitmap_left;
-	int bitmap_top;
-	int width;
-	int rows;
-	uint8_t *coverage;
-	bool rendered;
-
-	uint64_t last_used;
-};
-
-struct aswl_ft_cache {
-	struct aswl_ft_cached_glyph *glyphs;
-	size_t count;
-	size_t cap;
-	uint64_t tick;
-	int pixel_size;
-};
-
-static struct aswl_ft_cache *aswl_ft_cache_get(struct aswl_font *font)
-{
-	if (font == NULL)
-		return NULL;
-	return (struct aswl_ft_cache *)font->ft_cache;
-}
-
-static void aswl_ft_cache_clear(struct aswl_ft_cache *cache)
-{
-	if (cache == NULL)
-		return;
-	for (size_t i = 0; i < cache->count; i++)
-		free(cache->glyphs[i].coverage);
-	cache->count = 0;
-}
-
-static void aswl_ft_cache_destroy(struct aswl_font *font)
-{
-	if (font == NULL)
-		return;
-	struct aswl_ft_cache *cache = aswl_ft_cache_get(font);
-	if (cache == NULL)
-		return;
-	aswl_ft_cache_clear(cache);
-	free(cache->glyphs);
-	free(cache);
-	font->ft_cache = NULL;
-}
-
-static bool aswl_ft_cache_init(struct aswl_font *font)
-{
-	if (font == NULL)
-		return false;
-	if (font->ft_cache != NULL)
-		return true;
-
-	struct aswl_ft_cache *cache = calloc(1, sizeof(*cache));
-	if (cache == NULL)
-		return false;
-
-	cache->cap = 512;
-	cache->glyphs = calloc(cache->cap, sizeof(*cache->glyphs));
-	if (cache->glyphs == NULL) {
-		free(cache);
-		return false;
-	}
-	cache->tick = 1;
-	cache->pixel_size = 0;
-	font->ft_cache = cache;
-	return true;
-}
-
-static void aswl_ft_cache_set_pixel_size(struct aswl_font *font, int px)
-{
-	struct aswl_ft_cache *cache = aswl_ft_cache_get(font);
-	if (cache == NULL)
-		return;
-	if (cache->pixel_size == px)
-		return;
-	aswl_ft_cache_clear(cache);
-	cache->pixel_size = px;
-}
-
-static struct aswl_ft_cached_glyph *aswl_ft_cache_lookup(struct aswl_font *font, uint32_t codepoint)
-{
-	struct aswl_ft_cache *cache = aswl_ft_cache_get(font);
-	if (cache == NULL)
-		return NULL;
-
-	for (size_t i = 0; i < cache->count; i++) {
-		if (cache->glyphs[i].codepoint == codepoint) {
-			cache->glyphs[i].last_used = cache->tick++;
-			return &cache->glyphs[i];
-		}
-	}
-	return NULL;
-}
-
-static struct aswl_ft_cached_glyph *aswl_ft_cache_alloc_slot(struct aswl_font *font)
-{
-	struct aswl_ft_cache *cache = aswl_ft_cache_get(font);
-	if (cache == NULL || cache->glyphs == NULL || cache->cap == 0)
-		return NULL;
-
-	if (cache->count < cache->cap) {
-		struct aswl_ft_cached_glyph *g = &cache->glyphs[cache->count++];
-		*g = (struct aswl_ft_cached_glyph){ 0 };
-		return g;
-	}
-
-	size_t lru = 0;
-	uint64_t best = UINT64_MAX;
-	for (size_t i = 0; i < cache->count; i++) {
-		if (cache->glyphs[i].last_used < best) {
-			best = cache->glyphs[i].last_used;
-			lru = i;
-		}
-	}
-
-	free(cache->glyphs[lru].coverage);
-	cache->glyphs[lru] = (struct aswl_ft_cached_glyph){ 0 };
-	return &cache->glyphs[lru];
-}
-
-static struct aswl_ft_cached_glyph *aswl_ft_get_cached_glyph(struct aswl_font *font, uint32_t codepoint)
-{
-	if (font == NULL || font->ft_face == NULL)
-		return NULL;
-
-	struct aswl_ft_cache *cache = aswl_ft_cache_get(font);
-	if (cache == NULL)
-		return NULL;
-
-	struct aswl_ft_cached_glyph *g = aswl_ft_cache_lookup(font, codepoint);
-	if (g != NULL)
-		return g;
-
-	FT_Face face = (FT_Face)font->ft_face;
-	g = aswl_ft_cache_alloc_slot(font);
-	if (g == NULL)
-		return NULL;
-
-	FT_UInt glyph = FT_Get_Char_Index(face, (FT_ULong)codepoint);
-	g->codepoint = codepoint;
-	g->glyph_index = glyph;
-	g->advance = 0;
-	g->rendered = false;
-	g->last_used = cache->tick++;
-
-	if (FT_Load_Glyph(face, glyph, FT_LOAD_DEFAULT) == 0)
-		g->advance = (int)(face->glyph->advance.x >> 6);
-
-	return g;
-}
-
-static void aswl_ft_ensure_rendered(struct aswl_font *font, struct aswl_ft_cached_glyph *g)
-{
-	if (font == NULL || font->ft_face == NULL || g == NULL)
-		return;
-	if (g->rendered)
-		return;
-
-	FT_Face face = (FT_Face)font->ft_face;
-	if (FT_Load_Glyph(face, g->glyph_index, FT_LOAD_DEFAULT) != 0) {
-		g->rendered = true;
-		return;
-	}
-	g->advance = (int)(face->glyph->advance.x >> 6);
-
-	if (FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL) != 0) {
-		g->rendered = true;
-		return;
-	}
-
-	FT_GlyphSlot slot = face->glyph;
-	FT_Bitmap *bm = &slot->bitmap;
-
-	g->bitmap_left = slot->bitmap_left;
-	g->bitmap_top = slot->bitmap_top;
-	g->width = (int)bm->width;
-	g->rows = (int)bm->rows;
-
-	free(g->coverage);
-	g->coverage = NULL;
-
-	if (g->width > 0 && g->rows > 0) {
-		size_t sz = (size_t)g->width * (size_t)g->rows;
-		g->coverage = malloc(sz);
-		if (g->coverage != NULL) {
-			int pitch = bm->pitch;
-			const unsigned char *buf = bm->buffer;
-			for (int row = 0; row < g->rows; row++) {
-				const unsigned char *rowp = NULL;
-				if (pitch >= 0)
-					rowp = buf + (size_t)row * (size_t)pitch;
-				else
-					rowp = buf + (size_t)(g->rows - 1 - row) * (size_t)(-pitch);
-
-				uint8_t *dst = g->coverage + (size_t)row * (size_t)g->width;
-				if (bm->pixel_mode == FT_PIXEL_MODE_GRAY) {
-					memcpy(dst, rowp, (size_t)g->width);
-				} else if (bm->pixel_mode == FT_PIXEL_MODE_MONO) {
-					for (int col = 0; col < g->width; col++) {
-						uint8_t byte = rowp[col >> 3];
-						uint8_t bit = (byte >> (7 - (col & 7))) & 1u;
-						dst[col] = bit ? 255u : 0u;
-					}
-				} else {
-					memset(dst, 0, (size_t)g->width);
-				}
-			}
-		}
-	}
-
-	g->rendered = true;
-}
-
-static bool aswl_freetype_init(struct aswl_font *font)
-{
-	if (font == NULL)
-		return false;
-
-	FT_Library lib = NULL;
-	if (FT_Init_FreeType(&lib) != 0)
-		return false;
-
-	font->ft_lib = lib;
-	if (!aswl_ft_cache_init(font)) {
-		FT_Done_FreeType(lib);
-		font->ft_lib = NULL;
-		return false;
-	}
-	return true;
-}
-
-static void aswl_freetype_destroy(struct aswl_font *font)
-{
-	if (font == NULL)
-		return;
-
-	if (font->ft_face != NULL) {
-		FT_Done_Face((FT_Face)font->ft_face);
-		font->ft_face = NULL;
-	}
-	if (font->ft_lib != NULL) {
-		FT_Done_FreeType((FT_Library)font->ft_lib);
-		font->ft_lib = NULL;
-	}
-	aswl_ft_cache_destroy(font);
-	font->ft_has_kerning = false;
-}
-
-#ifdef HAVE_FONTCONFIG
-static char *aswl_fontconfig_match_file(const char *pattern)
-{
-	if (pattern == NULL || pattern[0] == '\0')
-		return NULL;
-
-	if (!FcInit())
-		return NULL;
-
-	FcPattern *pat = FcNameParse((const FcChar8 *)pattern);
-	if (pat == NULL)
-		return NULL;
-
-	FcConfigSubstitute(NULL, pat, FcMatchPattern);
-	FcDefaultSubstitute(pat);
-
-	FcResult result = FcResultNoMatch;
-	FcPattern *match = FcFontMatch(NULL, pat, &result);
-	FcPatternDestroy(pat);
-
-	if (match == NULL)
-		return NULL;
-
-	FcChar8 *file = NULL;
-	if (FcPatternGetString(match, FC_FILE, 0, &file) != FcResultMatch || file == NULL) {
-		FcPatternDestroy(match);
-		return NULL;
-	}
-
-	char *out = strdup((const char *)file);
-	FcPatternDestroy(match);
-	return out;
-}
-#endif
-
-static char *aswl_resolve_font_path(const char *spec, int *base_px_out)
-{
-	if (base_px_out != NULL)
-		*base_px_out = 0;
-
-	char *norm = aswl_normalize_font_spec(spec);
-	if (norm == NULL)
-		return NULL;
-
-	if (base_px_out != NULL)
-		*base_px_out = aswl_parse_trailing_px(norm);
-
-	if (aswl_is_file_readable(norm))
-		return norm;
-
-	/*
-	 * AfterStep looks frequently refer to bundled TTFs by basename plus optional "-<size>"
-	 * suffix (e.g. "DefaultSans.ttf-16"). Resolve those against the AfterStep font dirs.
-	 */
-	char *as_font = aswl_try_afterstep_font_file(norm);
-	if (as_font != NULL) {
-		free(norm);
-		return as_font;
-	}
-
-	size_t len = strlen(norm);
-	size_t i = len;
-	while (i > 0 && isdigit((unsigned char)norm[i - 1]))
-		i--;
-	if (i > 1 && i < len && norm[i - 1] == '-') {
-		char *base = strndup(norm, i - 1);
-		if (base != NULL) {
-			as_font = aswl_try_afterstep_font_file(base);
-			free(base);
-			if (as_font != NULL) {
-				free(norm);
-				return as_font;
-			}
-		}
-	}
-
-#ifdef HAVE_FONTCONFIG
-	char *file = aswl_fontconfig_match_file(norm);
-	if (file != NULL) {
-		free(norm);
-		return file;
-	}
-
-	/*
-	 * Common AfterStep convention is "Family-12" (size suffix). If fontconfig doesn't
-	 * match it as-is, try stripping the trailing "-<digits>".
-	 */
-	size_t len2 = strlen(norm);
-	size_t i2 = len2;
-	while (i2 > 0 && isdigit((unsigned char)norm[i2 - 1]))
-		i2--;
-	if (i2 > 1 && i2 < len2 && norm[i2 - 1] == '-') {
-		char *tmp = strndup(norm, i2 - 1);
-		if (tmp != NULL) {
-			file = aswl_fontconfig_match_file(tmp);
-			free(tmp);
-		}
-		if (file != NULL) {
-			free(norm);
-			return file;
-		}
-	}
-#endif
-
-	free(norm);
-	return NULL;
-}
-
-static int aswl_freetype_text_width_utf8_n(struct aswl_font *font,
-                                          const char *s,
-                                          size_t n,
-                                          FT_UInt prev_glyph,
-                                          FT_UInt *last_glyph_out)
-{
-	if (last_glyph_out != NULL)
-		*last_glyph_out = 0;
-	if (font == NULL || font->ft_face == NULL || s == NULL || n == 0)
-		return 0;
-
-	FT_Face face = (FT_Face)font->ft_face;
-	int pen_x = 0;
-
-	size_t i = 0;
-	uint32_t cp = 0;
-	while (aswl_utf8_decode_next(s, n, &i, &cp)) {
-		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
-		if (g == NULL)
-			continue;
-
-		FT_UInt glyph = g->glyph_index;
-		if (font->ft_has_kerning && prev_glyph != 0 && glyph != 0) {
-			FT_Vector delta = { 0 };
-			if (FT_Get_Kerning(face, prev_glyph, glyph, FT_KERNING_DEFAULT, &delta) == 0)
-				pen_x += (int)(delta.x >> 6);
-		}
-
-		pen_x += g->advance;
-		prev_glyph = glyph;
-	}
-
-	if (last_glyph_out != NULL)
-		*last_glyph_out = prev_glyph;
-	return pen_x;
-}
-
-static size_t aswl_freetype_fit_bytes_utf8(struct aswl_font *font, const char *s, int max_w)
-{
-	if (font == NULL || font->ft_face == NULL || s == NULL || max_w <= 0)
-		return 0;
-
-	FT_Face face = (FT_Face)font->ft_face;
-	size_t len = strlen(s);
-
-	size_t i = 0;
-	size_t bytes = 0;
-	int w = 0;
-	FT_UInt prev = 0;
-
-	uint32_t cp = 0;
-	while (aswl_utf8_decode_next(s, len, &i, &cp)) {
-		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
-		if (g == NULL)
-			continue;
-
-		int add = 0;
-		if (font->ft_has_kerning && prev != 0 && g->glyph_index != 0) {
-			FT_Vector delta = { 0 };
-			if (FT_Get_Kerning(face, prev, g->glyph_index, FT_KERNING_DEFAULT, &delta) == 0)
-				add += (int)(delta.x >> 6);
-		}
-		add += g->advance;
-
-		if (w + add > max_w)
-			break;
-
-		w += add;
-		prev = g->glyph_index;
-		bytes = i;
-	}
-
-	return bytes;
-}
-
-static size_t aswl_freetype_fit_bytes_utf8_with_suffix(struct aswl_font *font,
-                                                       const char *s,
-                                                       int max_w,
-                                                       const char *suffix,
-                                                       size_t suffix_len)
-{
-	if (font == NULL || font->ft_face == NULL || s == NULL || suffix == NULL || suffix_len == 0 || max_w <= 0)
-		return 0;
-
-	int suffix_w = aswl_freetype_text_width_utf8_n(font, suffix, suffix_len, 0, NULL);
-	if (suffix_w >= max_w)
-		return aswl_freetype_fit_bytes_utf8(font, s, max_w);
-
-	FT_Face face = (FT_Face)font->ft_face;
-	size_t len = strlen(s);
-
-	size_t i = 0;
-	size_t bytes = 0;
-	int w = 0;
-	FT_UInt prev = 0;
-
-	uint32_t cp = 0;
-	while (aswl_utf8_decode_next(s, len, &i, &cp)) {
-		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
-		if (g == NULL)
-			continue;
-
-		int add = 0;
-		if (font->ft_has_kerning && prev != 0 && g->glyph_index != 0) {
-			FT_Vector delta = { 0 };
-			if (FT_Get_Kerning(face, prev, g->glyph_index, FT_KERNING_DEFAULT, &delta) == 0)
-				add += (int)(delta.x >> 6);
-		}
-		add += g->advance;
-
-		int new_w = w + add;
-		int suff_prev_w = aswl_freetype_text_width_utf8_n(font, suffix, suffix_len, g->glyph_index, NULL);
-		if (new_w + suff_prev_w > max_w)
-			break;
-
-		w = new_w;
-		prev = g->glyph_index;
-		bytes = i;
-	}
-
-	return bytes;
-}
 
 static int aswl_freetype_draw_text_utf8_n(struct aswl_font *font,
                                          uint32_t *dst_argb,
@@ -1277,7 +526,7 @@ static int aswl_freetype_draw_text_utf8_n(struct aswl_font *font,
 	if (last_glyph_out != NULL)
 		*last_glyph_out = prev_glyph;
 	return pen_x;
-}
+	}
 
 #endif /* HAVE_FREETYPE */
 
@@ -1298,9 +547,7 @@ void aswl_font_destroy(struct aswl_font *font)
 	if (font == NULL)
 		return;
 
-#ifdef HAVE_FREETYPE
-	aswl_freetype_destroy(font);
-#endif
+	aswl_font_backend_destroy(font);
 
 	*font = (struct aswl_font){ 0 };
 }
@@ -1310,48 +557,22 @@ bool aswl_font_load(struct aswl_font *font, const char *spec)
 	if (font == NULL)
 		return false;
 
-#ifdef HAVE_FREETYPE
-	aswl_freetype_destroy(font);
-#endif
+	aswl_font_backend_destroy(font);
 	font->use_freetype = false;
 	font->base_px = 0;
 
 	if (spec == NULL || spec[0] == '\0' || strcmp(spec, "builtin") == 0 || strcmp(spec, "5x7") == 0)
 		return true;
 
-#ifdef HAVE_FREETYPE
-	int base_px = 0;
-	char *path = aswl_resolve_font_path(spec, &base_px);
-	if (path == NULL)
+	if (!aswl_font_backend_load(font, spec))
 		return false;
 
-	if (!aswl_freetype_init(font)) {
-		free(path);
-		return false;
-	}
-
-	FT_Face face = NULL;
-	if (FT_New_Face((FT_Library)font->ft_lib, path, 0, &face) != 0) {
-		free(path);
-		aswl_freetype_destroy(font);
-		return false;
-	}
-	free(path);
-
-	font->ft_face = face;
-	font->ft_has_kerning = FT_HAS_KERNING(face) != 0;
-	font->use_freetype = true;
-	font->base_px = base_px;
 	if (font->base_px > 0)
 		font->scale = 1;
 
 	/* Prime metrics for current scale. */
 	(void)aswl_font_set_scale(font, font->scale);
 	return true;
-#else
-	(void)spec;
-	return false;
-#endif
 }
 
 bool aswl_font_set_scale(struct aswl_font *font, int scale)
@@ -1373,39 +594,7 @@ bool aswl_font_set_scale(struct aswl_font *font, int scale)
 		return true;
 	}
 
-	#ifdef HAVE_FREETYPE
-	if (font->ft_face == NULL)
-		return false;
-
-	FT_Face face = (FT_Face)font->ft_face;
-	int px = 0;
-	if (font->base_px > 0)
-		px = font->base_px * scale;
-	else
-		px = 7 * scale;
-	if (px < 6)
-		px = 6;
-
-	if (FT_Set_Pixel_Sizes(face, 0, (FT_UInt)px) != 0)
-		return false;
-
-	aswl_ft_cache_set_pixel_size(font, px);
-
-	int asc = (int)(face->size->metrics.ascender >> 6);
-	int desc = (int)(-(face->size->metrics.descender >> 6));
-	int h = (int)(face->size->metrics.height >> 6);
-	if (h <= 0)
-		h = asc + desc;
-	if (h <= 0)
-		h = px;
-
-	font->ascent = asc;
-	font->descent = desc;
-	font->height = h;
-	return true;
-#else
-	return false;
-#endif
+	return aswl_font_backend_set_scale(font, scale);
 }
 
 int aswl_font_height(const struct aswl_font *font)
@@ -1421,12 +610,12 @@ int aswl_font_text_width_n(struct aswl_font *font, const char *s, size_t n)
 		return 0;
 
 	if (!font->use_freetype)
-		return as_font5x7_text_width_n(s, n, font->scale);
+		return aswl_font5x7_text_width_n(s, n, font->scale);
 
 #ifdef HAVE_FREETYPE
 	return aswl_freetype_text_width_utf8_n(font, s, n, 0, NULL);
 #else
-	return as_font5x7_text_width_n(s, n, font->scale);
+	return aswl_font5x7_text_width_n(s, n, font->scale);
 #endif
 }
 
@@ -1435,6 +624,310 @@ int aswl_font_text_width(struct aswl_font *font, const char *s)
 	if (font == NULL || s == NULL)
 		return 0;
 	return aswl_font_text_width_n(font, s, strlen(s));
+}
+
+static int aswl_text_style_sanitize(int text_style)
+{
+	if (text_style < 0 || text_style > 9)
+		return 0;
+	return text_style;
+}
+
+static int aswl_text_style_extra_px(int text_style)
+{
+	switch (aswl_text_style_sanitize(text_style)) {
+	case 1: /* embossed */
+	case 2: /* sunken */
+	case 9: /* outline full */
+		return 2;
+	case 3: /* shade above */
+	case 4: /* shade below */
+	case 5: /* embossed thick */
+	case 6: /* sunken thick */
+		return 3;
+	case 7: /* outline above */
+	case 8: /* outline below */
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+int aswl_font_height_styled(const struct aswl_font *font, int text_style)
+{
+	if (font == NULL)
+		return 0;
+	return aswl_font_height(font) + aswl_text_style_extra_px(text_style);
+}
+
+#ifdef HAVE_FREETYPE
+static int aswl_freetype_text_width_utf8_n_styled(struct aswl_font *font,
+                                                  const char *s,
+                                                  size_t n,
+                                                  FT_UInt prev_glyph,
+                                                  FT_UInt *last_glyph_out,
+                                                  int extra_dx)
+{
+	if (last_glyph_out != NULL)
+		*last_glyph_out = 0;
+	if (font == NULL || font->ft_face == NULL || s == NULL || n == 0)
+		return 0;
+
+	if (extra_dx < 0)
+		extra_dx = 0;
+
+	FT_Face face = (FT_Face)font->ft_face;
+	int pen_x = 0;
+
+	size_t i = 0;
+	uint32_t cp = 0;
+	while (aswl_utf8_decode_next(s, n, &i, &cp)) {
+		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
+		if (g == NULL)
+			continue;
+
+		FT_UInt glyph = g->glyph_index;
+		if (font->ft_has_kerning && prev_glyph != 0 && glyph != 0) {
+			FT_Vector delta = { 0 };
+			if (FT_Get_Kerning(face, prev_glyph, glyph, FT_KERNING_DEFAULT, &delta) == 0)
+				pen_x += (int)(delta.x >> 6);
+		}
+
+		pen_x += g->advance + extra_dx;
+		prev_glyph = glyph;
+	}
+
+	if (last_glyph_out != NULL)
+		*last_glyph_out = prev_glyph;
+	return pen_x;
+}
+
+static size_t aswl_freetype_fit_bytes_utf8_styled(struct aswl_font *font, const char *s, int max_w, int extra_dx)
+{
+	if (font == NULL || font->ft_face == NULL || s == NULL || max_w <= 0)
+		return 0;
+	if (extra_dx < 0)
+		extra_dx = 0;
+
+	FT_Face face = (FT_Face)font->ft_face;
+	size_t len = strlen(s);
+
+	size_t i = 0;
+	size_t bytes = 0;
+	int w = 0;
+	FT_UInt prev = 0;
+
+	uint32_t cp = 0;
+	while (aswl_utf8_decode_next(s, len, &i, &cp)) {
+		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
+		if (g == NULL)
+			continue;
+
+		int add = 0;
+		if (font->ft_has_kerning && prev != 0 && g->glyph_index != 0) {
+			FT_Vector delta = { 0 };
+			if (FT_Get_Kerning(face, prev, g->glyph_index, FT_KERNING_DEFAULT, &delta) == 0)
+				add += (int)(delta.x >> 6);
+		}
+		add += g->advance + extra_dx;
+
+		if (w + add > max_w)
+			break;
+
+		w += add;
+		prev = g->glyph_index;
+		bytes = i;
+	}
+
+	return bytes;
+}
+
+static size_t aswl_freetype_fit_bytes_utf8_with_suffix_styled(struct aswl_font *font,
+                                                              const char *s,
+                                                              int max_w,
+                                                              const char *suffix,
+                                                              size_t suffix_len,
+                                                              int extra_dx)
+{
+	if (font == NULL || font->ft_face == NULL || s == NULL || suffix == NULL || suffix_len == 0 || max_w <= 0)
+		return 0;
+
+	int suffix_w = aswl_freetype_text_width_utf8_n_styled(font, suffix, suffix_len, 0, NULL, extra_dx);
+	if (suffix_w >= max_w)
+		return aswl_freetype_fit_bytes_utf8_styled(font, s, max_w, extra_dx);
+
+	FT_Face face = (FT_Face)font->ft_face;
+	size_t len = strlen(s);
+
+	size_t i = 0;
+	size_t bytes = 0;
+	int w = 0;
+	FT_UInt prev = 0;
+
+	uint32_t cp = 0;
+	while (aswl_utf8_decode_next(s, len, &i, &cp)) {
+		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
+		if (g == NULL)
+			continue;
+
+		int add = 0;
+		if (font->ft_has_kerning && prev != 0 && g->glyph_index != 0) {
+			FT_Vector delta = { 0 };
+			if (FT_Get_Kerning(face, prev, g->glyph_index, FT_KERNING_DEFAULT, &delta) == 0)
+				add += (int)(delta.x >> 6);
+		}
+		add += g->advance + extra_dx;
+
+		int new_w = w + add;
+		int suff_prev_w = aswl_freetype_text_width_utf8_n_styled(font, suffix, suffix_len, g->glyph_index, NULL, extra_dx);
+		if (new_w + suff_prev_w > max_w)
+			break;
+
+		w = new_w;
+		prev = g->glyph_index;
+		bytes = i;
+	}
+
+	return bytes;
+}
+
+static int aswl_freetype_draw_text_utf8_n_styled(struct aswl_font *font,
+                                                 uint32_t *dst_argb,
+                                                 int dst_w,
+                                                 int dst_h,
+                                                 int dst_stride_px,
+                                                 int x,
+                                                 int y,
+                                                 const char *s,
+                                                 size_t n,
+                                                 uint32_t argb,
+                                                 int extra_dx,
+                                                 FT_UInt prev_glyph,
+                                                 FT_UInt *last_glyph_out)
+{
+	if (last_glyph_out != NULL)
+		*last_glyph_out = 0;
+	if (font == NULL || font->ft_face == NULL || dst_argb == NULL || s == NULL || n == 0)
+		return x;
+
+	if (extra_dx < 0)
+		extra_dx = 0;
+
+	FT_Face face = (FT_Face)font->ft_face;
+	int pen_x = x;
+	int baseline_y = y + font->ascent;
+
+	uint32_t base_a = (argb >> 24) & 0xFFu;
+	uint32_t rgb = argb & 0x00FFFFFFu;
+
+	size_t i = 0;
+	uint32_t cp = 0;
+	while (aswl_utf8_decode_next(s, n, &i, &cp)) {
+		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
+		if (g == NULL)
+			continue;
+
+		FT_UInt glyph = g->glyph_index;
+		if (font->ft_has_kerning && prev_glyph != 0 && glyph != 0) {
+			FT_Vector delta = { 0 };
+			if (FT_Get_Kerning(face, prev_glyph, glyph, FT_KERNING_DEFAULT, &delta) == 0)
+				pen_x += (int)(delta.x >> 6);
+		}
+
+		aswl_ft_ensure_rendered(font, g);
+
+		int gx = pen_x + g->bitmap_left;
+		int gy = baseline_y - g->bitmap_top;
+
+		if (g->coverage != NULL && g->width > 0 && g->rows > 0) {
+			for (int row = 0; row < g->rows; row++) {
+				const uint8_t *rowp = g->coverage + (size_t)row * (size_t)g->width;
+				for (int col = 0; col < g->width; col++) {
+					uint8_t cov = rowp[col];
+					if (cov == 0)
+						continue;
+					uint32_t a = (base_a * (uint32_t)cov) / 255u;
+					aswl_blend_pixel(dst_argb,
+					                 dst_w,
+					                 dst_h,
+					                 dst_stride_px,
+					                 gx + col,
+					                 gy + row,
+					                 (a << 24) | rgb);
+				}
+			}
+		}
+
+		pen_x += g->advance + extra_dx;
+		prev_glyph = glyph;
+	}
+
+	if (last_glyph_out != NULL)
+		*last_glyph_out = prev_glyph;
+	return pen_x;
+}
+#endif /* HAVE_FREETYPE */
+
+int aswl_font_text_width_styled_n(struct aswl_font *font, const char *s, size_t n, int text_style)
+{
+	if (font == NULL || s == NULL || n == 0)
+		return 0;
+
+	int extra = aswl_text_style_extra_px(text_style);
+
+	if (!font->use_freetype) {
+		/* Built-in: approximate by adding the effect margin per glyph. */
+		int base = aswl_font5x7_text_width_n(s, n, font->scale);
+		size_t i = 0;
+		uint32_t cp = 0;
+		int glyphs = 0;
+		while (aswl_utf8_decode_next(s, n, &i, &cp))
+			glyphs++;
+		return base + extra * glyphs;
+	}
+
+#ifdef HAVE_FREETYPE
+	return aswl_freetype_text_width_utf8_n_styled(font, s, n, 0, NULL, extra);
+#else
+	int base = aswl_font5x7_text_width_n(s, n, font->scale);
+	size_t i = 0;
+	uint32_t cp = 0;
+	int glyphs = 0;
+	while (aswl_utf8_decode_next(s, n, &i, &cp))
+		glyphs++;
+	return base + extra * glyphs;
+#endif
+}
+
+int aswl_font_text_width_styled(struct aswl_font *font, const char *s, int text_style)
+{
+	if (font == NULL || s == NULL)
+		return 0;
+	return aswl_font_text_width_styled_n(font, s, strlen(s), text_style);
+}
+
+static uint32_t aswl_argb_scale_alpha(uint32_t argb, uint8_t scale)
+{
+	uint32_t a = (argb >> 24) & 0xFFu;
+	uint32_t na = (a * (uint32_t)scale) / 255u;
+	return (argb & 0x00FFFFFFu) | (na << 24);
+}
+
+static uint32_t aswl_argb_with_rgb(uint32_t argb, uint32_t rgb24)
+{
+	return (argb & 0xFF000000u) | (rgb24 & 0x00FFFFFFu);
+}
+
+static uint32_t aswl_text_contrast_rgb24(uint32_t fg_argb)
+{
+	uint32_t r = (fg_argb >> 16) & 0xFFu;
+	uint32_t g = (fg_argb >> 8) & 0xFFu;
+	uint32_t b = fg_argb & 0xFFu;
+	/* Match libAfterImage's contrast heuristic (roughly midpoint luminance). */
+	uint32_t y = r * 222u + g * 707u + b * 71u;
+	if (y < 127500u)
+		return 0x00FFFFFFu; /* white outline for dark text */
+	return 0x00000000u; /* black outline for light text */
 }
 
 void aswl_font_draw_text(struct aswl_font *font,
@@ -1492,5 +985,158 @@ void aswl_font_draw_text(struct aswl_font *font,
 		(void)aswl_freetype_draw_text_utf8_n(font, dst_argb, dst_w, dst_h, dst_stride_px, pen_x, y, "...", 3, argb, last_glyph, NULL);
 #else
 	as_font5x7_draw_text(dst_argb, dst_w, dst_h, dst_stride_px, x, y, s, max_w, font->scale, argb);
-#endif
+	#endif
+	}
+
+void aswl_font_draw_text_styled(struct aswl_font *font,
+                                uint32_t *dst_argb,
+                                int dst_w,
+                                int dst_h,
+                                int dst_stride_px,
+                                int x,
+                                int y,
+                                const char *s,
+                                int max_w,
+                                uint32_t argb,
+                                int text_style)
+{
+	if (font == NULL || dst_argb == NULL)
+		return;
+	if (s == NULL || s[0] == '\0')
+		return;
+
+	int style = aswl_text_style_sanitize(text_style);
+	if (style == 0) {
+		aswl_font_draw_text(font, dst_argb, dst_w, dst_h, dst_stride_px, x, y, s, max_w, argb);
+		return;
+	}
+
+	if (!font->use_freetype) {
+		/*
+		 * Styling is only needed for AfterStep look parity (TTF fonts). If we
+		 * fell back to the built-in font, just draw plain to avoid surprises.
+		 */
+		as_font5x7_draw_text(dst_argb, dst_w, dst_h, dst_stride_px, x, y, s, max_w, font->scale, argb);
+		return;
+	}
+
+#ifdef HAVE_FREETYPE
+	size_t n = strlen(s);
+	size_t draw_n = n;
+	bool need_ellipsis = false;
+
+	int extra = aswl_text_style_extra_px(style);
+
+	int full_w = aswl_freetype_text_width_utf8_n_styled(font, s, n, 0, NULL, extra);
+	if (max_w > 0 && full_w > max_w) {
+		int ell_w = aswl_freetype_text_width_utf8_n_styled(font, "...", 3, 0, NULL, extra);
+		if (ell_w < max_w) {
+			draw_n = aswl_freetype_fit_bytes_utf8_with_suffix_styled(font, s, max_w, "...", 3, extra);
+			need_ellipsis = true;
+		} else {
+			draw_n = aswl_freetype_fit_bytes_utf8_styled(font, s, max_w, extra);
+		}
+	}
+
+	struct aswl_text_layer {
+		int dx;
+		int dy;
+		uint8_t alpha_scale;
+		bool contrast;
+	};
+	struct aswl_text_layer layers[4];
+	size_t layer_count = 0;
+
+	switch (style) {
+	case 1: /* embossed */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0xFF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 2, .dy = 2, .alpha_scale = 0x9F, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 1, .dy = 1, .alpha_scale = 0xCF, .contrast = false };
+		break;
+	case 2: /* sunken */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0x9F, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 2, .dy = 2, .alpha_scale = 0xFF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 1, .dy = 1, .alpha_scale = 0xCF, .contrast = false };
+		break;
+	case 3: /* shade above */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0x7F, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 3, .dy = 3, .alpha_scale = 0xFF, .contrast = false };
+		break;
+	case 4: /* shade below */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 3, .dy = 3, .alpha_scale = 0x7F, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0xFF, .contrast = false };
+		break;
+	case 5: /* embossed thick */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0xFF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 1, .dy = 1, .alpha_scale = 0xEF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 3, .dy = 3, .alpha_scale = 0x7F, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 2, .dy = 2, .alpha_scale = 0xCF, .contrast = false };
+		break;
+	case 6: /* sunken thick */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0x7F, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 1, .dy = 1, .alpha_scale = 0xAF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 3, .dy = 3, .alpha_scale = 0xFF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 2, .dy = 2, .alpha_scale = 0xCF, .contrast = false };
+		break;
+	case 7: /* outline above */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0xAF, .contrast = true };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 1, .dy = 1, .alpha_scale = 0xFF, .contrast = false };
+		break;
+	case 8: /* outline below */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0xFF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 1, .dy = 1, .alpha_scale = 0xAF, .contrast = true };
+		break;
+	case 9: /* outline full */
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0xAF, .contrast = true };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 1, .dy = 1, .alpha_scale = 0xFF, .contrast = false };
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 2, .dy = 2, .alpha_scale = 0xAF, .contrast = true };
+		break;
+	default:
+		layers[layer_count++] = (struct aswl_text_layer){ .dx = 0, .dy = 0, .alpha_scale = 0xFF, .contrast = false };
+		break;
+	}
+
+	for (size_t li = 0; li < layer_count; li++) {
+		uint32_t layer = aswl_argb_scale_alpha(argb, layers[li].alpha_scale);
+		if (layers[li].contrast) {
+			uint32_t rgb = aswl_text_contrast_rgb24(argb);
+			layer = aswl_argb_with_rgb(layer, rgb);
+		}
+
+		FT_UInt last_glyph = 0;
+		int pen_x = x + layers[li].dx;
+		if (draw_n > 0)
+			pen_x = aswl_freetype_draw_text_utf8_n_styled(font,
+			                                              dst_argb,
+			                                              dst_w,
+			                                              dst_h,
+			                                              dst_stride_px,
+			                                              x + layers[li].dx,
+			                                              y + layers[li].dy,
+			                                              s,
+			                                              draw_n,
+			                                              layer,
+			                                              extra,
+			                                              0,
+			                                              &last_glyph);
+
+		if (need_ellipsis) {
+			(void)aswl_freetype_draw_text_utf8_n_styled(font,
+			                                            dst_argb,
+			                                            dst_w,
+			                                            dst_h,
+			                                            dst_stride_px,
+			                                            pen_x,
+			                                            y + layers[li].dy,
+			                                            "...",
+			                                            3,
+			                                            layer,
+			                                            extra,
+			                                            last_glyph,
+			                                            NULL);
+		}
+	}
+#else
+	as_font5x7_draw_text(dst_argb, dst_w, dst_h, dst_stride_px, x, y, s, max_w, font->scale, argb);
+#endif /* HAVE_FREETYPE */
 }
