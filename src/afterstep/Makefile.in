@@ -1,5 +1,5 @@
 OBJS            = add_window.o afterstep.o aswindow.o \
-                                colormaps.o configure.o configure_load.o configure_apply.o configure_merge.o configure_restart.o cover.o dbus.o decorations.o dirtree.o \
+                                colormaps.o configure.o configure_load.o configure_apply.o configure_merge.o configure_restart.o cover.o dbus.o decorations.o decorations_model.o decorations_render.o dirtree.o \
 					events.o event_loop.o event_dispatch.o event_handlers_input.o event_handlers_property.o event_handlers_window.o event_handlers_misc.o functions.o housekeeping.o icons.o \
 					function_handlers_config.o \
 					menuitem.o menus.o misc.o module.o window_focus.o window_frame.o window_frame_layout.o window_frame_render.o window_lifecycle.o window_list.o window_lookup.o window_menus.o window_session.o window_stacking.o window_state.o \
