@@ -3,7 +3,7 @@ OBJS            = add_window.o afterstep.o aswindow.o \
 					events.o event_loop.o event_dispatch.o event_handlers_input.o event_handlers_property.o event_handlers_window.o event_handlers_misc.o functions.o housekeeping.o icons.o \
 					function_handlers_config.o function_handlers_window.o function_handlers_focus.o function_handlers_workspace.o function_handlers_modules.o function_handlers_misc.o \
 					menuitem.o menus_core.o menus_render.o menus_events.o menus_run.o misc.o module.o window_focus.o window_frame.o window_frame_layout.o window_frame_render.o window_lifecycle.o window_list.o window_lookup.o window_menus.o window_session.o window_stacking.o window_state.o \
-                                pager.o placement.o theme.o winstatus.o
+                                pager.o pager_model.o pager_render.o placement.o theme.o winstatus.o
 
 # move.o clientwin.o
 # resize.o
