@@ -74,6 +74,10 @@ CommandLineOpts WinTabs_cmdl_options[] =
 	{"bc", "border-color","use color to fill border around windows", NULL, handler_set_string,
 	 &border_color_override, 0, CMO_HasArgs },
 
+	{NULL, "standalone-scan",
+	 "When not connected to AfterStep, periodically scan the X11 root window for matching clients (useful under Xwayland)",
+	 NULL, handler_set_flag, &(WinTabsState.flags), ASWT_StandaloneScan, 0 },
+
 	{NULL, NULL, NULL, NULL, NULL, NULL, 0, 0 }
 };
 
@@ -180,7 +184,15 @@ main( int argc, char **argv )
     /* map_canvas_window( WinTabsState.main_canvas, True ); */
     /* final cleanup */
 	XFlush (dpy);
-	sleep (1);								   /* we have to give AS a chance to spot us */
+	/* Give AfterStep a chance to spot us when running as a module. When we are
+	 * fully standalone (no AfterStep socket), don't stall the initial render
+	 * path: under Xwayland the screenshot harness depends on fast commits. */
+	if (get_module_in_fd() >= 0)
+		sleep(1);
+	else
+		sleep_a_millisec(100);
+
+	wintabs_standalone_scan_start();
 
 	/* And at long last our main loop : */
     HandleEvents();
@@ -217,6 +229,11 @@ LOCAL_DEBUG_OUT( "DeadPipe%s", "" );
 	destroy_asvector( &WinTabsState.tabs );
    	destroy_ascanvas( &WinTabsState.tabs_canvas );
    	destroy_ascanvas( &WinTabsState.main_canvas );
+
+	if (WinTabsState.main_background_pixmap != None) {
+		XFreePixmap(dpy, WinTabsState.main_background_pixmap);
+		WinTabsState.main_background_pixmap = None;
+	}
 
 	destroy_astbar_props( &(WinTabsState.tbar_props) );
 	free_button_resources( &WinTabsState.close_button );

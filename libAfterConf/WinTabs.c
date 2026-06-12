@@ -116,6 +116,14 @@ WinTabsConfig *CreateWinTabsConfig ()
 
 void DestroyWinTabsConfig (WinTabsConfig * config)
 {
+	if (config->pattern)
+		free(config->pattern);
+	if (config->exclude_pattern)
+		free(config->exclude_pattern);
+	if (config->title)
+		free(config->title);
+	if (config->icon_title)
+		free(config->icon_title);
 	if (config->unfocused_style)
 		free (config->unfocused_style);
 	if (config->focused_style)

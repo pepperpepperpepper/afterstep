@@ -1,4 +1,7 @@
 #include "wintabs_internal.h"
+#include "../../libAfterStep/session.h"
+
+static void merge_wintabs_config(WinTabsConfig *config);
 
 void
 retrieve_wintabs_astbar_props()
@@ -12,16 +15,17 @@ retrieve_wintabs_astbar_props()
 	memset(&WinTabsState.unswallow_button, 0x00, sizeof(MyButton));
 	memset(&WinTabsState.menu_button, 0x00, sizeof(MyButton));
 
-	if (Scr.wmprops == NULL)
-		return;
+	if (Scr.wmprops != NULL) {
+		WinTabsState.tbar_props = get_astbar_props(Scr.wmprops );
+	}
 
-	WinTabsState.tbar_props = get_astbar_props(Scr.wmprops );
-	if (WinTabsState.tbar_props == NULL)
+	if (WinTabsState.tbar_props != NULL) {
+		button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.close_button, 		C_CloseButton, 		_AS_BUTTON_CLOSE, _AS_BUTTON_CLOSE_PRESSED );
+		if (!button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.unswallow_button, 	C_UnswallowButton, 	_AS_BUTTON_MAXIMIZE, _AS_BUTTON_MAXIMIZE_PRESSED ))
+			button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.unswallow_button, 	C_UnswallowButton, 	_AS_BUTTON_MINIMIZE, _AS_BUTTON_MINIMIZE_PRESSED );
+		button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.menu_button, 		C_MenuButton, 		_AS_BUTTON_MENU, _AS_BUTTON_MENU_PRESSED );
 		return;
-	button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.close_button, 		C_CloseButton, 		_AS_BUTTON_CLOSE, _AS_BUTTON_CLOSE_PRESSED );
-	if (!button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.unswallow_button, 	C_UnswallowButton, 	_AS_BUTTON_MAXIMIZE, _AS_BUTTON_MAXIMIZE_PRESSED ))
-		button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.unswallow_button, 	C_UnswallowButton, 	_AS_BUTTON_MINIMIZE, _AS_BUTTON_MINIMIZE_PRESSED );
-	button_from_astbar_props( WinTabsState.tbar_props, &WinTabsState.menu_button, 		C_MenuButton, 		_AS_BUTTON_MENU, _AS_BUTTON_MENU_PRESSED );
+	}
 }
 
 void
@@ -111,6 +115,23 @@ SetWinTabsLook()
 	    retrieve_wintabs_astbar_props();
 	if (Scr.wmprops != NULL)
 		mystyle_get_property (Scr.wmprops);
+	/*
+	 * WinTabs normally receives MyStyle definitions from AfterStep via the
+	 * _AS_STYLE root/selection-window property. Under the Wayland screenshot
+	 * harness there is no AfterStep X11 WM, so the property is absent and the
+	 * MyStyle list is empty. Parse the selected Look file directly so we can
+	 * render the initial "Waiting for *pattern*" hint immediately.
+	 */
+	if (mystyle_find ("focused_window_style") == NULL) {
+		const char *look_file = get_session_file (Session, 0, F_CHANGE_LOOK, False);
+		if (look_file != NULL) {
+			LookConfig *look_config = ParseLookOptions (look_file, MyName);
+			if (look_config != NULL) {
+				ProcessMyStyleDefinitions (&(look_config->style_defs));
+				DestroyLookConfig (look_config);
+			}
+		}
+	}
 
     Scr.Look.MSWindow[BACK_UNFOCUSED] = mystyle_find( Config->unfocused_style );
     Scr.Look.MSWindow[BACK_FOCUSED] = mystyle_find( Config->focused_style );
@@ -166,72 +187,127 @@ void
 GetOptions (const char *filename)
 {
     START_TIME(option_time);
-    WinTabsConfig *config = ParseWinTabsOptions( filename, MyName );
 
-#if defined(LOCAL_DEBUG) && !defined(NO_DEBUG_OUTPUT)
-    PrintWinTabsConfig (config);
-#endif
-    /* Need to merge new config with what we have already :*/
-    /* now lets check the config sanity : */
-    /* mixing set and default flags : */
-    Config->flags = (config->flags&config->set_flags)|(Config->flags & (~config->set_flags));
-    Config->set_flags |= config->set_flags;
+	static const char *base_name = "WinTabs";
 
-    Config->gravity = NorthWestGravity ;
-    if( get_flags(config->set_flags, WINTABS_Geometry) )
-        merge_geometry(&(config->geometry), &(Config->geometry) );
+	/*
+	 * The config file historically uses *WinTabs... as defaults and *<MyName>...
+	 * for per-instance overrides (e.g. TermTabs launched via `WinTabs --myname TermTabs`).
+	 *
+	 * Parse the base defaults first, then apply the per-instance overrides on top.
+	 * This ensures options like MaxTabWidth are inherited so TermTabs matches the
+	 * classic X11 layout (single-row banner+tabs, no black gaps).
+	 */
+	if (strcmp(MyName, base_name) != 0) {
+		WinTabsConfig *base_cfg = ParseWinTabsOptions(filename, (char *)base_name);
+		if (base_cfg != NULL) {
+			/*
+			 * Base WinTabs config often includes a default Pattern/PatternType
+			 * suitable for the WinTabs instance (e.g. aterm). For per-instance
+			 * uses like TermTabs (usually driven by CLI overrides), inheriting
+			 * PatternType can make matching too strict (e.g. res_class only),
+			 * breaking standalone swallow under Xwayland.
+			 *
+			 * Keep the layout/style defaults but drop Pattern/ExcludePattern so
+			 * TermTabs continues to match on any available window name field.
+			 */
+			if (base_cfg->pattern) {
+				free(base_cfg->pattern);
+				base_cfg->pattern = NULL;
+			}
+			if (base_cfg->exclude_pattern) {
+				free(base_cfg->exclude_pattern);
+				base_cfg->exclude_pattern = NULL;
+			}
+			clear_flags(base_cfg->set_flags, WINTABS_PatternType);
+			clear_flags(base_cfg->set_flags, WINTABS_ExcludePatternType);
 
-    if( config->pattern )
-    {
-        set_string( &(Config->pattern), mystrdup(config->pattern) );
-        Config->pattern_type = config->pattern_type ;
-    }
-    if( get_flags(config->set_flags, WINTABS_MaxRows) )
-        Config->max_rows = config->max_rows;
-    if( get_flags(config->set_flags, WINTABS_MaxColumns) )
-        Config->max_columns = config->max_columns;
-    if( get_flags(config->set_flags, WINTABS_MinTabWidth) )
-        Config->min_tab_width = config->min_tab_width;
-    if( get_flags(config->set_flags, WINTABS_MaxTabWidth) )
-        Config->max_tab_width = config->max_tab_width;
+			merge_wintabs_config(base_cfg);
+			DestroyWinTabsConfig(base_cfg);
+		}
+	}
 
-    if( config->unfocused_style )
-        set_string( &(Config->unfocused_style), mystrdup(config->unfocused_style) );
-    if( config->focused_style )
-        set_string( &(Config->focused_style), mystrdup(config->focused_style) );
-    if( config->sticky_style )
-        set_string( &(Config->sticky_style), mystrdup(config->sticky_style) );
+	WinTabsConfig *config = ParseWinTabsOptions(filename, MyName);
+	if (config != NULL) {
+		merge_wintabs_config(config);
+		DestroyWinTabsConfig(config);
+	}
 
-    if( get_flags(config->set_flags, WINTABS_Align) )
-        Config->name_aligment = config->name_aligment;
-    if( get_flags(config->set_flags, WINTABS_FBevel) )
-        Config->fbevel = config->fbevel;
-    if( get_flags(config->set_flags, WINTABS_UBevel) )
-        Config->ubevel = config->ubevel;
-    if( get_flags(config->set_flags, WINTABS_SBevel) )
-        Config->sbevel = config->sbevel;
+	SHOW_TIME("Config parsing", option_time);
+}
 
-    if( get_flags(config->set_flags, WINTABS_FCM) )
-        Config->fcm = config->fcm;
-    if( get_flags(config->set_flags, WINTABS_UCM) )
-        Config->ucm = config->ucm;
-    if( get_flags(config->set_flags, WINTABS_SCM) )
-        Config->scm = config->scm;
+static void
+merge_wintabs_config(WinTabsConfig *config)
+{
+	if (config == NULL || Config == NULL)
+		return;
 
-    if( get_flags(config->set_flags, WINTABS_H_SPACING) )
-        Config->h_spacing = config->h_spacing;
-    if( get_flags(config->set_flags, WINTABS_V_SPACING) )
-        Config->v_spacing = config->v_spacing;
+	/* mixing set and default flags : */
+	Config->flags = (config->flags & config->set_flags) | (Config->flags & (~config->set_flags));
+	Config->set_flags |= config->set_flags;
 
-    if( config->GroupNameSeparator )
-        set_string( &(Config->GroupNameSeparator), mystrdup(config->GroupNameSeparator) );
+	Config->gravity = NorthWestGravity;
+	if (get_flags(config->set_flags, WINTABS_Geometry))
+		merge_geometry(&(config->geometry), &(Config->geometry));
 
-    if( Config->balloon_conf )
-        Destroy_balloonConfig( Config->balloon_conf );
-    Config->balloon_conf = config->balloon_conf ;
-    config->balloon_conf = NULL ;
+	if (config->pattern) {
+		set_string(&(Config->pattern), mystrdup(config->pattern));
+		Config->pattern_type = config->pattern_type;
+	}
+	if (config->exclude_pattern) {
+		set_string(&(Config->exclude_pattern), mystrdup(config->exclude_pattern));
+		Config->exclude_pattern_type = config->exclude_pattern_type;
+	}
+	if (config->title)
+		set_string(&(Config->title), mystrdup(config->title));
+	if (config->icon_title)
+		set_string(&(Config->icon_title), mystrdup(config->icon_title));
 
-    if (config->style_defs)
-        ProcessMyStyleDefinitions (&(config->style_defs));
-    SHOW_TIME("Config parsing",option_time);
+	if (get_flags(config->set_flags, WINTABS_MaxRows))
+		Config->max_rows = config->max_rows;
+	if (get_flags(config->set_flags, WINTABS_MaxColumns))
+		Config->max_columns = config->max_columns;
+	if (get_flags(config->set_flags, WINTABS_MinTabWidth))
+		Config->min_tab_width = config->min_tab_width;
+	if (get_flags(config->set_flags, WINTABS_MaxTabWidth))
+		Config->max_tab_width = config->max_tab_width;
+
+	if (config->unfocused_style)
+		set_string(&(Config->unfocused_style), mystrdup(config->unfocused_style));
+	if (config->focused_style)
+		set_string(&(Config->focused_style), mystrdup(config->focused_style));
+	if (config->sticky_style)
+		set_string(&(Config->sticky_style), mystrdup(config->sticky_style));
+
+	if (get_flags(config->set_flags, WINTABS_Align))
+		Config->name_aligment = config->name_aligment;
+	if (get_flags(config->set_flags, WINTABS_FBevel))
+		Config->fbevel = config->fbevel;
+	if (get_flags(config->set_flags, WINTABS_UBevel))
+		Config->ubevel = config->ubevel;
+	if (get_flags(config->set_flags, WINTABS_SBevel))
+		Config->sbevel = config->sbevel;
+
+	if (get_flags(config->set_flags, WINTABS_FCM))
+		Config->fcm = config->fcm;
+	if (get_flags(config->set_flags, WINTABS_UCM))
+		Config->ucm = config->ucm;
+	if (get_flags(config->set_flags, WINTABS_SCM))
+		Config->scm = config->scm;
+
+	if (get_flags(config->set_flags, WINTABS_H_SPACING))
+		Config->h_spacing = config->h_spacing;
+	if (get_flags(config->set_flags, WINTABS_V_SPACING))
+		Config->v_spacing = config->v_spacing;
+
+	if (config->GroupNameSeparator)
+		set_string(&(Config->GroupNameSeparator), mystrdup(config->GroupNameSeparator));
+
+	if (Config->balloon_conf)
+		Destroy_balloonConfig(Config->balloon_conf);
+	Config->balloon_conf = config->balloon_conf;
+	config->balloon_conf = NULL;
+
+	if (config->style_defs)
+		ProcessMyStyleDefinitions(&(config->style_defs));
 }

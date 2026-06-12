@@ -1,6 +1,178 @@
 /* WinTabs event loop and dispatch extracted from WinTabs.c */
 
 #include "wintabs_internal.h"
+#include "../../libAfterBase/timer.h"
+
+static int standalone_scan_timer_tag = 0;
+
+static char *dup_x11_window_name(Window w)
+{
+	char *name = NULL;
+	if (w == None)
+		return NULL;
+	if (XFetchName(dpy, w, &name) == 0 || name == NULL)
+		return NULL;
+
+	char *out = mystrdup(name);
+	XFree(name);
+	return out;
+}
+
+static char *dup_x11_icon_name(Window w)
+{
+	char *name = NULL;
+	if (w == None)
+		return NULL;
+	if (XGetIconName(dpy, w, &name) == 0 || name == NULL)
+		return NULL;
+
+	char *out = mystrdup(name);
+	XFree(name);
+	return out;
+}
+
+static void dup_x11_class_hint(Window w, char **res_name_out, char **res_class_out)
+{
+	if (res_name_out)
+		*res_name_out = NULL;
+	if (res_class_out)
+		*res_class_out = NULL;
+	if (w == None)
+		return;
+
+	XClassHint hint;
+	if (XGetClassHint(dpy, w, &hint) == 0)
+		return;
+
+	if (res_name_out && hint.res_name != NULL)
+		*res_name_out = mystrdup(hint.res_name);
+	if (res_class_out && hint.res_class != NULL)
+		*res_class_out = mystrdup(hint.res_class);
+
+	if (hint.res_name != NULL)
+		XFree(hint.res_name);
+	if (hint.res_class != NULL)
+		XFree(hint.res_class);
+}
+
+static void wintabs_standalone_scan_one(Window w)
+{
+	if (w == None)
+		return;
+	if (w == WinTabsState.main_window || w == WinTabsState.tabs_window)
+		return;
+	if (WinTabsState.pattern_wrexp == NULL)
+		return;
+
+	XWindowAttributes attr;
+	if (XGetWindowAttributes(dpy, w, &attr) == 0)
+		return;
+	if (attr.map_state != IsViewable)
+		return;
+
+	int root_x = attr.x;
+	int root_y = attr.y;
+	Window child = None;
+	int tx = 0;
+	int ty = 0;
+	if (XTranslateCoordinates(dpy, w, Scr.Root, 0, 0, &tx, &ty, &child) != 0) {
+		root_x = tx;
+		root_y = ty;
+	}
+
+	ASWindowData wd;
+	memset(&wd, 0, sizeof(wd));
+	wd.magic = MAGIC_ASWindowData;
+	wd.client = w;
+	wd.frame = None;
+	wd.frame_rect.x = root_x;
+	wd.frame_rect.y = root_y;
+	wd.frame_rect.width = (unsigned int)attr.width;
+	wd.frame_rect.height = (unsigned int)attr.height;
+	wd.state_flags = AS_Mapped;
+	wd.flags = 0;
+
+	Window transient = None;
+	if (XGetTransientForHint(dpy, w, &transient) != 0)
+		set_flags(wd.flags, AS_Transient);
+
+		long supplied = 0;
+		memset(&wd.hints, 0, sizeof(wd.hints));
+		(void)XGetWMNormalHints(dpy, w, &wd.hints, &supplied);
+		/* WinTabs expects AfterStep-style hint flags in ASWindowData.flags
+		 * (see do_swallow_window(): aswt->hints.flags = wd->flags).
+		 * When running standalone, populate the subset we care about from ICCCM
+		 * XSizeHints so swallowed Xterm windows get the same size-inc rounding as
+		 * in the X11 baseline. */
+		if (get_flags(wd.hints.flags, PMinSize))
+			set_flags(wd.flags, AS_MinSize);
+		if (get_flags(wd.hints.flags, PMaxSize))
+			set_flags(wd.flags, AS_MaxSize);
+		if (get_flags(wd.hints.flags, PResizeInc))
+			set_flags(wd.flags, AS_SizeInc);
+		if (get_flags(wd.hints.flags, PAspect))
+			set_flags(wd.flags, AS_Aspect);
+		if (get_flags(wd.hints.flags, PBaseSize))
+			set_flags(wd.flags, AS_BaseSize);
+		if (get_flags(wd.hints.flags, PWinGravity))
+			set_flags(wd.flags, AS_Gravity);
+
+		wd.window_name = dup_x11_window_name(w);
+		wd.icon_name = dup_x11_icon_name(w);
+		dup_x11_class_hint(w, &wd.res_name, &wd.res_class);
+
+	check_swallow_window(&wd);
+
+	if (wd.window_name)
+		free(wd.window_name);
+	if (wd.icon_name)
+		free(wd.icon_name);
+	if (wd.res_name)
+		free(wd.res_name);
+	if (wd.res_class)
+		free(wd.res_class);
+}
+
+static void wintabs_standalone_scan_once(void)
+{
+	Window root = None;
+	Window parent = None;
+	Window *children = NULL;
+	unsigned int nchildren = 0;
+
+	if (XQueryTree(dpy, Scr.Root, &root, &parent, &children, &nchildren) == 0)
+		return;
+
+	for (unsigned int i = 0; i < nchildren; i++)
+		wintabs_standalone_scan_one(children[i]);
+
+	if (children != NULL)
+		XFree(children);
+}
+
+static void wintabs_standalone_scan_timer(void *data)
+{
+	(void)data;
+	if (!get_flags(WinTabsState.flags, ASWT_StandaloneScan))
+		return;
+	if (get_module_in_fd() >= 0)
+		return;
+
+	wintabs_standalone_scan_once();
+	timer_new(200, wintabs_standalone_scan_timer, &standalone_scan_timer_tag);
+}
+
+void wintabs_standalone_scan_start(void)
+{
+	if (!get_flags(WinTabsState.flags, ASWT_StandaloneScan))
+		return;
+	if (get_module_in_fd() >= 0)
+		return;
+	if (timer_find_by_data(&standalone_scan_timer_tag))
+		return;
+
+	timer_new(50, wintabs_standalone_scan_timer, &standalone_scan_timer_tag);
+}
 
 void HandleEvents()
 {
@@ -167,6 +339,8 @@ DispatchEvent (ASEvent * event)
                     ASFlagType changes = handle_canvas_config( mc );
                     if( get_flags( changes, CANVAS_RESIZED ) )
 					{
+						if (get_flags(WinTabsState.flags, ASWT_Transparent))
+							set_frame_background(NULL);
 						if( tabs_num > 0 )
 						{
 							WinTabsState.win_width = mc->width ;
@@ -177,6 +351,9 @@ DispatchEvent (ASEvent * event)
                     {
                         int i  = tabs_num;
                         ASWinTab *tabs = PVECTOR_HEAD( ASWinTab, WinTabsState.tabs );
+
+						if (get_flags(WinTabsState.flags, ASWT_Transparent))
+							set_frame_background(NULL);
 
 						rerender_tabs = on_tabs_canvas_config();
 
@@ -406,4 +583,3 @@ DispatchEvent (ASEvent * event)
 			break;
     }
 }
-

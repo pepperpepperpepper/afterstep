@@ -25,6 +25,7 @@ do_swallow_window( ASWindowData *wd )
 	INT32 encoding ;
 	ASWinTab *aswt = NULL ;
 	int gravity = NorthWestGravity ;
+	Bool standalone_scan = get_flags(WinTabsState.flags, ASWT_StandaloneScan) && (get_module_in_fd() < 0);
 
 	if( wd->client == WinTabsState.main_window || wd->client == None)
 		return;
@@ -35,27 +36,31 @@ do_swallow_window( ASWindowData *wd )
     /* first lets check if window is still not swallowed : it should have no more then 2 parents before root */
     w = get_parent_window( wd->client );
     LOCAL_DEBUG_OUT( "first parent %lX, root %lX", w, Scr.Root );
-	while( w == Scr.Root && ++try_num  < 10 )
-	{/* we should wait for AfterSTep to complete AddWindow protocol */
-	    /* do the actuall swallowing here : */
-    	ungrab_server();
-		sleep_a_millisec(200*try_num);
-		grab_server();
-		w = get_parent_window( wd->client );
-		LOCAL_DEBUG_OUT( "attempt %d:first parent %lX, root %lX", try_num, w, Scr.Root );
+	if (!standalone_scan) {
+		while( w == Scr.Root && ++try_num  < 10 )
+		{/* we should wait for AfterSTep to complete AddWindow protocol */
+		    /* do the actuall swallowing here : */
+	    	ungrab_server();
+			sleep_a_millisec(200*try_num);
+			grab_server();
+			w = get_parent_window( wd->client );
+			LOCAL_DEBUG_OUT( "attempt %d:first parent %lX, root %lX", try_num, w, Scr.Root );
+		}
+		if( w == Scr.Root )
+		{
+			ungrab_server();
+			return ;
+		}
 	}
-	if( w == Scr.Root )
-	{
-		ungrab_server();
-		return ;
-	}
-    if( w != None )
-        w = get_parent_window( w );
-    LOCAL_DEBUG_OUT( "second parent %lX, root %lX", w, Scr.Root );
-    if( w != Scr.Root )
-	{
-		ungrab_server();
-		return ;
+	if (w != Scr.Root) {
+	    if( w != None )
+	        w = get_parent_window( w );
+	    LOCAL_DEBUG_OUT( "second parent %lX, root %lX", w, Scr.Root );
+	    if( w != Scr.Root )
+		{
+			ungrab_server();
+			return ;
+		}
 	}
     /* its ok - we can swallow it now : */
     /* create swallow object : */

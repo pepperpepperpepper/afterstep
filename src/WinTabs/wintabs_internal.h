@@ -95,6 +95,7 @@ typedef struct {
 #define ASWT_StateSticky		(0x01<<7)
 #define ASWT_Desktops 			(0x01<<8) /* requested at command line */
 #define ASWT_WantTransparent 	(0x01<<16) /* requested at command line */
+#define ASWT_StandaloneScan     (0x01<<17) /* requested at command line */
 
 
 	ASFlagType flags ;
@@ -130,6 +131,12 @@ typedef struct {
 	ASHashTable *unswallowed_apps ;
 
 	unsigned long 		border_color;
+
+	Pixmap main_background_pixmap;
+	unsigned int main_background_width;
+	unsigned int main_background_height;
+	int main_background_root_x;
+	int main_background_root_y;
 }ASWinTabsState ;
 
 extern ASWinTabsState WinTabsState;
@@ -164,6 +171,7 @@ void CheckConfigSanity(const char *pattern_override, const char *exclude_pattern
 void SetWinTabsLook();
 void GetBaseOptions (const char *filename);
 void GetOptions (const char *filename);
+void wintabs_standalone_scan_start(void);
 
 static inline int
 find_tab_for_client (Window client)

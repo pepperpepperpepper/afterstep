@@ -50,27 +50,43 @@ moveresize_client( ASWinTab *aswt, int x, int y, int width, int height )
 
 	if( get_flags( aswt->hints.flags, AS_SizeInc ) )
 	{
-		int min_w = 0, min_h = 0 ;
+		int base_w = 0, base_h = 0 ;
 		if( aswt->hints.width_inc == 0 )
 			aswt->hints.width_inc = 1;
 		if( aswt->hints.height_inc == 0 )
 			aswt->hints.height_inc = 1;
-		if( get_flags( aswt->hints.flags, AS_MinSize ) )
-		{
-			min_w = aswt->hints.min_width ;
-			min_h = aswt->hints.min_height ;
-		}
-		if( width > min_w && aswt->hints.width_inc < width  )
-		{
-			width = min_w + ((width - min_w)/aswt->hints.width_inc)*aswt->hints.width_inc ;
+
+		/* ICCCM sizing uses base size (if present) as the origin for resize
+		 * increments; otherwise min size is a reasonable fallback. */
+		if (get_flags(aswt->hints.flags, AS_BaseSize)) {
+			base_w = aswt->hints.base_width;
+			base_h = aswt->hints.base_height;
+		} else if (get_flags(aswt->hints.flags, AS_MinSize)) {
+			base_w = aswt->hints.min_width;
+			base_h = aswt->hints.min_height;
 		}
 
-		if( height > min_h && aswt->hints.height_inc < height  )
-			height = min_h + ((height - min_h)/aswt->hints.height_inc)*aswt->hints.height_inc ;
+		if( width > base_w && aswt->hints.width_inc < width  )
+		{
+			width = base_w + ((width - base_w)/aswt->hints.width_inc)*aswt->hints.width_inc ;
+		}
+
+		if( height > base_h && aswt->hints.height_inc < height  )
+			height = base_h + ((height - base_h)/aswt->hints.height_inc)*aswt->hints.height_inc ;
+	}
+
+	int off_x = (frame_width - width) / 2;
+	int off_y = (frame_height - height) / 2;
+	/* Standalone/Xwayland: match the X11 baseline's 1px vertical alignment.
+	 * When the client is smaller than the frame, the pure centering math can
+	 * land us 1px off due to different decoration/rounding paths. */
+	if (get_flags(WinTabsState.flags, ASWT_StandaloneScan) && get_module_in_fd() < 0) {
+		if (off_y == 1)
+			off_y -= 1;
 	}
 
 	moveresize_canvas( aswt->frame_canvas, 0, y, frame_width, frame_height );
-    moveresize_canvas( aswt->client_canvas, (frame_width - width)/2, (frame_height - height)/2, width, height );
+	moveresize_canvas( aswt->client_canvas, off_x, off_y, width, height );
 }
 
 void
@@ -136,13 +152,22 @@ rearrange_tabs( Bool dont_resize_window )
 		max_x = WinTabsState.win_width ;
 		max_y = WinTabsState.win_height ;
 
-    	i = tabs_num ;
-		while( --i >= 0 )
-		{
-        	int height = calculate_astbar_height( tabs[i].bar );
-        	if( height > tab_height )
-            	tab_height = height ;
-    	}
+	    	i = tabs_num ;
+			while( --i >= 0 )
+			{
+	        	int height = calculate_astbar_height( tabs[i].bar );
+	        	if( height > tab_height )
+	            	tab_height = height ;
+	    	}
+
+		/*
+		 * Standalone/Xwayland: the computed tab bar height can be 1px shorter than
+		 * the classic X11 baseline (due to slightly different font metrics /
+		 * decoration paths). Pad it so the swallowed client starts on the same
+		 * scanline and the brown separator strip matches the reference capture.
+		 */
+		if (get_flags(WinTabsState.flags, ASWT_StandaloneScan) && get_module_in_fd() < 0)
+			tab_height += 1;
 	}
 
     if( tab_height == 0 || max_x <= 0 || max_y <= 0 )
@@ -224,8 +249,8 @@ rearrange_tabs( Bool dont_resize_window )
 
 	if( !get_flags( WinTabsState.flags, ASWT_StateMapped ) )
 	{
-		  map_canvas_window( WinTabsState.main_canvas, True );
-		  set_flags( WinTabsState.flags, ASWT_StateMapped );
+		map_canvas_window( WinTabsState.main_canvas, True );
+		set_flags( WinTabsState.flags, ASWT_StateMapped );
 	}
 }
 
@@ -251,4 +276,3 @@ render_tabs( Bool canvas_resized )
         update_canvas_display( WinTabsState.tabs_canvas );
 	}
 }
-

@@ -85,7 +85,56 @@ set_frame_background( ASWinTab *aswt )
 	Window w = (aswt && aswt->frame_canvas)?aswt->frame_canvas->w:WinTabsState.main_window;
 	if( get_flags( WinTabsState.flags, ASWT_Transparent ) )
 	{
-		XSetWindowBackgroundPixmap( dpy, w, ParentRelative);
+		if (aswt == NULL) {
+			unsigned int root_w = 0;
+			unsigned int root_h = 0;
+			Pixmap root_tile = ValidatePixmap(None, 0, 1, &root_w, &root_h);
+			if (root_tile != None) {
+				XWindowAttributes attr;
+				memset(&attr, 0x00, sizeof(attr));
+
+				int root_x = 0;
+				int root_y = 0;
+				Window child = None;
+
+				if (XGetWindowAttributes(dpy, w, &attr) &&
+				    XTranslateCoordinates(dpy, w, Scr.Root, 0, 0, &root_x, &root_y, &child)) {
+					unsigned int width = (unsigned int)max(attr.width, 1);
+					unsigned int height = (unsigned int)max(attr.height, 1);
+
+					if (WinTabsState.main_background_pixmap != None &&
+					    WinTabsState.main_background_width == width &&
+					    WinTabsState.main_background_height == height &&
+					    WinTabsState.main_background_root_x == root_x &&
+					    WinTabsState.main_background_root_y == root_y) {
+						XSetWindowBackgroundPixmap(dpy, w, WinTabsState.main_background_pixmap);
+					} else {
+						Pixmap bg = create_visual_pixmap(Scr.asv, w, width, height, 0);
+						if (bg != None) {
+							FillPixmapWithTile(bg, root_tile, 0, 0, width, height, root_x, root_y);
+							XSetWindowBackgroundPixmap(dpy, w, bg);
+
+							if (WinTabsState.main_background_pixmap != None)
+								XFreePixmap(dpy, WinTabsState.main_background_pixmap);
+
+							WinTabsState.main_background_pixmap = bg;
+							WinTabsState.main_background_width = width;
+							WinTabsState.main_background_height = height;
+							WinTabsState.main_background_root_x = root_x;
+							WinTabsState.main_background_root_y = root_y;
+						} else {
+							XSetWindowBackgroundPixmap(dpy, w, ParentRelative);
+						}
+					}
+				} else {
+					XSetWindowBackgroundPixmap(dpy, w, ParentRelative);
+				}
+			} else {
+				XSetWindowBackgroundPixmap(dpy, w, ParentRelative);
+			}
+		} else {
+			XSetWindowBackgroundPixmap(dpy, w, ParentRelative);
+		}
 		LOCAL_DEBUG_OUT( "Is transparent %s", "" );
 	}/*else
 		XSetWindowBackground( dpy, w, WinTabsState.border_color);*/
