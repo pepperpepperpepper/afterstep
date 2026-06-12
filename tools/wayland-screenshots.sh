@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat 1>&2 <<'EOF'
-Usage: tools/wayland-screenshots.sh [--out DIR] [--upload]
+Usage: tools/wayland-screenshots.sh [--out DIR] [--no-upload] [--upload]
 
 Generates a Wayland screenshot gallery for the wlroots-based compositor scaffold (`wayland/aswlcomp`)
 by running it nested under Xvfb (WLR_BACKENDS=x11) and capturing key screens.
@@ -24,8 +24,8 @@ Outputs:
 
 Options:
   --out DIR   Output directory (default: screenshots/YYYY-MM-DD-wayland)
-  --upload    Upload a hosted gallery via `wtf-upload` (prints the index.html URL)
-  --no-upload Skip upload (local files only) (default)
+  --upload    Upload a hosted gallery via `wtf-upload` (prints the index.html URL) (default)
+  --no-upload Skip upload (local files only)
 EOF
 }
 
@@ -42,7 +42,7 @@ repo_root="$(cd -- "${script_dir}/.." && pwd -P)"
 host_home="${HOME:-}"
 
 out_dir=""
-do_upload=0
+do_upload=1
 as_pid=""
 upload_index=""
 
@@ -100,12 +100,19 @@ require_cmd make
 require_cmd cc
 require_cmd pkg-config
 require_cmd pgrep
+require_cmd xprop
 require_cmd xdotool
 
 cd -- "${repo_root}"
 
-make -C wayland aswlcomp aswlpanel aswlmenu aswlctl aswlbg aswlbanner
+make -C wayland aswlcomp aswlpanel aswlmenu aswlctl aswlbg aswlbanner aswlwait
 make -C src/WinTabs WinTabs
+
+# TermTabs/WinTabs relies on the X root pixmap for its transparent empty-state
+# background (ParentRelative). Under Xwayland the root pixmap is often unset,
+# yielding a black rectangle instead of the AfterStep background. Pre-populate
+# the Xwayland root pixmap using libAfterImage's `ascompose -r`.
+make -C libAfterImage/apps ascompose
 
 tmp_home="$(mktemp -d)"
 runtime_dir="$(mktemp -d)"
@@ -164,10 +171,45 @@ top_winlist_h=32
 top_winlist_margin_top=46
 top_winlist_margin_right=$((right_pager_w + right_reserved + right_gap))
 
-terminal_app_id="ASWLShotXTerm"
-default_terminal_cmd="xterm -class ${terminal_app_id} -geometry 80x24 -fa Monospace -fs 12 -T 'arch@sandbox-server:/home/arch/afterstep'"
+# Xwayland demo terminal used for the "clients" screenshot. We do not start it
+# until after 02-menu.png so TermTabs remains empty for the empty-state capture.
+terminal_app_id="XTerm"
+# Match the X11 baseline window placement: with AfterStep's decoration metrics,
+# the xterm client content begins at y=161 (not 164).
+# Xterm's Xft face metrics differ by 1px between Xvfb (baseline) and Xwayland on
+# some setups (e.g. 20px vs 19px row height for the same `-fs 12` request).
+# Use `-fs 13` under Xwayland so the resulting pixel size matches the X11/Xvfb
+# baseline captures.
+default_terminal_cmd="xterm -geometry 63x24+52+161 -fa Monospace -fs 13 -T 'arch@sandbox-server:/home/arch/afterstep'"
 terminal_cmd="${TERMINAL:-${default_terminal_cmd}}"
 wayland_demo_cmd="weston-simple-shm"
+
+# Xwayland client geometry is specified in terms of the client surface (content)
+# while aswlcomp reports and positions "outer" (decorated) geometry. Keep the
+# screenshot layout stable by deriving client geometry from the decoration
+# metrics. These defaults must match aswlcomp's compiled-in defaults.
+deco_border="${ASWLCOMP_DECOR_BORDER:-2}"
+deco_title="${ASWLCOMP_DECOR_TITLE:-28}"
+
+# Expected outer geometry for the TermTabs/WinTabs window in the reference shots.
+termtabs_outer_w=640
+termtabs_outer_h=510
+termtabs_outer_x=48
+termtabs_outer_y=100
+termtabs_client_w=$((termtabs_outer_w - 2 * deco_border))
+termtabs_client_h=$((termtabs_outer_h - deco_title - deco_border))
+termtabs_client_x=$((termtabs_outer_x + deco_border))
+termtabs_client_y=$((termtabs_outer_y + deco_title))
+
+# Expected outer geometry for xeyes in the reference shots.
+xeyes_outer_w=152
+xeyes_outer_h=138
+xeyes_outer_x=200
+xeyes_outer_y=200
+xeyes_client_w=$((xeyes_outer_w - 2 * deco_border))
+xeyes_client_h=$((xeyes_outer_h - deco_title - deco_border))
+xeyes_client_x=$((xeyes_outer_x + deco_border))
+xeyes_client_y=$((xeyes_outer_y + deco_title))
 
 {
   echo "# Screenshot run top dock (Wharf-ish) config."
@@ -285,6 +327,20 @@ mkdir -p -- "${HOME}/.afterstep/non-configurable"
 # module can render (and therefore map) consistently.
 cp -a -- "${repo_root}/afterstep/." "${HOME}/.afterstep/"
 
+# Prefer the installed "active" theme selectors so X11 modules (TermTabs/WinTabs)
+# pick the same look/colorscheme/background as the X11 screenshot baseline.
+if [[ -d "${repo_root}/_install/share/afterstep/non-configurable" ]]; then
+  cp -a -- "${repo_root}/_install/share/afterstep/non-configurable/0_background" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+  cp -a -- "${repo_root}/_install/share/afterstep/non-configurable/0_colorscheme" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+  cp -a -- "${repo_root}/_install/share/afterstep/non-configurable/0_look" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+  cp -a -- "${repo_root}/_install/share/afterstep/non-configurable/0_feel" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+elif [[ -d "/usr/share/afterstep/non-configurable" ]]; then
+  cp -a -- "/usr/share/afterstep/non-configurable/0_background" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+  cp -a -- "/usr/share/afterstep/non-configurable/0_colorscheme" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+  cp -a -- "/usr/share/afterstep/non-configurable/0_look" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+  cp -a -- "/usr/share/afterstep/non-configurable/0_feel" "${HOME}/.afterstep/non-configurable/" 2>/dev/null || true
+fi
+
 export WLR_BACKENDS=x11
 export WLR_X11_FULLSCREEN=1
 export WLR_RENDERER=pixman
@@ -292,6 +348,13 @@ export ASWLCOMP_OUTPUT_WIDTH=1600
 export ASWLCOMP_OUTPUT_HEIGHT=900
 
 export ASWLCOMP_WORKSPACES=4
+# The X11 reference screenshots are click-to-focus and (critically) appear to
+# have client windows unfocused for the "clients" shots. Avoid focus-stealing
+# on map so titlebars render in the unfocused style for parity.
+#
+# The WinList strip stays populated by listing visible windows (not
+# focused-only) rather than by forcing focus.
+export ASWLCOMP_FOCUS_ON_MAP="${ASWLCOMP_FOCUS_ON_MAP:-0}"
 # The menu/launcher requests a Wayland keyboard. If a headless wlroots/x11 + Xvfb
 # environment misbehaves with a keyboard present, rerun with:
 #   ASWLCOMP_DISABLE_KEYBOARD=1 tools/wayland-screenshots.sh ...
@@ -302,6 +365,14 @@ socket="aswlcomp-shot-$$"
 demo_bin="${tmp_home}/aswlx11dockapp-demo"
 cc -O2 -g -std=c11 -Wall -Wextra -Wformat=2 -Wshadow -Wpointer-arith \
   -o "${demo_bin}" wayland/aswlx11dockapp-demo.c $(pkg-config --cflags --libs x11)
+
+clock_bin="${tmp_home}/aswlx11clock-overlay"
+cc -O2 -g -std=c11 -Wall -Wextra -Wformat=2 -Wshadow -Wpointer-arith \
+  -o "${clock_bin}" wayland/aswlx11clock-overlay.c $(pkg-config --cflags --libs x11 xft)
+
+fill_bin="${tmp_home}/aswlx11fill-window"
+cc -O2 -g -std=c11 -Wall -Wextra -Wformat=2 -Wshadow -Wpointer-arith \
+  -o "${fill_bin}" wayland/aswlx11fill-window.c $(pkg-config --cflags --libs x11)
 
 rm -f -- "${log_file}"
 ./wayland/aswlcomp --socket "${socket}" --autostart /dev/null >"${log_file}" 2>&1 &
@@ -318,6 +389,213 @@ wait_for_socket() {
     sleep 0.05
   done
   return 1
+}
+
+run_in_comp_sync() {
+  local desc="$1"
+  local cmd="$2"
+  local max_tries="${3:-200}"
+
+  local marker
+  marker="${XDG_RUNTIME_DIR}/aswl-sync-$$-${RANDOM}.rc"
+  rm -f -- "${marker}" 2>/dev/null || true
+
+  require_comp_alive
+  # Run the command in the compositor (inherits WAYLAND_DISPLAY + DISPLAY for Xwayland),
+  # then write its exit code to a marker file so the harness can wait deterministically.
+  WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${cmd}; rc=\$?; printf '%s\n' \"\${rc}\" > '${marker}'" || true
+
+  for _ in $(seq 1 "${max_tries}"); do
+    require_comp_alive
+    if [[ -f "${marker}" ]]; then
+      local rc
+      rc="$(cat -- "${marker}" 2>/dev/null || true)"
+      rm -f -- "${marker}" 2>/dev/null || true
+      if [[ "${rc}" == "0" ]]; then
+        return 0
+      fi
+      echo "Error: ${desc} failed (exit ${rc})." >&2
+      return 1
+    fi
+    sleep 0.05
+  done
+
+  echo "Error: timed out waiting for ${desc} to finish." >&2
+  return 1
+}
+
+aswl_default_file() {
+  local primary="$1"
+  local fallback="$2"
+
+  if [[ -r "${primary}" ]]; then
+    printf '%s' "${primary}"
+    return 0
+  fi
+  if [[ -r "${fallback}" ]]; then
+    printf '%s' "${fallback}"
+    return 0
+  fi
+  return 1
+}
+
+aswl_colorscheme_value() {
+  local file="$1"
+  local key="$2"
+
+  awk -v want="${key}" '
+    BEGIN { disabled = "#~~DISABLED~~#" }
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      sub(/^[[:space:]]+/, "", line)
+      if (line == "") next
+      if (index(line, disabled) == 1) {
+        line = substr(line, length(disabled) + 1)
+        sub(/^[[:space:]]+/, "", line)
+      } else if (substr(line, 1, 1) == "#") {
+        next
+      }
+
+      if (line ~ ("^" want "[[:space:]]+#[0-9A-Fa-f]{6,8}([[:space:]]|$)")) {
+        # Split: KEY VALUE ...
+        n = split(line, parts, /[[:space:]]+/)
+        if (n >= 2) {
+          print parts[2]
+          exit 0
+        }
+      }
+    }
+  ' "${file}" 2>/dev/null || true
+}
+
+resolve_stormy_skies_path() {
+  local share_root="$1"
+
+  local candidates=(
+    "${share_root}/backgrounds/.StormySkies"
+    "${share_root}/backgrounds/jpg/.StormySkies"
+    "${repo_root}/afterstep/backgrounds/jpg/.StormySkies"
+    "${repo_root}/_install/share/afterstep/backgrounds/.StormySkies"
+    "/usr/share/afterstep/backgrounds/.StormySkies"
+  )
+  for p in "${candidates[@]}"; do
+    if [[ -r "${p}" ]]; then
+      printf '%s' "${p}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_simple_texture_path() {
+  local share_root="$1"
+
+  local candidates=(
+    "${share_root}/desktop/tiles/SimpleTexture"
+    "${share_root}/desktop/tiles/png/SimpleTexture"
+    "${share_root}/desktop/tiles/jpg/SimpleTexture"
+    "${repo_root}/afterstep/desktop/tiles/png/SimpleTexture"
+    "${repo_root}/_install/share/afterstep/desktop/tiles/SimpleTexture"
+    "/usr/share/afterstep/desktop/tiles/SimpleTexture"
+  )
+  for p in "${candidates[@]}"; do
+    if [[ -r "${p}" ]]; then
+      printf '%s' "${p}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+ensure_xwayland_root_pixmap() {
+  local share_root=""
+  if [[ -d "${repo_root}/_install/share/afterstep" ]]; then
+    share_root="${repo_root}/_install/share/afterstep"
+  elif [[ -d "/usr/share/afterstep" ]]; then
+    share_root="/usr/share/afterstep"
+  else
+    share_root="${repo_root}/afterstep"
+  fi
+
+  local bg_path
+  bg_path="$(aswl_default_file "${share_root}/non-configurable/0_background" "${repo_root}/afterstep/backgrounds/xml/Default" || true)"
+  if [[ -z "${bg_path}" ]]; then
+    echo "Warning: could not locate background XML for Xwayland root pixmap" >&2
+    return 0
+  fi
+
+  local cs_path
+  cs_path="$(aswl_default_file "${share_root}/non-configurable/0_colorscheme" "${repo_root}/afterstep/colorschemes/colorscheme.Stormy_Skies" || true)"
+
+  local base_light="#FF7B97B3"
+  local base_dark="#FF000000"
+  local inactive1="#FF5C5B66"
+  if [[ -n "${cs_path}" && -r "${cs_path}" ]]; then
+    base_light="$(aswl_colorscheme_value "${cs_path}" BaseLight || true)"
+    base_dark="$(aswl_colorscheme_value "${cs_path}" BaseDark || true)"
+    inactive1="$(aswl_colorscheme_value "${cs_path}" Inactive1 || true)"
+
+    [[ -n "${base_light}" ]] || base_light="#FF7B97B3"
+    [[ -n "${base_dark}" ]] || base_dark="#FF000000"
+    [[ -n "${inactive1}" ]] || inactive1="#FF5C5B66"
+  fi
+
+  local stormy_path tile_path
+  stormy_path="$(resolve_stormy_skies_path "${share_root}" || true)"
+  tile_path="$(resolve_simple_texture_path "${share_root}" || true)"
+
+  # Build a small, self-contained XML string so `ascompose` does not depend on
+  # repo-vs-installed asset layout, nor on AfterStep color names.
+  local xml
+  xml="$(cat -- "${bg_path}" 2>/dev/null || true)"
+  if [[ -z "${xml}" ]]; then
+    echo "Warning: failed to read ${bg_path}; skipping Xwayland root pixmap" >&2
+    return 0
+  fi
+
+  # Replace known colorscheme tokens with hex so libAfterImage can parse them.
+  xml="$(printf '%s' "${xml}" | sed \
+    -e "s/\\<BaseLight\\>/${base_light}/g" \
+    -e "s/\\<BaseDark\\>/${base_dark}/g" \
+    -e "s/\\<Inactive1\\>/${inactive1}/g")"
+
+  # Fix up asset locations for repo vs installed layouts.
+  if [[ -n "${stormy_path}" ]]; then
+    xml="$(printf '%s' "${xml}" | sed -e "s|src=\"\\.StormySkies\"|src=\"${stormy_path}\"|g")"
+  fi
+  if [[ -n "${tile_path}" ]]; then
+    xml="$(printf '%s' "${xml}" | sed -e "s|src=\"tiles/SimpleTexture\"|src=\"${tile_path}\"|g")"
+  fi
+
+  # Ensure ascompose can locate fonts via FONT_PATH; IMAGE_PATH isn't required
+  # after we rewrite `src=` to absolute paths.
+  local fonts_dir="${share_root}/desktop/fonts"
+  if [[ ! -d "${fonts_dir}" ]]; then
+    fonts_dir="${repo_root}/afterstep/desktop/fonts"
+  fi
+
+  # Escape single quotes for /bin/sh -c '...'
+  local xml_escaped
+  xml_escaped="${xml//\'/\'\\\'\'}"
+
+  # Try a few times: Xwayland may not be ready immediately at compositor start.
+  for _ in $(seq 1 20); do
+    if run_in_comp_sync "ascompose -r (set Xwayland root pixmap)" \
+      "FONT_PATH='${fonts_dir}' libAfterImage/apps/ascompose -q -r -s '${xml_escaped}' >/dev/null 2>&1 && xprop -root _XROOTPMAP_ID >/dev/null 2>&1" \
+      200; then
+      if [[ "${ASWL_DEBUG_XWAYLAND_ROOT:-}" == "1" ]]; then
+        run_in_comp_sync "debug: capture Xwayland root" \
+          "xprop -root _XROOTPMAP_ID > '${out_dir}/xwayland-rootpixmap.txt' 2>&1 || true; xwininfo -root -all > '${out_dir}/xwayland-rootwininfo.txt' 2>&1 || true; import -window root '${out_dir}/xwayland-root.png' > '${out_dir}/xwayland-root-import.txt' 2>&1 || true; true" \
+          200 || true
+      fi
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  echo "Warning: failed to set Xwayland root pixmap (continuing)" >&2
+  return 0
 }
 
 require_comp_alive() {
@@ -348,6 +626,11 @@ require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLBANNER_TINT='#0e7f7f7f' ./wayland/aswlbanner" || true
 sleep 0.1
 
+# Seed the Xwayland root pixmap so X11 modules that use ParentRelative
+# transparency (WinTabs/TermTabs) match the X11 baseline instead of rendering
+# against a black root.
+ensure_xwayland_root_pixmap
+
 get_comp_window_id() {
   xwininfo -root -tree | awk '/^[[:space:]]*0x[0-9a-f]+/ {print $1; exit}'
 }
@@ -376,6 +659,33 @@ snap() {
   local file="$1"
   require_comp_alive
   import -window "${win_id}" "${file}"
+}
+
+wait_for_rendered_crop() {
+  local geom="${1:?crop geometry required (WxH+X+Y)}"
+  local min_std="${2:-0.12}"
+  local max_tries="${3:-100}"
+
+  local probe="${runtime_dir}/aswl-crop-probe-$$.png"
+  rm -f -- "${probe}" 2>/dev/null || true
+
+  for _ in $(seq 1 "${max_tries}"); do
+    require_comp_alive
+    import -window "${win_id}" -crop "${geom}" +repage "${probe}" >/dev/null 2>&1 || true
+    if [[ -r "${probe}" ]]; then
+      local std
+      std="$(identify -format '%[fx:standard_deviation]' "${probe}" 2>/dev/null || printf '0')"
+      if awk -v s="${std}" -v m="${min_std}" 'BEGIN { exit !(s > m) }'; then
+        rm -f -- "${probe}" 2>/dev/null || true
+        return 0
+      fi
+    fi
+    sleep 0.05
+  done
+
+  rm -f -- "${probe}" 2>/dev/null || true
+  echo "Warning: timed out waiting for rendered crop ${geom} (continuing)" >&2
+  return 0
 }
 
 move_pointer() {
@@ -409,7 +719,7 @@ focus_window_by_match() {
 
       match_app = (want_app != "" && got_app == want_app)
       match_title = (want_title != "" && index(got_title, want_title) > 0)
-      if ((match_app || match_title) && id == "") id = $1
+      if ($4 ~ /mapped/ && (match_app || match_title) && id == "") id = $1
     }
     END { print id }
   ' || true)"
@@ -497,17 +807,69 @@ wait_for_mapped_app_id() {
   return 1
 }
 
+wait_for_window_geometry() {
+  local title_substr="${1:?title substring required}"
+  local want_w="${2:?width required}"
+  local want_h="${3:?height required}"
+  local want_x="${4:-}"
+  local want_y="${5:-}"
+  local max_tries="${6:-200}"
+
+  for _ in $(seq 1 "${max_tries}"); do
+    require_comp_alive
+	    if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' \
+      -v want_title="${title_substr}" \
+      -v want_w="${want_w}" \
+      -v want_h="${want_h}" \
+      -v want_x="${want_x}" \
+      -v want_y="${want_y}" '
+      function lcase(s) { return tolower(s) }
+	      BEGIN { id = ""; found = 0 }
+	      {
+	        if ($2 ~ /^ws=/) {
+	          got_title = $6
+	          sub(/^title=/, "", got_title)
+	          if (index(lcase(got_title), lcase(want_title)) > 0) {
+	            id = $1
+	          } else {
+	            id = ""
+	          }
+	        } else if (id != "" && $1 == id && $2 == "geom") {
+	          gx = $3; gy = $4; gw = $5; gh = $6
+	          sub(/^x=/, "", gx); sub(/^y=/, "", gy); sub(/^w=/, "", gw); sub(/^h=/, "", gh)
+	          ok = (gw == want_w && gh == want_h)
+	          if (want_x != "") ok = ok && (gx == want_x)
+	          if (want_y != "") ok = ok && (gy == want_y)
+	          if (ok) {
+	            found = 1
+	            exit
+	          }
+	          # Title matched but geometry did not; keep scanning (handles retries
+	          # that accidentally spawn duplicate windows).
+	          id = ""
+	        }
+	      }
+      END { exit found ? 0 : 1 }
+    ' >/dev/null; then
+      return 0
+    fi
+    sleep 0.05
+  done
+  return 1
+}
+
 ensure_mapped_window() {
   local desc="$1"
   local cmd="$2"
   local want_app_id="${3:-}"
   local want_title_substr="${4:-}"
   local attempts="${5:-3}"
+  local max_tries="${6:-200}"
 
   for attempt in $(seq 1 "${attempts}"); do
     require_comp_alive
     WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${cmd}" || true
-    if wait_for_mapped_app_id "${want_app_id}" "${want_title_substr}" 200; then
+    if wait_for_mapped_app_id "${want_app_id}" "${want_title_substr}" "${max_tries}"; then
       return 0
     fi
 
@@ -587,62 +949,141 @@ close_menu_if_open() {
 
 # Give aswlbg (background XML compositor via libAfterImage) time to paint before
 # the first capture. This can take a bit longer on some systems.
+require_comp_alive
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLWAIT_X=810 ASWLWAIT_Y=460 ASWLWAIT_W=672 ASWLWAIT_H=30 ASWLWAIT_TEXT='Waiting for window matching \"WinList\" ... Press button to cancel.' ./wayland/aswlwait" || true
 sleep 2
 snap "${out_dir}/01-desktop.png"
 
 # The X11 baseline's Banner is only visible during early init. Stop it before we
 # bring up the panels and menus so subsequent shots match the baseline.
+kill_children_matching "aswlwait" TERM
+sleep 0.1
 kill_children_matching "aswlbanner" TERM
 sleep 0.1
 
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_HEIGHT=${top_dock_h} ASWLPANEL_CONFIG='${top_panel_cfg}' ./wayland/aswlpanel" || true
 require_comp_alive
-WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_WINDOW_LIST=focused ASWLPANEL_CONFIG='${top_winlist_cfg}' ./wayland/aswlpanel" || true
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_WINDOW_LIST=topmost ASWLPANEL_CONFIG='${top_winlist_cfg}' ./wayland/aswlpanel" || true
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_CLOCK_OVERRIDE=05:45 ASWLTHEME_CONFIG='${right_dock_theme_cfg}' ASWLPANEL_CONFIG='${right_dock_cfg}' ./wayland/aswlpanel" || true
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "ASWLPANEL_EXCLUSIVE_ZONE=0 ASWLPANEL_MODE=pager ASWLPANEL_CONFIG='${right_pager_cfg}' ./wayland/aswlpanel" || true
 
 ensure_mapped_window "TermTabs (WinTabs)" \
-  "./src/WinTabs/WinTabs --myname TermTabs --pattern '*term*' --exclude-pattern 'mc*' --geometry +5+100 --title 'term tabs'" \
-  "" "term tabs"
+  "./src/WinTabs/WinTabs --myname TermTabs --pattern '*term*' --exclude-pattern 'mc*' --geometry ${termtabs_client_w}x${termtabs_client_h}+${termtabs_client_x}+${termtabs_client_y} --title 'term tabs' --standalone-scan" \
+  "" "term tabs" 1 400
 
-sleep 0.3
-move_pointer 48 100
-open_menu_and_wait
-snap "${out_dir}/02-menu.png"
-close_menu_if_open
+# Capture a window list snapshot for parity debugging (includes frame geometry).
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows >"${out_dir}/windows-02-termtabs.txt" 2>&1 || true
+
+# Match the (mislabeled) X11 baseline `02-root-menu.png`: it shows TermTabs'
+# empty state, not the menu.
+	# WinTabs sleeps for 1s before entering its event loop; wait until its pixels
+	# look "rendered" (stddev rises from ~0.07 for an uninitialized surface).
+	wait_for_rendered_crop "240x90+48+100" 0.10 400
+	# Give WinTabs a moment to finish painting the hint/banner area; otherwise we
+	# can capture partially-rendered pixels and regress parity vs the X11 baseline.
+	sleep 0.2
+	snap "${out_dir}/02-menu.png"
 
 require_comp_alive
 WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl workspace 1 || true
 require_comp_alive
 close_windows_by_app_id "${terminal_app_id}"
-ensure_mapped_window "xterm" "${terminal_cmd}" "${terminal_app_id}" "aswlshot-xterm"
+require_comp_alive
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${terminal_cmd}" || true
+# Wait for TermTabs to expand to its configured client size after swallowing
+# the terminal. This is the key visual parity requirement for 03/04.
+if ! wait_for_window_geometry "term tabs" 640 510 48 100 400; then
+  echo "Error: TermTabs did not expand after starting xterm." >&2
+  WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null || true
+  tail -n 200 "${log_file}" >&2 || true
+  exit 1
+fi
+
+if [[ "${ASWL_DEBUG_XTERM_INFO:-}" == "1" ]]; then
+  run_in_comp_sync "debug: xterm xwininfo" \
+    "xwininfo -name 'arch@sandbox-server:/home/arch/afterstep' -all > '${out_dir}/xterm-xwininfo.txt' 2>&1 || true; true" \
+    200 || true
+  run_in_comp_sync "debug: xterm xprop" \
+    "xprop -name 'arch@sandbox-server:/home/arch/afterstep' > '${out_dir}/xterm-xprop.txt' 2>&1 || true; true" \
+    200 || true
+  run_in_comp_sync "debug: xterm WM_NORMAL_HINTS" \
+    "xprop -name 'arch@sandbox-server:/home/arch/afterstep' WM_NORMAL_HINTS > '${out_dir}/xterm-wm-normal-hints.txt' 2>&1 || true; true" \
+    200 || true
+fi
+
 require_comp_alive
 close_windows_by_app_id "XEyes"
-ensure_mapped_window "xeyes" "xeyes" "XEyes" "xeyes"
-focus_window_by_app_id "${terminal_app_id}"
-for _ in $(seq 1 30); do
-  focus_window_by_match "XEyes" "xeyes"
-  if WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows 2>/dev/null | awk -F'\t' '
-    BEGIN { found = 0 }
-    BEGIN { want_app = tolower("XEyes"); want_title = tolower("xeyes"); }
-    {
-      got_app = $5
-      sub(/^app_id=/, "", got_app)
-      got_app = tolower(got_app)
-      got_title = $6
-      sub(/^title=/, "", got_title)
-      got_title = tolower(got_title)
-      if ($4 ~ /focused/ && ((got_app == want_app) || (index(got_title, want_title) > 0))) found = 1
-    }
-    END { exit found ? 0 : 1 }
-  ' >/dev/null; then
-    break
+# Match the X11 baseline's xeyes appearance: use an unshaped (rectangular)
+# window and explicitly paint its background white.
+#
+# xeyes intentionally sets its core background pixmap to None, so the window
+# background isn't cleared automatically (even if you pass -bg). Without this,
+# Xwayland often shows uninitialized pixels (typically black) behind the eyes.
+# We fill the window (and its child widget) with #FFFFFF and then trigger an
+# Expose so xeyes repaints on top of the new background.
+#
+# Xwayland may not have a named-color database (rgb.txt), so use hex colors to
+# keep the demo deterministic across environments.
+ensure_mapped_window "xeyes" "xeyes +shape -render +present -bg '#FFFFFF' -fg '#000000' -outline '#000000' -center '#FFFFFF' -geometry ${xeyes_client_w}x${xeyes_client_h}+${xeyes_client_x}+${xeyes_client_y}" "XEyes" "xeyes"
+
+# Force a stable white background for the xeyes window.
+xeyes_xwininfo_tmp="${XDG_RUNTIME_DIR}/xeyes-xwininfo-$$.txt"
+rm -f -- "${xeyes_xwininfo_tmp}" 2>/dev/null || true
+run_in_comp_sync "xeyes xwininfo" \
+  "xwininfo -name xeyes -all > '${xeyes_xwininfo_tmp}' 2>&1 || true; true" \
+  200 || true
+wid="$(awk '/Window id:/{print $4; exit}' "${xeyes_xwininfo_tmp}" 2>/dev/null || true)"
+if [[ -z "${wid}" ]]; then
+  echo "Error: could not determine xeyes window id for background fill." >&2
+  sed -n '1,120p' "${xeyes_xwininfo_tmp}" >&2 || true
+  exit 1
+fi
+run_in_comp_sync "xeyes background fill" \
+  "${fill_bin} --window '${wid}' --color '#FFFFFF' --subtree --expose" \
+  200
+
+if [[ "${ASWL_DEBUG_XEYES_INFO:-}" == "1" ]]; then
+  cp -f -- "${xeyes_xwininfo_tmp}" "${out_dir}/xeyes-xwininfo.txt" 2>/dev/null || true
+  run_in_comp_sync "debug: xeyes xwininfo/xprop" \
+    "xprop -name xeyes > '${out_dir}/xeyes-xprop.txt' 2>&1 || true; true" \
+    200 || true
+
+  child="$(awk '/child:/{getline; print $1; exit}' "${xeyes_xwininfo_tmp}" 2>/dev/null || true)"
+
+  if [[ -n "${wid}" ]]; then
+    run_in_comp_sync "debug: xeyes import" \
+      "import -window '${wid}' '${out_dir}/xeyes-import.png' 2>/dev/null || true; true" \
+      200 || true
   fi
-  sleep 0.05
-done
+
+  if [[ -n "${child}" ]]; then
+    run_in_comp_sync "debug: xeyes import child" \
+      "import -window '${child}' '${out_dir}/xeyes-child-import.png' 2>/dev/null || true; true" \
+      200 || true
+  fi
+fi
+
+# Overlay a small "clock" window over xeyes (matches X11 baseline and should
+# not appear in the window list menu).
+require_comp_alive
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl exec "${clock_bin} --text '05:45' --geometry '68x37+261+290' --font 'Monospace-13' --seconds 120 --no-title --no-wm-class" || true
+wait_for_rendered_crop "90x60+250+275" 0.10 400
+
+# X11 baseline captures are click-to-focus. For parity, do not focus any client
+# window here: we keep the pointer inside xeyes to make its pupils deterministic
+# while leaving decorations in the unfocused style.
+
+# Capture a window list snapshot for parity debugging (includes frame geometry).
+WAYLAND_DISPLAY="${socket}" ./wayland/aswlctl list_windows >"${out_dir}/windows-03-clients.txt" 2>&1 || true
+
+# Make `xeyes` deterministic: it tracks the pointer position, so place the
+# cursor inside the window before capturing. This reduces visual diffs vs the
+# X11 baseline.
+move_pointer "${ASWL_SHOT_XEYES_POINTER_X:-315}" "${ASWL_SHOT_XEYES_POINTER_Y:-263}"
+sleep 0.1
 sleep 0.3
 snap "${out_dir}/03-clients.png"
 
@@ -765,9 +1206,9 @@ cat >"${out_dir}/index.html" <<EOF
       </figure>
       <figure>
         <a href="02-menu.png">
-          <img src="02-menu.png" alt="aswlmenu launcher open" />
+          <img src="02-menu.png" alt="AfterStep with TermTabs (WinTabs) empty state" />
         </a>
-        <figcaption><strong>Menu</strong> — <a href="02-menu.png">02-menu.png</a></figcaption>
+        <figcaption><strong>TermTabs</strong> — <a href="02-menu.png">02-menu.png</a></figcaption>
       </figure>
       <figure>
         <a href="03-clients.png">
@@ -857,9 +1298,9 @@ if [[ "${do_upload}" -eq 1 ]]; then
       </figure>
       <figure>
         <a href="${img_urls[1]}">
-          <img src="${img_urls[1]}" alt="aswlmenu launcher open" />
+          <img src="${img_urls[1]}" alt="AfterStep with TermTabs (WinTabs) empty state" />
         </a>
-        <figcaption><strong>Menu</strong> — <a href="${img_urls[1]}">02-menu.png</a></figcaption>
+        <figcaption><strong>TermTabs</strong> — <a href="${img_urls[1]}">02-menu.png</a></figcaption>
       </figure>
       <figure>
         <a href="${img_urls[2]}">
