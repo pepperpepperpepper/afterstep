@@ -9,7 +9,7 @@ Linux/Xorg systems.
 
 <p>
   <img src="screenshots/2026-01-18-xvfb/01-desktop.png" width="48%" alt="AfterStep desktop (full init)" />
-  <img src="screenshots/2026-01-18-xvfb/02-root-menu.png" width="48%" alt="AfterStep root menu open" />
+  <img src="screenshots/2026-01-18-xvfb/02-root-menu.png" width="48%" alt="AfterStep TermTabs (empty state; misnamed 02-root-menu.png)" />
 </p>
 <p>
   <img src="screenshots/2026-01-18-xvfb/03-clients.png" width="48%" alt="AfterStep with client windows" />
