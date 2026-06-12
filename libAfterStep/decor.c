@@ -1477,27 +1477,27 @@ render_astbar_int (ASTBarData * tbar, ASCanvas * pc, ASImage ** pcache,
 																									 BAR_FLAGS_VERTICAL)
 																				? FLIP_VERTICAL : 0);
 				}
-				if (*pcache)
-					back = tile_asimage (ASDefaultVisual, *pcache,
-															 tbar->root_x - origin_canvas->root_x +
-															 bevel.top_outline,
-															 tbar->root_y - origin_canvas->root_y +
-															 bevel.left_outline, tbar->width,
-															 tbar->height, TINT_LEAVE_SAME, ASA_ASImage,
-															 0, ASIMAGE_QUALITY_DEFAULT);
-			}
+					if (*pcache)
+						back = tile_asimage (ASDefaultVisual, *pcache,
+																 tbar->root_x - origin_canvas->root_x +
+																 bevel.left_outline,
+																 tbar->root_y - origin_canvas->root_y +
+																 bevel.top_outline, tbar->width,
+																 tbar->height, TINT_LEAVE_SAME, ASA_ASImage,
+																 0, ASIMAGE_QUALITY_DEFAULT);
+				}
 
-			if (back == NULL)
-				back = mystyle_crop_image (style,
-																	 pc->root_x,
-																	 pc->root_y,
-																	 tbar->root_x - origin_canvas->root_x +
-																	 bevel.top_outline,
-																	 tbar->root_y - origin_canvas->root_y +
-																	 bevel.left_outline, tbar->width,
-																	 tbar->height,
-																	 origin_canvas->width +
-																	 (int)origin_canvas->bw,
+				if (back == NULL)
+					back = mystyle_crop_image (style,
+																		 pc->root_x,
+																		 pc->root_y,
+																		 tbar->root_x - origin_canvas->root_x +
+																		 bevel.left_outline,
+																		 tbar->root_y - origin_canvas->root_y +
+																		 bevel.top_outline, tbar->width,
+																		 tbar->height,
+																		 origin_canvas->width +
+																		 (int)origin_canvas->bw,
 																	 origin_canvas->height +
 																	 (int)origin_canvas->bw,
 																	 get_flags (tbar->state,
