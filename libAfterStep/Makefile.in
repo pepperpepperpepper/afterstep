@@ -18,7 +18,7 @@ LIB_INCS= 	afterstep.h asapp.h ascommand.h asdatabase.h asfeel.h aswindata.h \
 #           audit.o strncmp.o homeanddirs.o
 #           findfile.o asproperty.o catstring3.o copystring.o termhash.o
 #
-LIB_OBJS= asapp.o ascommand.o asdatabase.o asfeel.o aswindata.o \
+LIB_OBJS= asapp.o asapp_env.o asapp_spawn.o ascommand.o asdatabase.o asfeel.o aswindata.o \
 				balloon.o canvas.o canvas_x11.o clientprops.o colorscheme.o \
 				decor.o desktop_category.o desktop_category_entries.o event.o \
 				freestor.o functions.o functions_terms.o font.o hints.o hints_common.o hints_icccm.o hints_motif.o hints_gnome.o hints_kde.o hints_extwm.o hints_xresources.o hints_asdb.o kde.o module.o \
@@ -26,7 +26,7 @@ LIB_OBJS= asapp.o ascommand.o asdatabase.o asfeel.o aswindata.o \
 				outline.o operations.o parser.o parser_scan.o parser_fs.o parser_xml.o \
 				screen.o session.o session_files.o shape.o wmprops.o wmprops_write.o
 
-LIB_SOURCES= asapp.c ascommand.c asdatabase.c asfeel.c aswindata.c \
+LIB_SOURCES= asapp.c asapp_env.c asapp_spawn.c ascommand.c asdatabase.c asfeel.c aswindata.c \
 				balloon.c canvas.c canvas_x11.c clientprops.c colorscheme.c \
 				decor.c desktop_category.c desktop_category_entries.c event.c \
 				freestor.c functions.c functions_terms.c font.c hints.c hints_common.c hints_icccm.c hints_motif.c hints_gnome.c hints_kde.c hints_extwm.c hints_xresources.c hints_asdb.c kde.c module.c \
