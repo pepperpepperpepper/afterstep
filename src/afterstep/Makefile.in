@@ -1,5 +1,5 @@
 OBJS            = add_window.o afterstep.o afterstep_screen.o aswindow.o \
-                                colormaps.o configure.o configure_load.o configure_apply.o configure_merge.o configure_restart.o cover.o dbus.o decorations.o decorations_model.o decorations_render.o dirtree.o \
+                                colormaps.o configure.o configure_load.o configure_apply.o configure_merge.o configure_restart.o cover.o dbus.o dbus_session.o decorations.o decorations_model.o decorations_render.o dirtree.o \
 					events.o event_loop.o event_dispatch.o event_handlers_input.o event_handlers_property.o event_handlers_window.o event_handlers_misc.o functions.o housekeeping.o icons.o \
 					function_handlers_config.o function_handlers_window.o function_handlers_focus.o function_handlers_workspace.o function_handlers_modules.o function_handlers_misc.o \
 					menuitem.o menus_core.o menus_render.o menus_events.o menus_run.o misc.o module.o module_control.o window_focus.o window_frame.o window_frame_layout.o window_frame_render.o window_lifecycle.o window_list.o window_lookup.o window_menus.o window_session.o window_stacking.o window_state.o \
@@ -56,8 +56,11 @@ uninstall:	uninstall.bin
 test_asdbus.o: dbus.c
 		$(CC) $(CCFLAGS) $(EXTRA_DEFINES) -DTEST_AS_DBUS $(INCLUDES) $(EXTRA_INCLUDES) -c dbus.c -o test_asdbus.o
 
-test_asdbus:	test_asdbus.o
-		$(CC) test_asdbus.o $(LIBS_ALL) -o test_asdbus
+test_asdbus_session.o: dbus_session.c
+		$(CC) $(CCFLAGS) $(EXTRA_DEFINES) -DTEST_AS_DBUS $(INCLUDES) $(EXTRA_INCLUDES) -c dbus_session.c -o test_asdbus_session.o
+
+test_asdbus:	test_asdbus.o test_asdbus_session.o
+		$(CC) test_asdbus.o test_asdbus_session.o $(LIBS_ALL) -o test_asdbus
 
 
 install.man:
