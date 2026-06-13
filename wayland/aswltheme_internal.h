@@ -71,6 +71,14 @@ bool aswl_resolve_style_back_pixmap_tint(struct aswl_style *styles,
                                          int *type_out,
                                          uint32_t *tint_out);
 
+/* Resolves image-backed BackPixmap textures (127 scaled / 128 tiled). On
+ * success *path_out is a malloc'd pixmap file path (caller frees). */
+bool aswl_resolve_style_back_pixmap_path(struct aswl_style *styles,
+                                         size_t style_count,
+                                         const char *style_name,
+                                         char **path_out,
+                                         int *type_out);
+
 bool aswl_resolve_style_gradient(struct aswl_style *styles,
                                  size_t style_count,
                                  const char *style_name,

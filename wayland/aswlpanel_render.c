@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "aswlpanel_internal.h"
+#include "aswlicon.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +28,48 @@ static int clamp_int(int v, int lo, int hi)
 static bool as_panel_edge_is_vertical(enum as_panel_edge edge)
 {
 	return edge == ASWL_PANEL_EDGE_LEFT || edge == ASWL_PANEL_EDGE_RIGHT;
+}
+
+/* Fill the panel background from an image-backed MyStyle BackPixmap: type 128
+ * tiles the pixmap, type 127 scales it to fill. Typical AfterStep BackPixmap
+ * images are opaque, so a straight ARGB copy matches the wl_shm buffer. */
+static bool as_buffer_fill_backpixmap_image(struct as_buffer *buf,
+                                            const char *path, bool scaled)
+{
+	if (buf == NULL || buf->data == NULL || path == NULL || path[0] == '\0')
+		return false;
+	if (buf->width <= 0 || buf->height <= 0)
+		return false;
+
+	uint32_t *img = NULL;
+	int iw = 0;
+	int ih = 0;
+	if (!aswl_icon_load_argb(path, &img, &iw, &ih) || img == NULL || iw <= 0 || ih <= 0) {
+		free(img);
+		return false;
+	}
+
+	uint32_t *dst = (uint32_t *)buf->data;
+	int stride_px = buf->stride / 4;
+	for (int y = 0; y < buf->height; y++) {
+		uint32_t *row = dst + (size_t)y * stride_px;
+		int sy = scaled ? (int)((int64_t)y * ih / buf->height) : (y % ih);
+		if (sy < 0)
+			sy = 0;
+		else if (sy >= ih)
+			sy = ih - 1;
+		const uint32_t *srow = img + (size_t)sy * iw;
+		for (int x = 0; x < buf->width; x++) {
+			int sx = scaled ? (int)((int64_t)x * iw / buf->width) : (x % iw);
+			if (sx < 0)
+				sx = 0;
+			else if (sx >= iw)
+				sx = iw - 1;
+			row[x] = srow[sx];
+		}
+	}
+	free(img);
+	return true;
 }
 
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
@@ -121,6 +164,14 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 					        bg_backpix_filled);
 				}
 			}
+		}
+
+		if (!bg_backpix_filled &&
+		    (bg_backpix_type == 128 || bg_backpix_type == 127) &&
+		    state->theme.panel_back_pixmap_path != NULL) {
+			bg_backpix_filled = as_buffer_fill_backpixmap_image(
+			        buf, state->theme.panel_back_pixmap_path,
+			        bg_backpix_type == 127);
 		}
 
 		if (!bg_backpix_filled) {

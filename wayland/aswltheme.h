@@ -23,9 +23,10 @@ struct aswl_theme {
 	uint32_t panel_ws_active_fg;
 
 	struct aswl_gradient panel_bg_gradient;
-	/* MyStyle BackPixmap (texture type 129/149) pseudo-transparency. */
-	int panel_back_pixmap_type; /* 0 if unset; 129 or 149 when enabled */
+	/* MyStyle BackPixmap: 129/149 pseudo-transparency (tint), or 127/128 image. */
+	int panel_back_pixmap_type; /* 0 unset; 129/149 tint; 127 scaled; 128 tiled */
 	uint32_t panel_back_pixmap_tint; /* ARGB tint (AfterImage tint space) */
+	char *panel_back_pixmap_path; /* resolved pixmap file for 127/128; NULL otherwise */
 	struct aswl_gradient panel_button_gradient;
 	struct aswl_gradient panel_ws_inactive_gradient;
 	struct aswl_gradient panel_ws_active_gradient;

@@ -921,6 +921,49 @@ bool aswl_resolve_style_back_pixmap_tint(struct aswl_style *styles,
 	return true;
 }
 
+bool aswl_resolve_style_back_pixmap_path(struct aswl_style *styles,
+                                         size_t style_count,
+                                         const char *style_name,
+                                         char **path_out,
+                                         int *type_out)
+{
+	if (path_out != NULL)
+		*path_out = NULL;
+	if (type_out != NULL)
+		*type_out = 0;
+	if (style_name == NULL || style_name[0] == '\0')
+		return false;
+
+	struct aswl_style *st = aswl_find_style(styles, style_count, style_name);
+	if (st == NULL)
+		return false;
+
+	const char *stack[16] = { 0 };
+	const struct aswl_style *src = NULL;
+	if (!aswl_resolve_style_back_pixmap_rec(styles, style_count, st, stack, 0, &src))
+		return false;
+	if (src == NULL)
+		return false;
+
+	/* Image-backed pixmap textures: 127 = scaled, 128 = tiled. The token is a
+	 * pixmap file path (unlike 129/149, where it is a tint color). */
+	if (src->back_pixmap_type != 127 && src->back_pixmap_type != 128)
+		return false;
+	if (src->back_pixmap == NULL || src->back_pixmap[0] == '\0')
+		return false;
+
+	char *dup = strdup(src->back_pixmap);
+	if (dup == NULL)
+		return false;
+	if (path_out != NULL)
+		*path_out = dup;
+	else
+		free(dup);
+	if (type_out != NULL)
+		*type_out = src->back_pixmap_type;
+	return true;
+}
+
 static bool aswl_resolve_style_gradient_rec(struct aswl_style *styles,
                                            size_t style_count,
                                            const struct aswl_style *st,
