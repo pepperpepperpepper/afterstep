@@ -23,7 +23,7 @@ LIB_OBJS= asapp.o ascommand.o asdatabase.o asfeel.o aswindata.o \
 				decor.o desktop_category.o desktop_category_entries.o event.o \
 				freestor.o functions.o functions_terms.o font.o hints.o hints_common.o hints_icccm.o hints_motif.o hints_gnome.o hints_kde.o hints_extwm.o hints_xresources.o hints_asdb.o kde.o module.o \
 				moveresize.o myicon.o mylook.o mystyle.o mystyle_property.o \
-				outline.o operations.o parser.o parser_fs.o parser_xml.o \
+				outline.o operations.o parser.o parser_scan.o parser_fs.o parser_xml.o \
 				screen.o session.o shape.o wmprops.o
 
 LIB_SOURCES= asapp.c ascommand.c asdatabase.c asfeel.c aswindata.c \
@@ -31,7 +31,7 @@ LIB_SOURCES= asapp.c ascommand.c asdatabase.c asfeel.c aswindata.c \
 				decor.c desktop_category.c desktop_category_entries.c event.c \
 				freestor.c functions.c functions_terms.c font.c hints.c hints_common.c hints_icccm.c hints_motif.c hints_gnome.c hints_kde.c hints_extwm.c hints_xresources.c hints_asdb.c kde.c module.c \
 				moveresize.c myicon.c mylook.c mystyle.c mystyle_property.c \
-				outline.c operations.c parser.c parser_fs.c parser_xml.c \
+				outline.c operations.c parser.c parser_scan.c parser_fs.c parser_xml.c \
 				screen.c session.c shape.c wmprops.c
 
 CONFIG_SCRIPT= afterstep-config
