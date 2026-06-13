@@ -216,6 +216,12 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	theme->menu_back_pixmap_type = 0;
 	free(theme->menu_back_pixmap_path);
 	theme->menu_back_pixmap_path = NULL;
+	theme->frame_active_back_pixmap_type = 0;
+	free(theme->frame_active_back_pixmap_path);
+	theme->frame_active_back_pixmap_path = NULL;
+	theme->frame_inactive_back_pixmap_type = 0;
+	free(theme->frame_inactive_back_pixmap_path);
+	theme->frame_inactive_back_pixmap_path = NULL;
 
 		struct aswl_theme_cfg cfg = {
 			.panel_style = strdup("*WharfTile"),
@@ -372,6 +378,27 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	    aswl_resolve_style_color(styles, style_count, cfg.win_inactive_style, true, colors, color_count, &c)) {
 		theme->frame_inactive_fg = c;
 		applied = true;
+	}
+	if (cfg.win_active_style != NULL) {
+		/* Image-backed BackPixmap (127 scaled / 128 tiled) for the active titlebar. */
+		char *bp_path = NULL;
+		int bp_ptype = 0;
+		if (aswl_resolve_style_back_pixmap_path(styles, style_count, cfg.win_active_style, &bp_path, &bp_ptype)) {
+			free(theme->frame_active_back_pixmap_path);
+			theme->frame_active_back_pixmap_path = bp_path;
+			theme->frame_active_back_pixmap_type = bp_ptype;
+			applied = true;
+		}
+	}
+	if (cfg.win_inactive_style != NULL) {
+		char *bp_path = NULL;
+		int bp_ptype = 0;
+		if (aswl_resolve_style_back_pixmap_path(styles, style_count, cfg.win_inactive_style, &bp_path, &bp_ptype)) {
+			free(theme->frame_inactive_back_pixmap_path);
+			theme->frame_inactive_back_pixmap_path = bp_path;
+			theme->frame_inactive_back_pixmap_type = bp_ptype;
+			applied = true;
+		}
 	}
 
 	if (cfg.menu_item_style != NULL &&

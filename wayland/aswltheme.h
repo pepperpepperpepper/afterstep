@@ -54,6 +54,13 @@ struct aswl_theme {
 	struct aswl_gradient frame_active_gradient;
 	struct aswl_gradient frame_inactive_gradient;
 
+	/* MyStyle BackPixmap image background for window titlebars (127 scaled /
+	 * 128 tiled), per focus state. */
+	int frame_active_back_pixmap_type;
+	char *frame_active_back_pixmap_path;
+	int frame_inactive_back_pixmap_type;
+	char *frame_inactive_back_pixmap_path;
+
 	uint32_t menu_bg;
 	uint32_t menu_border;
 	uint32_t menu_header_bg;

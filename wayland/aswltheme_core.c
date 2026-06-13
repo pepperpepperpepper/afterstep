@@ -95,6 +95,8 @@ void aswl_theme_destroy(struct aswl_theme *theme)
 	free(theme->frame_inactive_font);
 	free(theme->panel_back_pixmap_path);
 	free(theme->menu_back_pixmap_path);
+	free(theme->frame_active_back_pixmap_path);
+	free(theme->frame_inactive_back_pixmap_path);
 	theme->panel_font = NULL;
 	theme->menu_font = NULL;
 	theme->menu_title_font = NULL;
@@ -104,6 +106,8 @@ void aswl_theme_destroy(struct aswl_theme *theme)
 	theme->frame_inactive_font = NULL;
 	theme->panel_back_pixmap_path = NULL;
 	theme->menu_back_pixmap_path = NULL;
+	theme->frame_active_back_pixmap_path = NULL;
+	theme->frame_inactive_back_pixmap_path = NULL;
 }
 
 void aswl_gradient_destroy(struct aswl_gradient *grad)

@@ -653,6 +653,45 @@ void aswl_deco_assets_destroy(struct aswl_deco_assets *deco)
 	deco->loaded = false;
 }
 
+/* Tile (128) or scale (127) an image-backed MyStyle BackPixmap into the
+ * titlebar pixel buffer (contiguous frame_w x title_h, premultiplied ARGB).
+ * Typical AfterStep titlebar pixmaps are opaque, so premultiply is a no-op
+ * for them and correct for any with alpha. */
+static bool view_fill_titlebar_backpixmap(uint32_t *pixels, int w, int h,
+                                          const char *path, bool scaled)
+{
+	if (pixels == NULL || path == NULL || path[0] == '\0' || w <= 0 || h <= 0)
+		return false;
+
+	uint32_t *img = NULL;
+	int iw = 0;
+	int ih = 0;
+	if (!aswl_icon_load_argb(path, &img, &iw, &ih) || img == NULL || iw <= 0 || ih <= 0) {
+		free(img);
+		return false;
+	}
+
+	for (int y = 0; y < h; y++) {
+		int sy = scaled ? (int)((int64_t)y * ih / h) : (y % ih);
+		if (sy < 0)
+			sy = 0;
+		else if (sy >= ih)
+			sy = ih - 1;
+		const uint32_t *srow = img + (size_t)sy * iw;
+		uint32_t *drow = pixels + (size_t)y * w;
+		for (int x = 0; x < w; x++) {
+			int sx = scaled ? (int)((int64_t)x * iw / w) : (x % iw);
+			if (sx < 0)
+				sx = 0;
+			else if (sx >= iw)
+				sx = iw - 1;
+			drow[x] = aswl_premul_argb(srow[sx]);
+		}
+	}
+	free(img);
+	return true;
+}
+
 static struct wlr_buffer *view_render_titlebar_buffer(struct aswl_view *view, int frame_w, int title_h)
 {
 	if (view == NULL || view->server == NULL || frame_w <= 0 || title_h <= 0)
@@ -668,8 +707,14 @@ static struct wlr_buffer *view_render_titlebar_buffer(struct aswl_view *view, in
 	if (pixels == NULL)
 		return NULL;
 
+	int bp_type = focused ? server->theme.frame_active_back_pixmap_type : server->theme.frame_inactive_back_pixmap_type;
+	const char *bp_path = focused ? server->theme.frame_active_back_pixmap_path : server->theme.frame_inactive_back_pixmap_path;
+	bool bp_filled = false;
+	if ((bp_type == 128 || bp_type == 127) && bp_path != NULL)
+		bp_filled = view_fill_titlebar_backpixmap(pixels, frame_w, title_h, bp_path, bp_type == 127);
+
 	const struct aswl_gradient *grad = focused ? &server->theme.frame_active_gradient : &server->theme.frame_inactive_gradient;
-	if (aswl_gradient_is_valid(grad)) {
+	if (!bp_filled && aswl_gradient_is_valid(grad)) {
 		for (int y = 0; y < title_h; y++) {
 			for (int x = 0; x < frame_w; x++) {
 				double t = aswl_gradient_t(grad->type, x, y, frame_w, title_h);
@@ -677,7 +722,7 @@ static struct wlr_buffer *view_render_titlebar_buffer(struct aswl_view *view, in
 				pixels[(size_t)y * (size_t)frame_w + (size_t)x] = aswl_premul_argb(c);
 			}
 		}
-	} else {
+	} else if (!bp_filled) {
 		/* Fallback: subtle vertical gradient. */
 		uint32_t grad_top = aswl_color_lighten(bg, 42);
 		uint32_t grad_bot = aswl_color_darken(bg, 52);
