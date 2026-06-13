@@ -629,6 +629,48 @@ static void as_state_ensure_pin_button_icons(struct as_state *state)
 	                            pin_pressed_specs);
 }
 
+/* Fill the menu body from an image-backed MyStyle BackPixmap (MenuItemStyle):
+ * type 128 tiles the pixmap, 127 scales it to fill. Typical AfterStep
+ * BackPixmap images are opaque, so a straight ARGB copy matches the buffer. */
+static bool as_buffer_fill_backpixmap_image(struct as_buffer *buf,
+                                            const char *path, bool scaled)
+{
+	if (buf == NULL || buf->data == NULL || path == NULL || path[0] == '\0')
+		return false;
+	if (buf->width <= 0 || buf->height <= 0)
+		return false;
+
+	uint32_t *img = NULL;
+	int iw = 0;
+	int ih = 0;
+	if (!aswl_icon_load_argb(path, &img, &iw, &ih) || img == NULL || iw <= 0 || ih <= 0) {
+		free(img);
+		return false;
+	}
+
+	uint32_t *dst = (uint32_t *)buf->data;
+	int stride_px = buf->stride / 4;
+	for (int y = 0; y < buf->height; y++) {
+		uint32_t *row = dst + (size_t)y * stride_px;
+		int sy = scaled ? (int)((int64_t)y * ih / buf->height) : (y % ih);
+		if (sy < 0)
+			sy = 0;
+		else if (sy >= ih)
+			sy = ih - 1;
+		const uint32_t *srow = img + (size_t)sy * iw;
+		for (int x = 0; x < buf->width; x++) {
+			int sx = scaled ? (int)((int64_t)x * iw / buf->width) : (x % iw);
+			if (sx < 0)
+				sx = 0;
+			else if (sx >= iw)
+				sx = iw - 1;
+			row[x] = as_premul_argb(srow[sx]);
+		}
+	}
+	free(img);
+	return true;
+}
+
 static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 {
 	const struct aswl_gradient *bg_grad = &state->theme.menu_item_gradient;
@@ -646,17 +688,28 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		bevel_base = bg_color;
 	}
 
-	if (aswl_gradient_is_valid(bg_grad)) {
-		as_buffer_fill_style_rect(buf,
-		                          0,
-		                          0,
-		                          buf->width,
-		                          buf->height,
-		                          bg_grad,
-		                          bg_color,
-		                          0);
-	} else {
-		as_buffer_paint_solid(buf, bg_color);
+	bool menu_backpix_filled = false;
+	if (!state->window_list_mode &&
+	    (state->theme.menu_back_pixmap_type == 128 || state->theme.menu_back_pixmap_type == 127) &&
+	    state->theme.menu_back_pixmap_path != NULL) {
+		menu_backpix_filled = as_buffer_fill_backpixmap_image(
+		        buf, state->theme.menu_back_pixmap_path,
+		        state->theme.menu_back_pixmap_type == 127);
+	}
+
+	if (!menu_backpix_filled) {
+		if (aswl_gradient_is_valid(bg_grad)) {
+			as_buffer_fill_style_rect(buf,
+			                          0,
+			                          0,
+			                          buf->width,
+			                          buf->height,
+			                          bg_grad,
+			                          bg_color,
+			                          0);
+		} else {
+			as_buffer_paint_solid(buf, bg_color);
+		}
 	}
 
 	struct as_menu_layout layout;

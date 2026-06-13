@@ -65,7 +65,7 @@ static bool as_buffer_fill_backpixmap_image(struct as_buffer *buf,
 				sx = 0;
 			else if (sx >= iw)
 				sx = iw - 1;
-			row[x] = srow[sx];
+			row[x] = as_premul_argb(srow[sx]);
 		}
 	}
 	free(img);

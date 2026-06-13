@@ -213,6 +213,9 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	theme->panel_back_pixmap_tint = 0;
 	free(theme->panel_back_pixmap_path);
 	theme->panel_back_pixmap_path = NULL;
+	theme->menu_back_pixmap_type = 0;
+	free(theme->menu_back_pixmap_path);
+	theme->menu_back_pixmap_path = NULL;
 
 		struct aswl_theme_cfg cfg = {
 			.panel_style = strdup("*WharfTile"),
@@ -382,6 +385,17 @@ bool aswl_theme_load(struct aswl_theme *theme)
 	    aswl_resolve_style_color(styles, style_count, cfg.menu_item_style, true, colors, color_count, &c)) {
 		theme->menu_item_fg = c;
 		applied = true;
+	}
+	if (cfg.menu_item_style != NULL) {
+		/* Image-backed BackPixmap (127 scaled / 128 tiled) for the menu body. */
+		char *bp_path = NULL;
+		int bp_ptype = 0;
+		if (aswl_resolve_style_back_pixmap_path(styles, style_count, cfg.menu_item_style, &bp_path, &bp_ptype)) {
+			free(theme->menu_back_pixmap_path);
+			theme->menu_back_pixmap_path = bp_path;
+			theme->menu_back_pixmap_type = bp_ptype;
+			applied = true;
+		}
 	}
 
 	if (cfg.menu_hilite_style != NULL &&

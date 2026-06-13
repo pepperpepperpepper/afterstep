@@ -73,6 +73,10 @@ struct aswl_theme {
 	struct aswl_gradient menu_item_gradient;
 	struct aswl_gradient menu_item_sel_gradient;
 
+	/* MyStyle BackPixmap image background for the menu body (MenuItemStyle). */
+	int menu_back_pixmap_type; /* 0 unset; 127 scaled; 128 tiled */
+	char *menu_back_pixmap_path; /* resolved pixmap file for 127/128; NULL otherwise */
+
 	char *menu_font;
 	char *menu_title_font;
 	char *menu_hititle_font;
