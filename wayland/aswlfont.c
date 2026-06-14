@@ -902,17 +902,21 @@ void aswl_font_draw_text(struct aswl_font *font,
 #ifdef HAVE_FREETYPE
 /*
  * Accumulate one TextStyle pass into scratch buffers, matching AfterStep's
- * asfont.c model: glyph coverage is composited into the alpha buffer with
- * MAX/lighten (render_asglyph: dst = max(dst, scaled)), NOT alpha-over. For
- * the outline body pass, the fore color is composited OVER a pre-filled
- * backing color in a separate RGB buffer (render_asglyph_over), weighted by
- * the raw glyph coverage. Scratch (0,0) maps to the caller's (x,y); this pass
- * is placed at (off_x, off_y). Returns the pen x for ellipsis chaining.
+ * asfont.c model byte-for-byte. Coverage is composited into the alpha buffer
+ * with MAX/lighten exactly as render_asglyph (asfont.c:857-862): the per-pass
+ * ratio (eff_ratio, already pre-modulated by the fore alpha via (0xXX*a)>>8)
+ * scales the glyph coverage as ((gcov*ratio)>>8)+1, then dst = max(dst, that).
+ * For the outline body pass, the fore color is composited OVER a pre-filled
+ * backing color in a separate RGB buffer exactly as render_asglyph_over
+ * (asfont.c:899-902): dst = (bg*(256-w) + fg*w)>>8, weighted by the RAW glyph
+ * coverage w (w>=254 snaps to fg). Scratch (0,0) maps to the caller's
+ * (x-margin, y-margin); this pass is placed at (off_x, off_y). Returns the pen
+ * x for ellipsis chaining.
  */
 static int aswl_styled_accumulate_layer(struct aswl_font *font,
                                         const char *s, size_t n,
                                         int off_x, int off_y,
-                                        uint8_t alpha_scale, int extra_dx,
+                                        uint8_t eff_ratio, int extra_dx,
                                         uint8_t *cov, uint32_t *colbuf, int bw, int bh,
                                         bool body, uint32_t fore_rgb,
                                         FT_UInt prev_glyph, FT_UInt *last_glyph_out)
@@ -957,17 +961,28 @@ static int aswl_styled_accumulate_layer(struct aswl_font *font,
 					if (sx < 0 || sx >= bw)
 						continue;
 					size_t idx = (size_t)sy * (size_t)bw + (size_t)sx;
-					uint8_t scov = (uint8_t)(((uint32_t)gcov * alpha_scale) / 255u);
+					/* render_asglyph: ((gcov*ratio)>>8)+1, MAX/lighten. */
+					uint8_t scov = (eff_ratio >= 0xFFu)
+						? gcov
+						: (uint8_t)((((uint32_t)gcov * eff_ratio) >> 8) + 1u);
 					if (scov > cov[idx])
-						cov[idx] = scov; /* MAX coverage (render_asglyph) */
+						cov[idx] = scov;
 					if (body && colbuf != NULL) {
-						/* fore OVER backing, weighted by raw glyph coverage */
+						/* render_asglyph_over: fore OVER backing,
+						 * weighted by RAW glyph coverage. */
 						uint32_t bgp = colbuf[idx];
 						uint32_t w = gcov;
-						uint32_t iw = 255u - w;
-						uint32_t r = ((((fore_rgb >> 16) & 0xFFu) * w) + (((bgp >> 16) & 0xFFu) * iw) + 127u) / 255u;
-						uint32_t gg = ((((fore_rgb >> 8) & 0xFFu) * w) + (((bgp >> 8) & 0xFFu) * iw) + 127u) / 255u;
-						uint32_t b = (((fore_rgb & 0xFFu) * w) + ((bgp & 0xFFu) * iw) + 127u) / 255u;
+						uint32_t r, gg, b;
+						if (w >= 254u) {
+							r = (fore_rgb >> 16) & 0xFFu;
+							gg = (fore_rgb >> 8) & 0xFFu;
+							b = fore_rgb & 0xFFu;
+						} else {
+							uint32_t aw = 256u - w;
+							r = ((((bgp >> 16) & 0xFFu) * aw) + (((fore_rgb >> 16) & 0xFFu) * w)) >> 8;
+							gg = ((((bgp >> 8) & 0xFFu) * aw) + (((fore_rgb >> 8) & 0xFFu) * w)) >> 8;
+							b = (((bgp & 0xFFu) * aw) + ((fore_rgb & 0xFFu) * w)) >> 8;
+						}
 						colbuf[idx] = (r << 16) | (gg << 8) | b;
 					}
 				}
@@ -1096,11 +1111,16 @@ void aswl_font_draw_text_styled(struct aswl_font *font,
 	 * the passes into a scratch (cov = MAX; outline body color OVER a backing
 	 * fill in colbuf), then alpha-over the result onto dst a single time. This
 	 * avoids the over-darkening that per-pass alpha-over produced at the
-	 * overlapping, antialiased glyph edges.
+	 * overlapping, antialiased glyph edges. The fore alpha is pre-modulated
+	 * into each pass's ratio via (0xXX*a)>>8 (asfont.c:998-1007) and thereby
+	 * baked into the coverage channel, so the final composite uses cov as the
+	 * alpha directly rather than multiplying by base_a again.
 	 */
 	bool is_outline = (style >= 7); /* 7/8/9 carry a contrasting backing color */
 	uint32_t fore_rgb = argb & 0x00FFFFFFu;
 	uint32_t base_a = (argb >> 24) & 0xFFu;
+	if (base_a == 0)
+		return; /* fully transparent fore: nothing visible to composite */
 
 	int maxoff = 0;
 	for (size_t li = 0; li < layer_count; li++) {
@@ -1112,8 +1132,19 @@ void aswl_font_draw_text_styled(struct aswl_font *font,
 
 	int text_w = aswl_freetype_text_width_utf8_n_styled(font, s, draw_n, 0, NULL, extra);
 	int ell_w = need_ellipsis ? aswl_freetype_text_width_utf8_n_styled(font, "...", 3, 0, NULL, extra) : 0;
-	int bw = text_w + ell_w + maxoff + 2;
-	int bh = aswl_font_height(font) + extra + maxoff + 2;
+	/*
+	 * Glyph ink can extend beyond its advance box (swashes overhanging on the
+	 * right, accents/tall caps reaching above the ascent, italic side-bearings
+	 * on the left). The width helpers above only sum advances, so pad the
+	 * scratch by a font-height margin on every side; the scratch origin (0,0)
+	 * then maps to dst (x-margin, y-margin). Without this the scratch (which
+	 * the per-pass-direct draw never used) would silently clip such ink.
+	 */
+	int margin = aswl_font_height(font);
+	if (margin < 4)
+		margin = 4;
+	int bw = text_w + ell_w + maxoff + 2 + 2 * margin;
+	int bh = aswl_font_height(font) + extra + maxoff + 2 + 2 * margin;
 	if (bw < 1)
 		bw = 1;
 	if (bh < 1)
@@ -1138,16 +1169,18 @@ void aswl_font_draw_text_styled(struct aswl_font *font,
 
 	for (size_t li = 0; li < layer_count; li++) {
 		bool body = is_outline ? !layers[li].contrast : true;
+		/* Pre-modulate the pass ratio by the fore alpha (asfont.c:998-1007). */
+		uint8_t eff = (uint8_t)(((uint32_t)layers[li].alpha_scale * base_a) >> 8);
 		FT_UInt last_glyph = 0;
 		int pen_x = aswl_styled_accumulate_layer(font, s, draw_n,
-		                                         layers[li].dx, layers[li].dy,
-		                                         layers[li].alpha_scale, extra,
+		                                         layers[li].dx + margin, layers[li].dy + margin,
+		                                         eff, extra,
 		                                         cov, colbuf, bw, bh,
 		                                         body, fore_rgb, 0, &last_glyph);
 		if (need_ellipsis)
 			(void)aswl_styled_accumulate_layer(font, "...", 3,
-			                                   pen_x, layers[li].dy,
-			                                   layers[li].alpha_scale, extra,
+			                                   pen_x, layers[li].dy + margin,
+			                                   eff, extra,
 			                                   cov, colbuf, bw, bh,
 			                                   body, fore_rgb, last_glyph, NULL);
 	}
@@ -1159,8 +1192,9 @@ void aswl_font_draw_text_styled(struct aswl_font *font,
 			if (c == 0)
 				continue;
 			uint32_t rgb = (colbuf != NULL) ? colbuf[idx] : fore_rgb;
-			uint32_t a = (base_a * (uint32_t)c) / 255u;
-			aswl_blend_pixel(dst_argb, dst_w, dst_h, dst_stride_px, x + px, y + py, (a << 24) | rgb);
+			/* base_a is already baked into c; use it as the alpha directly. */
+			uint32_t a = (uint32_t)c;
+			aswl_blend_pixel(dst_argb, dst_w, dst_h, dst_stride_px, x - margin + px, y - margin + py, (a << 24) | rgb);
 		}
 	}
 
