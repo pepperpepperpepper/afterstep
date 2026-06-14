@@ -626,7 +626,9 @@ bool as_state_get_layout(struct as_state *state, struct as_menu_layout *layout)
 			row_text_h = hilite_text_h;
 	}
 
-	int header_vpad = state->window_list_mode ? 1 : 8;
+	/* window-list mode: +1px over the bare text so the raised title bevel
+	 * (drawn in aswlmenu_render) has room and the bar height matches X11. */
+	int header_vpad = state->window_list_mode ? 2 : 8;
 	int row_vpad = state->window_list_mode ? 1 : 6;
 	layout->header_h = header_text_h + 2 * header_vpad;
 	layout->row_h = row_text_h + 2 * row_vpad;

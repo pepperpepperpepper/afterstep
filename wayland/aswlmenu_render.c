@@ -752,7 +752,6 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 	                          header_grad,
 	                          header_bg,
 	                          0);
-	as_buffer_fill_rect(buf, 0, layout.header_h - 1, buf->width, 1, border);
 
 	/* Outer border (matches X11 AfterStep menus/window lists). */
 	if (border != 0 && buf->width > 1 && buf->height > 1) {
@@ -761,6 +760,17 @@ static void as_state_draw(struct as_state *state, struct as_buffer *buf)
 		as_buffer_fill_rect(buf, 0, 0, 1, buf->height, border);
 		as_buffer_fill_rect(buf, buf->width - 1, 0, 1, buf->height, border);
 	}
+
+	/*
+	 * Raised 3D bevel on the title bar. AfterStep renders the title MyStyle
+	 * with relief edges (hilite top-left, shadow bottom-right) via render_astbar
+	 * (mystyle_make_bevel: hi_color=relief.fore, lo_color=relief.back), which
+	 * gives the metallic raised look. We filled the gradient above; overlay the
+	 * bevel now, inset by the 1px outer border so the top/left hilite stays
+	 * visible. Its bottom-right shadow also replaces the old flat separator line.
+	 */
+	if (buf->width > 2 && layout.header_h > 2)
+		as_buffer_draw_bevel_rect(buf, 1, 1, buf->width - 2, layout.header_h - 1, header_bg, false);
 
 	bool bevel_buttons = !state->window_list_mode;
 	int icon_box = clamp_int(layout.header_h - 8, 10, 16);
