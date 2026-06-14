@@ -790,82 +790,6 @@ static size_t aswl_freetype_fit_bytes_utf8_with_suffix_styled(struct aswl_font *
 
 	return bytes;
 }
-
-static int aswl_freetype_draw_text_utf8_n_styled(struct aswl_font *font,
-                                                 uint32_t *dst_argb,
-                                                 int dst_w,
-                                                 int dst_h,
-                                                 int dst_stride_px,
-                                                 int x,
-                                                 int y,
-                                                 const char *s,
-                                                 size_t n,
-                                                 uint32_t argb,
-                                                 int extra_dx,
-                                                 FT_UInt prev_glyph,
-                                                 FT_UInt *last_glyph_out)
-{
-	if (last_glyph_out != NULL)
-		*last_glyph_out = 0;
-	if (font == NULL || font->ft_face == NULL || dst_argb == NULL || s == NULL || n == 0)
-		return x;
-
-	if (extra_dx < 0)
-		extra_dx = 0;
-
-	FT_Face face = (FT_Face)font->ft_face;
-	int pen_x = x;
-	int baseline_y = y + font->ascent;
-
-	uint32_t base_a = (argb >> 24) & 0xFFu;
-	uint32_t rgb = argb & 0x00FFFFFFu;
-
-	size_t i = 0;
-	uint32_t cp = 0;
-	while (aswl_utf8_decode_next(s, n, &i, &cp)) {
-		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
-		if (g == NULL)
-			continue;
-
-		FT_UInt glyph = g->glyph_index;
-		if (font->ft_has_kerning && prev_glyph != 0 && glyph != 0) {
-			FT_Vector delta = { 0 };
-			if (FT_Get_Kerning(face, prev_glyph, glyph, FT_KERNING_DEFAULT, &delta) == 0)
-				pen_x += (int)(delta.x >> 6);
-		}
-
-		aswl_ft_ensure_rendered(font, g);
-
-		int gx = pen_x + g->bitmap_left;
-		int gy = baseline_y - g->bitmap_top;
-
-		if (g->coverage != NULL && g->width > 0 && g->rows > 0) {
-			for (int row = 0; row < g->rows; row++) {
-				const uint8_t *rowp = g->coverage + (size_t)row * (size_t)g->width;
-				for (int col = 0; col < g->width; col++) {
-					uint8_t cov = rowp[col];
-					if (cov == 0)
-						continue;
-					uint32_t a = (base_a * (uint32_t)cov) / 255u;
-					aswl_blend_pixel(dst_argb,
-					                 dst_w,
-					                 dst_h,
-					                 dst_stride_px,
-					                 gx + col,
-					                 gy + row,
-					                 (a << 24) | rgb);
-				}
-			}
-		}
-
-		pen_x += g->advance + extra_dx;
-		prev_glyph = glyph;
-	}
-
-	if (last_glyph_out != NULL)
-		*last_glyph_out = prev_glyph;
-	return pen_x;
-}
 #endif /* HAVE_FREETYPE */
 
 int aswl_font_text_width_styled_n(struct aswl_font *font, const char *s, size_t n, int text_style)
@@ -905,19 +829,6 @@ int aswl_font_text_width_styled(struct aswl_font *font, const char *s, int text_
 		return 0;
 	return aswl_font_text_width_styled_n(font, s, strlen(s), text_style);
 }
-
-static uint32_t aswl_argb_scale_alpha(uint32_t argb, uint8_t scale)
-{
-	uint32_t a = (argb >> 24) & 0xFFu;
-	uint32_t na = (a * (uint32_t)scale) / 255u;
-	return (argb & 0x00FFFFFFu) | (na << 24);
-}
-
-static uint32_t aswl_argb_with_rgb(uint32_t argb, uint32_t rgb24)
-{
-	return (argb & 0xFF000000u) | (rgb24 & 0x00FFFFFFu);
-}
-
 static uint32_t aswl_text_contrast_rgb24(uint32_t fg_argb)
 {
 	uint32_t r = (fg_argb >> 16) & 0xFFu;
@@ -987,6 +898,89 @@ void aswl_font_draw_text(struct aswl_font *font,
 	as_font5x7_draw_text(dst_argb, dst_w, dst_h, dst_stride_px, x, y, s, max_w, font->scale, argb);
 	#endif
 	}
+
+#ifdef HAVE_FREETYPE
+/*
+ * Accumulate one TextStyle pass into scratch buffers, matching AfterStep's
+ * asfont.c model: glyph coverage is composited into the alpha buffer with
+ * MAX/lighten (render_asglyph: dst = max(dst, scaled)), NOT alpha-over. For
+ * the outline body pass, the fore color is composited OVER a pre-filled
+ * backing color in a separate RGB buffer (render_asglyph_over), weighted by
+ * the raw glyph coverage. Scratch (0,0) maps to the caller's (x,y); this pass
+ * is placed at (off_x, off_y). Returns the pen x for ellipsis chaining.
+ */
+static int aswl_styled_accumulate_layer(struct aswl_font *font,
+                                        const char *s, size_t n,
+                                        int off_x, int off_y,
+                                        uint8_t alpha_scale, int extra_dx,
+                                        uint8_t *cov, uint32_t *colbuf, int bw, int bh,
+                                        bool body, uint32_t fore_rgb,
+                                        FT_UInt prev_glyph, FT_UInt *last_glyph_out)
+{
+	if (last_glyph_out != NULL)
+		*last_glyph_out = 0;
+	if (font == NULL || font->ft_face == NULL || s == NULL || n == 0)
+		return off_x;
+	if (extra_dx < 0)
+		extra_dx = 0;
+
+	FT_Face face = (FT_Face)font->ft_face;
+	int pen_x = off_x;
+	int baseline_y = off_y + font->ascent;
+
+	size_t i = 0;
+	uint32_t cp = 0;
+	while (aswl_utf8_decode_next(s, n, &i, &cp)) {
+		struct aswl_ft_cached_glyph *g = aswl_ft_get_cached_glyph(font, cp);
+		if (g == NULL)
+			continue;
+		FT_UInt glyph = g->glyph_index;
+		if (font->ft_has_kerning && prev_glyph != 0 && glyph != 0) {
+			FT_Vector delta = { 0 };
+			if (FT_Get_Kerning(face, prev_glyph, glyph, FT_KERNING_DEFAULT, &delta) == 0)
+				pen_x += (int)(delta.x >> 6);
+		}
+		aswl_ft_ensure_rendered(font, g);
+		int gx = pen_x + g->bitmap_left;
+		int gy = baseline_y - g->bitmap_top;
+		if (g->coverage != NULL && g->width > 0 && g->rows > 0) {
+			for (int row = 0; row < g->rows; row++) {
+				int sy = gy + row;
+				if (sy < 0 || sy >= bh)
+					continue;
+				const uint8_t *rowp = g->coverage + (size_t)row * (size_t)g->width;
+				for (int col = 0; col < g->width; col++) {
+					uint8_t gcov = rowp[col];
+					if (gcov == 0)
+						continue;
+					int sx = gx + col;
+					if (sx < 0 || sx >= bw)
+						continue;
+					size_t idx = (size_t)sy * (size_t)bw + (size_t)sx;
+					uint8_t scov = (uint8_t)(((uint32_t)gcov * alpha_scale) / 255u);
+					if (scov > cov[idx])
+						cov[idx] = scov; /* MAX coverage (render_asglyph) */
+					if (body && colbuf != NULL) {
+						/* fore OVER backing, weighted by raw glyph coverage */
+						uint32_t bgp = colbuf[idx];
+						uint32_t w = gcov;
+						uint32_t iw = 255u - w;
+						uint32_t r = ((((fore_rgb >> 16) & 0xFFu) * w) + (((bgp >> 16) & 0xFFu) * iw) + 127u) / 255u;
+						uint32_t gg = ((((fore_rgb >> 8) & 0xFFu) * w) + (((bgp >> 8) & 0xFFu) * iw) + 127u) / 255u;
+						uint32_t b = (((fore_rgb & 0xFFu) * w) + ((bgp & 0xFFu) * iw) + 127u) / 255u;
+						colbuf[idx] = (r << 16) | (gg << 8) | b;
+					}
+				}
+			}
+		}
+		pen_x += g->advance + extra_dx;
+		prev_glyph = glyph;
+	}
+	if (last_glyph_out != NULL)
+		*last_glyph_out = prev_glyph;
+	return pen_x;
+}
+#endif /* HAVE_FREETYPE */
 
 void aswl_font_draw_text_styled(struct aswl_font *font,
                                 uint32_t *dst_argb,
@@ -1096,46 +1090,82 @@ void aswl_font_draw_text_styled(struct aswl_font *font,
 		break;
 	}
 
+	/*
+	 * AfterStep composites all TextStyle passes into a single coverage (alpha)
+	 * buffer with MAX/lighten, then colors it once. Replicate that: accumulate
+	 * the passes into a scratch (cov = MAX; outline body color OVER a backing
+	 * fill in colbuf), then alpha-over the result onto dst a single time. This
+	 * avoids the over-darkening that per-pass alpha-over produced at the
+	 * overlapping, antialiased glyph edges.
+	 */
+	bool is_outline = (style >= 7); /* 7/8/9 carry a contrasting backing color */
+	uint32_t fore_rgb = argb & 0x00FFFFFFu;
+	uint32_t base_a = (argb >> 24) & 0xFFu;
+
+	int maxoff = 0;
 	for (size_t li = 0; li < layer_count; li++) {
-		uint32_t layer = aswl_argb_scale_alpha(argb, layers[li].alpha_scale);
-		if (layers[li].contrast) {
-			uint32_t rgb = aswl_text_contrast_rgb24(argb);
-			layer = aswl_argb_with_rgb(layer, rgb);
-		}
+		if (layers[li].dx > maxoff)
+			maxoff = layers[li].dx;
+		if (layers[li].dy > maxoff)
+			maxoff = layers[li].dy;
+	}
 
-		FT_UInt last_glyph = 0;
-		int pen_x = x + layers[li].dx;
-		if (draw_n > 0)
-			pen_x = aswl_freetype_draw_text_utf8_n_styled(font,
-			                                              dst_argb,
-			                                              dst_w,
-			                                              dst_h,
-			                                              dst_stride_px,
-			                                              x + layers[li].dx,
-			                                              y + layers[li].dy,
-			                                              s,
-			                                              draw_n,
-			                                              layer,
-			                                              extra,
-			                                              0,
-			                                              &last_glyph);
+	int text_w = aswl_freetype_text_width_utf8_n_styled(font, s, draw_n, 0, NULL, extra);
+	int ell_w = need_ellipsis ? aswl_freetype_text_width_utf8_n_styled(font, "...", 3, 0, NULL, extra) : 0;
+	int bw = text_w + ell_w + maxoff + 2;
+	int bh = aswl_font_height(font) + extra + maxoff + 2;
+	if (bw < 1)
+		bw = 1;
+	if (bh < 1)
+		bh = 1;
+	if (bw > 8192)
+		bw = 8192;
+	if (bh > 1024)
+		bh = 1024;
 
-		if (need_ellipsis) {
-			(void)aswl_freetype_draw_text_utf8_n_styled(font,
-			                                            dst_argb,
-			                                            dst_w,
-			                                            dst_h,
-			                                            dst_stride_px,
-			                                            pen_x,
-			                                            y + layers[li].dy,
-			                                            "...",
-			                                            3,
-			                                            layer,
-			                                            extra,
-			                                            last_glyph,
-			                                            NULL);
+	uint8_t *cov = calloc((size_t)bw * (size_t)bh, 1);
+	if (cov == NULL)
+		return;
+	uint32_t *colbuf = NULL;
+	if (is_outline) {
+		uint32_t backing_rgb = aswl_text_contrast_rgb24(argb);
+		colbuf = malloc((size_t)bw * (size_t)bh * sizeof(*colbuf));
+		if (colbuf != NULL) {
+			for (size_t p = 0; p < (size_t)bw * (size_t)bh; p++)
+				colbuf[p] = backing_rgb;
 		}
 	}
+
+	for (size_t li = 0; li < layer_count; li++) {
+		bool body = is_outline ? !layers[li].contrast : true;
+		FT_UInt last_glyph = 0;
+		int pen_x = aswl_styled_accumulate_layer(font, s, draw_n,
+		                                         layers[li].dx, layers[li].dy,
+		                                         layers[li].alpha_scale, extra,
+		                                         cov, colbuf, bw, bh,
+		                                         body, fore_rgb, 0, &last_glyph);
+		if (need_ellipsis)
+			(void)aswl_styled_accumulate_layer(font, "...", 3,
+			                                   pen_x, layers[li].dy,
+			                                   layers[li].alpha_scale, extra,
+			                                   cov, colbuf, bw, bh,
+			                                   body, fore_rgb, last_glyph, NULL);
+	}
+
+	for (int py = 0; py < bh; py++) {
+		for (int px = 0; px < bw; px++) {
+			size_t idx = (size_t)py * (size_t)bw + (size_t)px;
+			uint8_t c = cov[idx];
+			if (c == 0)
+				continue;
+			uint32_t rgb = (colbuf != NULL) ? colbuf[idx] : fore_rgb;
+			uint32_t a = (base_a * (uint32_t)c) / 255u;
+			aswl_blend_pixel(dst_argb, dst_w, dst_h, dst_stride_px, x + px, y + py, (a << 24) | rgb);
+		}
+	}
+
+	free(cov);
+	free(colbuf);
 #else
 	as_font5x7_draw_text(dst_argb, dst_w, dst_h, dst_stride_px, x, y, s, max_w, font->scale, argb);
 #endif /* HAVE_FREETYPE */
