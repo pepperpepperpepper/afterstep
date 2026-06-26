@@ -582,11 +582,17 @@ static void as_state_ensure_iconize_button_icons(struct as_state *state)
 	if (state == NULL)
 		return;
 
-	/* look.DEFAULT TitleButton 3 (iconize). */
-	static const char *const iconize_dark_specs[] = { "default-iconize-dark", NULL };
-	static const char *const iconize_light_specs[] = { "default-iconize-light", NULL };
-	static const char *const iconize_dark_pressed_specs[] = { "default-iconize-dark-pressed", NULL };
-	static const char *const iconize_light_pressed_specs[] = { "default-iconize-light-pressed", NULL };
+	/*
+	 * look.DEFAULT renders the "Windows on Desktop N" title's middle button as
+	 * the shade-style bar (default-shade-dark = dots/bar_medium), NOT the iconize
+	 * windows-box (default-iconize-dark = dots/windows_medium). Match the X11
+	 * baseline glyph (a horizontal bar just left of the close X); fall back to
+	 * the iconize box only if the shade asset is missing.
+	 */
+	static const char *const iconize_dark_specs[] = { "default-shade-dark", "default-iconize-dark", NULL };
+	static const char *const iconize_light_specs[] = { "default-shade-light", "default-iconize-light", NULL };
+	static const char *const iconize_dark_pressed_specs[] = { "default-shade-dark-pressed", "default-iconize-dark-pressed", NULL };
+	static const char *const iconize_light_pressed_specs[] = { "default-shade-light-pressed", "default-iconize-light-pressed", NULL };
 
 	bool prefer_dark = state->window_list_mode || aswl_color_is_light(state->theme.menu_header_bg);
 	const char *const *normal_specs = prefer_dark ? iconize_dark_specs : iconize_light_specs;

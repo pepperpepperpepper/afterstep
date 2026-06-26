@@ -711,13 +711,15 @@ void as_state_update_iconize_button_metrics(struct as_state *state, const struct
 	state->iconize_h = 0;
 
 	/*
-	 * The classic AfterStep "WindowList" popup has an iconize button in its
-	 * titlebar in some looks, but the X11 reference screenshots for this repo
-	 * only show pin + close. Keep iconize opt-in to preserve parity.
+	 * The classic AfterStep "Windows on Desktop N" WinList popup shows
+	 * pin + iconize + close in its titlebar (verified against the X11 baseline
+	 * screenshots/2026-01-18-xvfb/04-clients-menu.png: pin, a shade-style bar,
+	 * then the close X). Enable the button by default in window-list mode;
+	 * ASWLMENU_WINLIST_ICONIZE=0 can still suppress it.
 	 */
 	if (!state->window_list_mode)
 		return;
-	if (env_int("ASWLMENU_WINLIST_ICONIZE", 0, 0, 1) != 1)
+	if (env_int("ASWLMENU_WINLIST_ICONIZE", 1, 0, 1) != 1)
 		return;
 	if (state->close_w <= 0 || state->close_h <= 0)
 		return;
@@ -886,8 +888,8 @@ void as_state_autosize(struct as_state *state)
 		int btn_outer_pad = 2;
 		int btn_spacing = 2;
 		int extra = 2 * border + 2 * btn_outer_pad + 2 * hit_box + 2 * layout.pad;
-		/* Optional iconize button adds another hit-box next to close. */
-		if (env_int("ASWLMENU_WINLIST_ICONIZE", 0, 0, 1) == 1)
+		/* Iconize button (default on in window-list mode) adds another hit-box next to close. */
+		if (env_int("ASWLMENU_WINLIST_ICONIZE", 1, 0, 1) == 1)
 			extra += hit_box + btn_spacing;
 		int header_required_w = header_w + extra;
 		if (header_required_w > desired_w)
