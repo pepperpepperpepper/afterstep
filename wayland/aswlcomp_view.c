@@ -106,6 +106,13 @@ void focus_view(struct aswl_view *view, struct wlr_surface *surface)
 	struct aswl_server *server = view->server;
 	if (server->session_locked)
 		return;
+
+	/* Focusing an iconified view RESTORES it: the window-list row and the
+	 * foreign-toplevel activate both land here, and a hidden window cannot
+	 * take focus — every focus implies un-minimize. */
+	if (view->minimized)
+		view_set_minimized(view, false);
+
 	struct aswl_view *old_focus = server->focused_view;
 	bool nofocus_module = view_is_nofocus_asmodule(view);
 	bool steal_focus = !view_is_suite_popup(view) && !nofocus_module;
@@ -185,6 +192,8 @@ static bool view_visible(struct aswl_server *server, struct aswl_view *view)
 	if (server == NULL || view == NULL)
 		return false;
 	if (!view->mapped || view->scene_tree == NULL)
+		return false;
+	if (view->minimized)
 		return false;
 	if (view->is_dock)
 		return false;
@@ -287,7 +296,8 @@ void set_workspace(struct aswl_server *server, uint32_t workspace)
 	wl_list_for_each_safe(view, tmp, &server->views, link) {
 		if (view->scene_tree == NULL)
 			continue;
-		bool enabled = view->mapped && (view->is_dock || view->workspace == server->current_workspace);
+		bool enabled = view->mapped && !view->minimized &&
+		               (view->is_dock || view->workspace == server->current_workspace);
 		wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
 		if (enabled && !view->is_dock)
 			place_view(view);
@@ -561,6 +571,61 @@ void view_set_maximized(struct aswl_view *view, bool maximized)
 
 	view_restore_geometry(view);
 	view_update_toplevel_protocols(view);
+}
+
+void view_set_minimized(struct aswl_view *view, bool minimized)
+{
+	if (view == NULL || view->server == NULL)
+		return;
+	if (view->is_dock)
+		return;
+
+	struct aswl_server *server = view->server;
+
+	/* view->minimized is the ONE authoritative field (every enabled term,
+	 * view_visible and the window-list flags read it). Do NOT OR in the
+	 * Xwayland surface's own flag here: wlr pre-flips xsurface->minimized
+	 * on the _NET_WM_STATE path BEFORE emitting request_minimize, so a
+	 * pair-read early-returns and the EWMH minimize (pager, wmctrl) never
+	 * hides the view. Guarding on our own flag makes a pre-flipped request
+	 * just run the verb (the X write below is idempotent). */
+	if (view->minimized == minimized)
+		return;
+
+	view->minimized = minimized;
+	if (view->type == ASWL_VIEW_XWAYLAND && view->xwayland_surface != NULL)
+		wlr_xwayland_surface_set_minimized(view->xwayland_surface, minimized);
+
+	fprintf(stderr, "aswlcomp: minimize view %u -> %d\n", view->id, minimized ? 1 : 0);
+
+	/* The standard enabled expression, plus the minimized term: the same term
+	 * rides every recompute site (map, set_workspace, move_window_to_workspace)
+	 * so nothing resurrects a hidden view by switching desks. */
+	if (view->scene_tree != NULL) {
+		bool enabled = view->mapped && !view->minimized &&
+		               (view->is_dock || view->workspace == server->current_workspace);
+		wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
+	}
+
+	if (minimized) {
+		if (server->grabbed_view == view)
+			end_interactive(server);
+		if (server->focused_view == view) {
+			if (view->xdg_surface != NULL && view->xdg_surface->toplevel != NULL)
+				(void)wlr_xdg_toplevel_set_activated(view->xdg_surface->toplevel, false);
+			else if (view->xwayland_surface != NULL)
+				wlr_xwayland_surface_activate(view->xwayland_surface, false);
+			server->focused_view = NULL;
+			view_update_decorations(view);
+			wlr_seat_keyboard_notify_clear_focus(server->seat);
+			aswl_ime_set_focus(server, NULL);
+			focus_topmost_view(server);
+		}
+	}
+
+	view_update_toplevel_protocols(view);
+	broadcast_window_state(server, view);
+	aswl_schedule_flush(server);
 }
 
 void place_view(struct aswl_view *view)

@@ -121,6 +121,7 @@ enum {
 	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
 	ASWL_WINDOW_FLAG_FOCUSED = 1u << 1,
 	ASWL_WINDOW_FLAG_XWAYLAND = 1u << 2,
+	ASWL_WINDOW_FLAG_MINIMIZED = 1u << 3,
 };
 
 struct aswl_view {
@@ -151,6 +152,10 @@ struct aswl_view {
 	int deco_close_w;
 	int deco_close_h;
 	bool mapped;
+	/* Compositor-owned iconified state. Kept in sync with the Xwayland
+	 * surface's own minimized flag for XDG-side requests too, so every
+	 * enabled/view_visible term and the window-list flags read ONE field. */
+	bool minimized;
 	bool is_dock;
 	bool placed;
 	bool saved_geometry;
@@ -564,6 +569,7 @@ bool view_is_fullscreen(struct aswl_view *view);
 bool view_is_maximized(struct aswl_view *view);
 void view_set_fullscreen(struct aswl_view *view, bool fullscreen);
 void view_set_maximized(struct aswl_view *view, bool maximized);
+void view_set_minimized(struct aswl_view *view, bool minimized);
 
 void view_maybe_mark_dock(struct aswl_view *view);
 void arrange_dock_views(struct aswl_server *server);

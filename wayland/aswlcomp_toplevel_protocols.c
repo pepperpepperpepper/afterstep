@@ -36,9 +36,10 @@ static void handle_foreign_request_minimize(struct wl_listener *listener, void *
 	if (view->is_dock)
 		return;
 
-	/* xdg-shell doesn't support compositor-driven minimize; support it for Xwayland only. */
-	if (view->xwayland_surface != NULL)
-		wlr_xwayland_surface_set_minimized(view->xwayland_surface, event->minimized);
+	/* The shared minimize verb (xdg and Xwayland alike): hides/shows the
+	 * node, hands focus off, and exports the state. The old body only poked
+	 * the X surface and left xdg views — and the screen — untouched. */
+	view_set_minimized(view, event->minimized);
 
 	view_update_toplevel_protocols(view);
 	aswl_schedule_flush(view->server);
@@ -115,7 +116,10 @@ void view_update_toplevel_protocols(struct aswl_view *view)
 		wlr_foreign_toplevel_handle_v1_set_activated(view->foreign_toplevel, view->server->focused_view == view);
 		wlr_foreign_toplevel_handle_v1_set_fullscreen(view->foreign_toplevel, view_is_fullscreen(view));
 		wlr_foreign_toplevel_handle_v1_set_maximized(view->foreign_toplevel, view_is_maximized(view));
-		bool minimized = view->xwayland_surface != NULL && view->xwayland_surface->minimized;
+		/* The compositor-owned flag (view->minimized) is authoritative; the
+		 * Xwayland surface's own field rides the same verb and agrees. */
+		bool minimized = view->minimized ||
+		                 (view->xwayland_surface != NULL && view->xwayland_surface->minimized);
 		wlr_foreign_toplevel_handle_v1_set_minimized(view->foreign_toplevel, minimized);
 	}
 }

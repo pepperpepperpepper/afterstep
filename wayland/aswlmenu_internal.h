@@ -49,6 +49,7 @@ enum {
 	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
 	ASWL_WINDOW_FLAG_FOCUSED = 1u << 1,
 	ASWL_WINDOW_FLAG_XWAYLAND = 1u << 2,
+	ASWL_WINDOW_FLAG_MINIMIZED = 1u << 3,
 };
 
 struct as_menu_entry {

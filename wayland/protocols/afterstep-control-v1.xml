@@ -123,6 +123,7 @@
           1 = mapped
           2 = focused
           4 = xwayland
+          8 = minimized
       </description>
       <arg name="id" type="uint" summary="Window ID"/>
       <arg name="workspace" type="uint" summary="Workspace index (1-based)"/>

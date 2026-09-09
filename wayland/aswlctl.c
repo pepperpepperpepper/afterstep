@@ -16,6 +16,7 @@ enum {
 	ASWL_WINDOW_FLAG_MAPPED = 1u << 0,
 	ASWL_WINDOW_FLAG_FOCUSED = 1u << 1,
 	ASWL_WINDOW_FLAG_XWAYLAND = 1u << 2,
+	ASWL_WINDOW_FLAG_MINIMIZED = 1u << 3,
 };
 
 struct aswl_state {
@@ -75,6 +76,75 @@ static bool flush_with_timeout(struct wl_display *display, int timeout_ms)
 			return false;
 		waited_ms += slice;
 	}
+}
+
+static void roundtrip_done(void *data, struct wl_callback *callback, uint32_t serial)
+{
+	(void)callback;
+	(void)serial;
+	bool *done = data;
+	*done = true;
+}
+
+static const struct wl_callback_listener roundtrip_listener = {
+	.done = roundtrip_done,
+};
+
+/* wl_display_roundtrip() with a deadline. The plain call polls forever, and
+ * disconnect_control runs on every verb's exit path — against a compositor
+ * that has stopped reading (quit mid-shutdown, a hung session) aswlctl must
+ * still terminate. Same guarantee when it returns true: the server has
+ * dispatched everything we queued ahead of the sync. */
+static bool roundtrip_with_timeout(struct wl_display *display, int timeout_ms)
+{
+	if (display == NULL)
+		return false;
+
+	bool done = false;
+	struct wl_callback *cb = wl_display_sync(display);
+	if (cb == NULL)
+		return false;
+	wl_callback_add_listener(cb, &roundtrip_listener, &done);
+
+	if (!flush_with_timeout(display, timeout_ms)) {
+		/* Peer not reading: the sync will never be answered either. */
+		wl_callback_destroy(cb);
+		return false;
+	}
+
+	int fd = wl_display_get_fd(display);
+	if (fd < 0) {
+		wl_callback_destroy(cb);
+		return false;
+	}
+
+	int waited_ms = 0;
+	while (!done) {
+		int slice = timeout_ms - waited_ms;
+		if (slice > 50)
+			slice = 50;
+		struct pollfd pfd = {
+			.fd = fd,
+			.events = POLLIN,
+		};
+		int prc;
+		do {
+			prc = poll(&pfd, 1, slice);
+		} while (prc < 0 && errno == EINTR);
+		if (prc < 0)
+			break;
+		if (prc == 0) {
+			waited_ms += slice;
+			if (waited_ms >= timeout_ms)
+				break;
+			continue;
+		}
+		if (wl_display_dispatch(display) < 0)
+			break;
+	}
+
+	wl_callback_destroy(cb);
+	return done;
 }
 
 static void usage(const char *prog)
@@ -264,13 +334,15 @@ static void handle_control_window(void *data,
 	const char *mapped = (flags & ASWL_WINDOW_FLAG_MAPPED) ? "mapped" : "-";
 	const char *focused = (flags & ASWL_WINDOW_FLAG_FOCUSED) ? "focused" : "-";
 	const char *xwayland = (flags & ASWL_WINDOW_FLAG_XWAYLAND) ? "xwayland" : "-";
-	printf("%u\tws=%u\tflags=%u\t%s,%s,%s\tapp_id=%s\ttitle=%s\n",
+	const char *minimized = (flags & ASWL_WINDOW_FLAG_MINIMIZED) ? "minimized" : "-";
+	printf("%u\tws=%u\tflags=%u\t%s,%s,%s,%s\tapp_id=%s\ttitle=%s\n",
 	       id,
 	       workspace,
 	       flags,
 	       mapped,
 	       focused,
 	       xwayland,
+	       minimized,
 	       app_id != NULL ? app_id : "",
 	       title != NULL ? title : "");
 }
@@ -410,6 +482,15 @@ static void disconnect_control(struct aswl_state *st)
 		st->registry = NULL;
 	}
 	if (st->display != NULL) {
+		/* Closing right after the flush races the compositor's read: a
+		 * fire-and-forget request (focus_window, set_workspace, ...) can
+		 * vanish with the socket even though wl_display_flush returned 0.
+		 * quit grew a linger for this and exec rounds trips for this; the
+		 * barrier belongs here so every verb gets it, not just the two
+		 * that were debugged. The timed roundtrip completes only after
+		 * the server has dispatched everything we queued ahead of the
+		 * sync — and still terminates if the server has gone away. */
+		(void)roundtrip_with_timeout(st->display, 2000);
 		wl_display_disconnect(st->display);
 		st->display = NULL;
 	}

@@ -339,7 +339,8 @@ static void handle_view_map(struct wl_listener *listener, void *data)
 	view_update_decorations(view);
 	view_toplevel_protocols_create(view);
 
-	bool enabled = server != NULL && (view->is_dock || view->workspace == server->current_workspace);
+	bool enabled = server != NULL && !view->minimized &&
+	               (view->is_dock || view->workspace == server->current_workspace);
 	wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
 
 	if (enabled) {
@@ -617,11 +618,16 @@ static void handle_request_minimize(struct wl_listener *listener, void *data)
 		return;
 
 	/*
-	 * xdg-shell doesn't have a minimized state in configure, but we still need
-	 * to send a configure event to acknowledge set_minimized requests.
+	 * xdg-shell has no minimized state in configure — the compositor owns it
+	 * (view_set_minimized hides the view; focus_view restores on activate).
+	 * A bare scheduled configure still acknowledges the request, per the
+	 * protocol. Re-echoing current.activated here is WRONG now that the verb
+	 * deactivates: last write wins in wlroots' scheduled state, and the
+	 * echo would re-activate the just-hidden toplevel.
 	 */
 	fprintf(stderr, "aswlcomp: xdg request_minimize\n");
-	(void)wlr_xdg_toplevel_set_activated(view->xdg_surface->toplevel, view->xdg_surface->toplevel->current.activated);
+	view_set_minimized(view, true);
+	(void)wlr_xdg_surface_schedule_configure(view->xdg_surface);
 
 	aswl_schedule_flush(view->server);
 }
@@ -980,23 +986,13 @@ static void handle_xwayland_request_minimize(struct wl_listener *listener, void 
 		return;
 
 	fprintf(stderr, "aswlcomp: xwayland request_minimize=%d\n", event->minimize ? 1 : 0);
-	wlr_xwayland_surface_set_minimized(view->xwayland_surface, event->minimize);
+	/* The shared verb (the same path xdg and foreign-toplevel requests take):
+	 * hides/shows the node, syncs the X surface, hands focus off and
+	 * broadcasts — with the grabbed-view and dock guards the old inline copy
+	 * lacked, and view_visible()'s minimized term keeps the just-hidden view
+	 * out of focus_topmost_view's candidates (it sits at the MRU tail). */
+	view_set_minimized(view, event->minimize);
 
-	if (view->scene_tree != NULL) {
-		bool enabled = view->mapped && !event->minimize &&
-		               (view->is_dock || view->workspace == view->server->current_workspace);
-		wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
-	}
-
-	if (event->minimize && view->server->focused_view == view) {
-		view->server->focused_view = NULL;
-		wlr_seat_keyboard_notify_clear_focus(view->server->seat);
-		aswl_ime_set_focus(view->server, NULL);
-		focus_topmost_view(view->server);
-	}
-
-	view_update_toplevel_protocols(view);
-	broadcast_window_state(view->server, view);
 	aswl_schedule_flush(view->server);
 }
 

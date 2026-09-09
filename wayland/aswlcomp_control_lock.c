@@ -111,6 +111,10 @@ static uint32_t view_window_flags(struct aswl_server *server, struct aswl_view *
 		flags |= ASWL_WINDOW_FLAG_FOCUSED;
 	if (view->type == ASWL_VIEW_XWAYLAND)
 		flags |= ASWL_WINDOW_FLAG_XWAYLAND;
+	/* Iconified-but-mapped windows STAY listed (X11 WinList parity: the entry
+	 * renders as '(name)'); restore is the row's focus verb. */
+	if (view->minimized)
+		flags |= ASWL_WINDOW_FLAG_MINIMIZED;
 
 	return flags;
 }
@@ -442,7 +446,8 @@ static void aswl_control_move_window_to_workspace(struct wl_client *client,
 	view->workspace = workspace;
 
 	if (view->scene_tree != NULL) {
-		bool enabled = view->mapped && view->workspace == server->current_workspace;
+		bool enabled = view->mapped && !view->minimized &&
+		               view->workspace == server->current_workspace;
 		wlr_scene_node_set_enabled(&view->scene_tree->node, enabled);
 		if (enabled)
 			place_view(view);

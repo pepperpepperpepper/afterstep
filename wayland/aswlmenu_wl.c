@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -336,11 +337,25 @@ static void control_window(void *data,
 	else if (app_id != NULL && app_id[0] != '\0')
 		label = app_id;
 
+	/* X11 WinList parity (WinList.c:1487): an iconified window STAYS listed
+	 * and its label is parenthesized — "(name)" — so a hidden window reads as
+	 * hidden, and its row (focus → un-minimize) brings it back. */
+	char *iconic = NULL;
+	if ((flags & ASWL_WINDOW_FLAG_MINIMIZED) != 0 && label != NULL) {
+		if (asprintf(&iconic, "(%s)", label) < 0)
+			iconic = NULL;
+		else
+			label = iconic;
+	}
+
 	char *cmd = NULL;
-	if (asprintf(&cmd, "@focus_window %u", id) < 0)
+	if (asprintf(&cmd, "@focus_window %u", id) < 0) {
+		free(iconic);
 		return;
+	}
 	(void)as_state_append_entry(state, label, cmd, NULL, true);
 	free(cmd);
+	free(iconic);
 }
 
 static void control_window_list_end(void *data, struct afterstep_control_v1 *control)
@@ -356,6 +371,17 @@ static void control_window_list_end(void *data, struct afterstep_control_v1 *con
 	as_state_finalize_menu(state);
 	as_state_autosize(state);
 	schedule_redraw(state);
+
+	/* The harness's row click target (same deal as the iconize line): rows
+	 * start below the header, one row_h each. Fires on every list rebuild,
+	 * so it is opt-in via env. */
+	if (getenv("ASWLMENU_GEOM_DEBUG") != NULL) {
+		struct as_menu_layout layout;
+		if (as_state_get_layout(state, &layout) && layout.row_h > 0)
+			fprintf(stderr, "aswlmenu: row band y=%d h=%d rows=%zu\n",
+			        layout.header_h + layout.pad, layout.row_h,
+			        state->filtered_count);
+	}
 }
 
 static void control_window_closed(void *data, struct afterstep_control_v1 *control, uint32_t id)
@@ -538,6 +564,62 @@ bool aswlmenu_wl_setup_surface(struct as_state *state)
 	return true;
 }
 
+static void drain_done(void *data, struct wl_callback *callback, uint32_t serial)
+{
+	(void)callback;
+	(void)serial;
+	bool *done = data;
+	*done = true;
+}
+
+static const struct wl_callback_listener drain_listener = {
+	.done = drain_done,
+};
+
+/* wl_display_roundtrip() with a deadline, run right before the socket closes:
+ * the menu must always exit, even against a compositor that stopped reading. */
+static void aswlmenu_drain_before_close(struct wl_display *display)
+{
+	if (display == NULL)
+		return;
+
+	bool done = false;
+	struct wl_callback *cb = wl_display_sync(display);
+	if (cb == NULL)
+		return;
+	wl_callback_add_listener(cb, &drain_listener, &done);
+
+	const int timeout_ms = 2000;
+	int waited_ms = 0;
+	while (!done) {
+		if (wl_display_flush(display) < 0 && errno != EAGAIN)
+			break;
+		int slice = timeout_ms - waited_ms;
+		if (slice > 50)
+			slice = 50;
+		struct pollfd pfd = {
+			.fd = wl_display_get_fd(display),
+			.events = POLLIN,
+		};
+		int prc;
+		do {
+			prc = poll(&pfd, 1, slice);
+		} while (prc < 0 && errno == EINTR);
+		if (prc < 0)
+			break;
+		if (prc == 0) {
+			waited_ms += slice;
+			if (waited_ms >= timeout_ms)
+				break;
+			continue;
+		}
+		if (wl_display_dispatch(display) < 0)
+			break;
+	}
+
+	wl_callback_destroy(cb);
+}
+
 void aswlmenu_cleanup(struct as_state *state)
 {
 	if (state == NULL)
@@ -631,6 +713,14 @@ void aswlmenu_cleanup(struct as_state *state)
 		wl_compositor_destroy(state->compositor);
 	if (state->registry != NULL)
 		wl_registry_destroy(state->registry);
-	if (state->display != NULL)
+	if (state->display != NULL) {
+		/* The menu often exits immediately after its last control request
+		 * (a row's @focus_window sets running=false on activation), and a
+		 * request flushed right before wl_display_disconnect can vanish
+		 * with the socket before the compositor reads it — the row click
+		 * would close the menu and restore nothing. Drain first: the sync
+		 * reply only arrives after the server dispatched what we sent. */
+		aswlmenu_drain_before_close(state->display);
 		wl_display_disconnect(state->display);
+	}
 }

@@ -154,8 +154,10 @@ static void as_state_launch_command(struct as_state *state, const char *command)
 			}
 
 			const char *id_arg = NULL;
-			if (strncmp(action, "focus_window", 11) == 0) {
-				id_arg = action + 11;
+			/* 12 = strlen("focus_window"): the bound and the offset must
+			 * agree, or id_arg starts mid-verb and the id never parses. */
+			if (strncmp(action, "focus_window", 12) == 0) {
+				id_arg = action + 12;
 			} else if (strncmp(action, "focus", 5) == 0) {
 				/* Avoid matching focus_next/focus_prev. */
 				if (action[5] != '_')
@@ -752,6 +754,12 @@ void as_state_update_iconize_button_metrics(struct as_state *state, const struct
 	state->iconize_y = y;
 	state->iconize_w = hit_box;
 	state->iconize_h = hit_box;
+
+	/* The harness's click target (no pointer-click primitive in the rig, so
+	 * the driver reads this line and xdotools the absolute centre). This
+	 * runs per render AND per pointer-motion, so it is opt-in via env. */
+	if (getenv("ASWLMENU_GEOM_DEBUG") != NULL)
+		fprintf(stderr, "aswlmenu: iconize button +%d+%d %dx%d\n", x, y, hit_box, hit_box);
 }
 
 static bool as_state_point_in_iconize_button(const struct as_state *state, int x, int y)
